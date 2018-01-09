@@ -1,0 +1,13 @@
+{
+  "nodes": [
+    {
+      "id": 1,
+      "name": "seaworld",
+      "host": "seaworld.ip.lab.chn.arrisi.com",
+      "monitor": {
+        "interval": 3000,
+        "metrics": ["uptime", "memory"]
+      }
+    }
+  ]
+}

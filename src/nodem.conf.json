@@ -1,0 +1,24 @@
+{
+  "node_metrics": {
+    "w": ["w"],
+    "free": ["free"],
+    "stat": ["vmstat","1", "2"],
+    "netstat": ["netstat", "-s"],
+    "dmesg": ["dmesg1"]
+  },
+
+  "service_metrics": {
+    "pidstat": ["pidstat", "-rtuh", "-p", "${pid}"]
+  },
+
+  "services": [
+    {
+      "name": "reactor",
+      "type": "java",
+      "java_home": ["/opt/arris/servassure/java/", "/export/home/stargus/java"],
+      "lookup": ["ps", "-ef", "|", "grep ", "=Reactor", "|", "grep", "-v", "grep", "|", "awk", "'{print $2}'"],
+      "log_home": ["/opt/arris/servassure/log", "/export/home/stargus/log/"],
+      "log_pattern": ["reactor.*"]
+    }
+  ]
+}
