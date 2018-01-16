@@ -140,6 +140,68 @@ class OSType(object):
     SUNOS = 3
 
 
+class TextTable(object):
+    """convert a tabular data form text to table.
+    e.g will convert follow data:
+
+    a b c d\n
+    1 2 3 5\n
+
+    to
+    [
+     ['a','b','c','d'],
+     ['1','2','3','4']
+    ]
+
+    """
+    def __init__(self, content, header_ln=0, vheader = False):
+        self._table = [[ele.strip() for ele in l.strip().split(' ') if ele.strip()]
+                       for l in content.splitlines() if l.strip()]
+        self._size = len(self._table)
+        self._hheader = self._table[header_ln] if self.size > header_ln else None
+        if vheader:
+            self._vheader = [row[0] for row in self._table]
+
+    @property
+    def size(self):
+        return self._size
+
+    def gets(self, rowid, header, conv_func=str):
+        """get values for header_name in row #rowno,
+        :param rowid: row number or row name
+        :param header: header name
+        :param default: default value if header not exist
+        :return: list of values (in case multi columns has same header name)
+        """
+        rowno = rowid if type(rowid) is int else self._vheader.index(rowid)
+        idxs = []
+        start = 0
+        while True:
+            try:
+                idx = self._hheader.index(header, start)
+                idxs.append(idx)
+                start = idx + 1
+            except ValueError as e:
+                break
+        return [conv_func(self._table[rowno][idx]) for idx in idxs]
+
+    def get(self, rowno, header, default=None, conv_func=str):
+        values = self.gets(rowno, header, conv_func=conv_func)
+        return values[0] if values else default
+
+    def get_ints(self, rowno, header):
+        return self.gets(rowno, header, conv_func=int)
+
+    def get_int(self, rowno, header, default=None):
+        return self.get(rowno, header, default, conv_func=int)
+
+    def get_floats(self, rowno, header):
+        return self.gets(rowno, header, conv_func=float)
+
+    def get_float(self, rowno, header, default=None):
+        return self.get(rowno, header, default, conv_func=float)
+
+
 def ostype():
     if "win" in sys.platform:
         return OSType.WIN
@@ -206,17 +268,23 @@ def load_json(str):
 # Global status for Master
 _MASTER = None
 _MASTER_DB_NAME = 'master.db'
-Agent = collections.namedtuple('Agent', 'aid, name, host, created_at')
-NMetric = collections.namedtuple('NMetric', 'aid, collect_at, category, content, created_at')
-NMemoryReport = collections.namedtuple('NMemoryReport', 'aid, collect_at, total_mem, used_mem, free_mem, '
-                                                        'cache_mem, total_swap, used_swap, free_swap')
-NCPUReport = collections.namedtuple('NCPUReport', 'aid, collect_at, sy, us, id, wa, st')
-NSystemReport = collections.namedtuple('NSystemReport', 'aid, collect_at, uptime, users, load1, load5, load15, in_, cs')
+_AGENT_FIELDS = 'aid, name, host, created_at'
+_NMETRIC_FIELDS = 'aid, collect_at, category, content, created_at'
+_NMEM_FIELDS = 'aid, collect_at, total_mem, used_mem, free_mem, cache_mem, total_swap, used_swap, free_swap'
+_NCPU_FIELDS = 'aid, collect_at, us, sy, id, wa, st'
+_NSYS_FIELDS = 'aid, collect_at, uptime, users, load1, load5, load15, procs_r, procs_b, sys_in, sys_cs'
+
+Agent = collections.namedtuple('Agent', _AGENT_FIELDS)
+NMetric = collections.namedtuple('NMetric', _NMETRIC_FIELDS)
+NMemoryReport = collections.namedtuple('NMemoryReport', _NMEM_FIELDS)
+NCPUReport = collections.namedtuple('NCPUReport', _NCPU_FIELDS)
+NSystemReport = collections.namedtuple('NSystemReport', _NSYS_FIELDS)
 
 
 def dao(f):
     def dao_decorator(*kargs, **kdargs):
-        with sqlite3.connect(_MASTER_DB_NAME) as conn:
+        with sqlite3.connect(_MASTER_DB_NAME,
+                             detect_types=sqlite3.PARSE_DECLTYPES|sqlite3.PARSE_COLNAMES) as conn:
             c = conn.cursor()
             kdargs['cursor'] = c
             r = f(*kargs, **kdargs)
@@ -224,6 +292,97 @@ def dao(f):
             c.close()
         return r
     return dao_decorator
+
+
+_RE_SYSREPORT = re.compile('.*?(?P<days>\\d+)\\s+day.*?(?P<users>\\d+)\\suser.*'
+                           'age: (?P<load1>\\d+\\.\\d+), (?P<load5>\\d+\\.\\d+), (?P<load15>\\d+\\.\\d+).*',
+                           re.S)
+
+
+def parse_w(aid, collect_time, content):
+    """parse the output of w command as follow:
+     21:25:14 up 45 days,  3:18,  1 user,  load average: 0.00, 0.03, 0.05
+    USER     TTY      FROM             LOGIN@   IDLE   JCPU   PCPU WHAT
+    root     pts/0    pc-itian.arrs.ar 27Dec17  2.00s  8:47   0.00s w
+    :param aid: agentid
+    :param collect_time: collect time from node
+    :param content: output of `w`
+    :return: NSystemReport
+    """
+    m = _RE_SYSREPORT.match(content)
+    if m:
+        days = int(m.group('days'))
+        users = int(m.group('users'))
+        load1 = float(m.group('load1'))
+        load5 = float(m.group('load5'))
+        load15 = float(m.group('load15'))
+        return NSystemReport(aid, collect_time, uptime=days*24*3600, users=users,
+                             load1=load1, load5=load5, load15=load15,
+                             procs_r=None, procs_b=None, sys_in=None, sys_cs=None)
+    else:
+        return None
+
+
+def parse_free(aid, collect_time, content):
+    """parse output of `free -m` command get memory usage information:
+                 total       used       free     shared    buffers     cached
+    Mem:         19991       6428      13562          0        148       2656
+    -/+ buffers/cache:       3623      16367
+    Swap:        10063          0      10063
+
+    :param aid: agentid
+    :param collect_time: collect time from node
+    :param content: output of `free -m`
+    :return: NMemoryReport
+    """
+    t = TextTable('col ' + content.lstrip(), vheader=True)
+    if t.size >= 2:
+        total_mem = t.get_int('Mem:', 'total')
+        used_mem = t.get_int('Mem:', 'used')
+        free_mem = t.get_int('Mem:', 'free')
+        total_swap = t.get_int('Swap:', 'total')
+        use_swap = t.get_int('Swap:', 'used')
+        free_swap = t.get_int('Swap:', 'free')
+        return NMemoryReport(aid, collect_time, total_mem=total_mem, used_mem=used_mem,
+                             free_mem=free_mem, cache_mem=None, total_swap=total_swap,
+                             used_swap=use_swap, free_swap=free_swap)
+    logging.warn('invalid output of free: %s', content)
+    return None
+
+
+def parse_vmstat(aid, collect_time, content):
+    """parse output of command `vmstat` and extact the system/cpu section.
+
+    Linux output:
+    procs -----------memory---------- ---swap-- -----io---- --system-- -----cpu-----
+     r  b   swpd   free   buff  cache   si   so    bi    bo   in   cs us sy id wa st
+     0  0      0 13540540 161232 2972924    0    0     2    17   84   25  0  0 99  1  0
+     0  0      0 13540532 161232 2972956    0    0     0    48  310  550  0  0 99  1  0
+
+    Solaris output:
+     kthr      memory            page            disk          faults      cpu
+     r b w   swap  free  re  mf pi po fr de sr s0 s1 s2 --   in   sy   cs us sy id
+     3 0 0 69302168 22126772 4 62 0 0  0  0  0 -0  0 33  0 2503 4393 3645  2  4 94
+     1 0 0 68852484 24149452 11 53 0 0 0  0  0  0  0  0  0 1463 1273 1198  1  1 99
+
+    :param aid:
+    :param collect_time:
+    :param content:
+    :return: (NCPUReport, procs_r, procs_b, sys_in, sys_cs)
+    """
+    t = TextTable(content, 1)
+    if t.size == 4:
+        data_rn = -1
+        procs_r, procs_b = t.get_int(data_rn,'r'), t.get_int(data_rn,'b')
+        sys_in, sys_cs = t.get_int(data_rn,'in'), t.get_int(data_rn,'cs')
+        us, sy = t.get_int(data_rn,'us'), t.get_ints(data_rn,'sy')[-1]
+        id_, wa = t.get_int(data_rn,'id'), t.get_int(data_rn,'wa')
+        st = t.get_int(data_rn,'st')
+        r = NCPUReport(aid=aid, collect_at=collect_time,
+                       us=us, sy=sy,id=id_, wa=wa, st=st)
+        return r, procs_r, procs_b, sys_in, sys_cs
+    logging.warn('invalid output of vmstat : %s', content)
+    return None, None, None, None, None
 
 
 class AgentStatus(object):
@@ -329,13 +488,14 @@ class AgentRequestHandler(SocketServer.StreamRequestHandler):
 class MasterDAO(object):
     """DAO for master use to manipulate data with database"""
     _DB_SCHEMA = r'''
-    CREATE TABLE IF NOT EXISTS agent(aid UNIQUE, name, host, created_at);
-    CREATE TABLE IF NOT EXISTS node_metric_raw(aid, collect_at, category, content, created_at);
+    CREATE TABLE IF NOT EXISTS agent(aid UNIQUE, name, host, created_at timestamp);
+    CREATE TABLE IF NOT EXISTS node_metric_raw(aid, collect_at timestamp, category, content, created_at timestamp);
     CREATE TABLE IF NOT EXISTS node_memory_report(
-        aid, collect_at, total_mem, used_mem, 
+        aid, collect_at timestamp, total_mem, used_mem, 
         free_mem, cache_mem, total_swap, used_swap, free_swap);
-    CREATE TABLE IF NOT EXISTS node_cpu_report(aid, collect_at, sy, us, id, wa, st);
-    CREATE TABLE IF NOT EXISTS node_system_report(aid, collect_at, uptime, users, load1, load5, load15, in_, cs);
+    CREATE TABLE IF NOT EXISTS node_cpu_report(aid, collect_at timestamp, us, sy, id, wa, st);
+    CREATE TABLE IF NOT EXISTS node_system_report(aid, collect_at timestamp, uptime, users, 
+        load1, load5, load15, procs_r, procs_b, sys_in, sys_cs);
     '''
 
     def __init__(self, pool_size=5):
@@ -359,50 +519,53 @@ class MasterDAO(object):
     @dao
     def add_nmetrics(self, agentid, collect_time, contents, cursor):
         metrics = map(lambda x: (agentid, collect_time, x[0], x[1], datetime.now()), contents.items())
-        cursor.executemany('INSERT INTO node_metric_raw (aid, collect_at, category, content, created_at) '
-                           'VALUES (?,?,?,?,?)', metrics)
         logging.debug('add node metrics to db:agent=%s, collect_time=%s, recs=%d',
                       agentid, collect_time, len(metrics))
+        cursor.executemany('INSERT INTO node_metric_raw (%s) VALUES (?,?,?,?,?)' % _NMETRIC_FIELDS, metrics)
 
     @dao
     def get_nmetrics(self, agentid, start, end=datetime.now(), category=None, cursor=None):
-        cursor.execute('select * from node_metric_raw where aid=? and collect_at>=? and collect_at <=?',
+        cursor.execute('select %s from node_metric_raw '
+                       'where aid=? and collect_at>=? and collect_at <=?' % _NMETRIC_FIELDS,
                        (agentid, start, end))
         return [NMetric(*r) for r in cursor.fetchall()]
 
     @dao
     def add_memreport(self, mem, cursor):
-        cursor.execute('insert into node_memory_report (aid, collect_at, total_mem, used_mem, '
-                       'free_mem, cache_mem, total_swap, used_swap, free_swap) '
-                       'VALUES (?,?,?,?,?,?,?,?,?)',
-                       mem)
         logging.debug('add node memory report to db:%s', mem)
+        cursor.execute('INSERT INTO node_memory_report (%s) VALUES (?,?,?,?,?,?,?,?,?)' % _NMEM_FIELDS,
+                       mem)
 
     @dao
     def get_memreports(self, aid, start, end=datetime.now(), cursor=None):
-        cursor.execute('select * from node_memory_report where aid=? and collect_at>=? and collect_at <=?',
+        cursor.execute('select %s from node_memory_report '
+                       'where aid=? and collect_at>=? and collect_at <=?' % _NMEM_FIELDS,
                        (aid, start, end))
         return [NMemoryReport(*r) for r in cursor.fetchall()]
 
     @dao
     def add_sysreport(self, s, cursor):
-        cursor.execute('insert into node_system_report (aid, collect_at, total_mem, used_mem, '
-                       'free_mem, cache_mem, total_swap, used_swap, free_swap) '
-                       'VALUES (?,?,?,?,?,?,?,?,?)',
-                       s)
+        cursor.execute('insert into node_system_report (%s) VALUES (?,?,?,?,?,?,?,?,?,?,?)' % _NSYS_FIELDS, s)
         logging.debug('add node sys report to db:%s', s)
 
     @dao
     def get_sysreports(self, aid, start, end=datetime.now(), cursor=None):
-        pass
+        cursor.execute('select %s from node_system_report '
+                       'where aid=? and collect_at>=? and collect_at <=?' % _NSYS_FIELDS,
+                       (aid, start, end))
+        return [NSystemReport(*r) for r in cursor.fetchall()]
 
     @dao
     def add_cpureport(self, cpu, cursor):
-        pass
+        logging.debug('add node cpu report to db:%s', cpu)
+        cursor.execute('INSERT INTO node_cpu_report (%s) VALUES (?,?,?,?,?,?,?)' % _NCPU_FIELDS, cpu)
 
     @dao
-    def get_cpureports(self, cpu):
-        pass
+    def get_cpureports(self, aid, start, end=datetime.now(), cursor=None):
+        cursor.execute('SELECT %s from node_cpu_report '
+                       'WHERE aid=? AND collect_at>=? AND collect_at <=?' % _NCPU_FIELDS,
+                       (aid, start, end))
+        return [NCPUReport(*r) for r in cursor.fetchall()]
 
     @dao
     def add_smetrics(selfs, agentid, serv_name, contents):
@@ -417,7 +580,7 @@ class Master:
         self._agents = None
         self._handlers = {}
         self._dao = MasterDAO()
-        self._server = SocketServer.ThreadingTCPServer(self._addr, AgentRequestHandler)
+        self._server = None
         self._init_handlers()
         self._load_agents()
         logging.info('master init on addr=%s', self._addr)
@@ -446,9 +609,9 @@ class Master:
         else:
             agent = Agent(msg.agentid, msg.client_addr[0], msg.client_addr[0], datetime.now())
             self._dao.add_agent(agent)
-            status = AgentStatus(agent, msg.client_addr)
+            agent_status = AgentStatus(agent, msg.client_addr, active=True)
             logging.info('new agent %s', agent_status)
-            self._agents[status.agentid] = status
+            self._agents[agent.aid] = agent_status
             return True
 
     def _agent_heartbeat(self, msg):
@@ -461,25 +624,22 @@ class Master:
         body = load_json(msg.body)
         collect_time = body.pop('collect_time')
         self._dao.add_nmetrics(aid, collect_time, body)
-        if 'w' in body:
-            sysreport = self._parse_sysreport(aid, collect_time, body['w'])
-            self._dao.add_sysreport(sysreport)
-        if 'free' in  body:
-            memreport = self._parse_memreport(aid, collect_time, body['free'])
-            self._dao.add_memreport(memreport)
+        if 'free' in body:
+            memrep = parse_free(aid, collect_time, body['free'])
+            self._dao.add_memreport(memrep) if memrep else None
         if 'vmstat' in body:
-            statreport = self._parse_cpureport(aid, collect_time, body['vmstat'])
-            self._dao.add_cpureport(statreport)
+            cpurep, procs_r, procs_b, sys_in, sys_cs \
+                = parse_vmstat(aid, collect_time, body['vmstat'])
+            self._dao.add_cpureport(cpurep) if cpurep else None
+        if 'w' in body:
+            sysrep = parse_w(aid, collect_time, body['w'])
+            if sysrep:
+                sysrep = sysrep._replace(procs_r=procs_r)
+                sysrep = sysrep._replace(procs_b=procs_b)
+                sysrep = sysrep._replace(sys_in=sys_in)
+                sysrep = sysrep._replace(sys_cs=sys_cs)
+            self._dao.add_sysreport(sysrep) if sysrep else None
         return True
-
-    def _parse_sysreport(self, aid, collect_time, content):
-        return ''
-
-    def _parse_memreport(self, aid, collect_time, content):
-        return ''
-
-    def _parse_cpureport(self, aid, collect_time, content):
-        return ''
 
     def _agent_smetrics(self, msg):
         return True
@@ -492,10 +652,10 @@ class Master:
 
     def start(self):
         logging.info('master started and listening on %s', self._addr)
+        self._server = SocketServer.ThreadingTCPServer(self._addr, AgentRequestHandler)
         self._server.serve_forever()
 
     def handle_msg(self, msg):
-        self.find_agent(msg.agentid).activate()
         return self._handlers[msg.msg_type](msg)
 
     def inactive_agent(self, agentid):
@@ -581,13 +741,13 @@ class AgentConfig(object):
 
 class NodeCollector(threading.Thread):
 
-    def __init__(self, agentid, config, q):
+    def __init__(self, agent, config):
         super(NodeCollector, self).__init__(target=self._collect, name='NodeCollector')
-        self._agentid = agentid
+        self._agent = agent
+        self._agentid = agent.agentid
         self._def_interval = 10
         self._delay = threading.Event()
         self._config = config
-        self._msg_queue = q
         self.setDaemon(True)
 
     def _collect(self):
@@ -618,7 +778,7 @@ class NodeCollector(threading.Thread):
         logging.info('produce heartbeat...')
         body = {'datetime': datetime.now()}
         hb_msg = Msg(self._agentid, Msg.A_HEARTBEAT, body=dump_json(body))
-        self._msg_queue.put(hb_msg)
+        self._agent.add_msg(hb_msg)
 
     def _collect_nmetrics(self):
         """Collect node metrics"""
@@ -633,7 +793,7 @@ class NodeCollector(threading.Thread):
                 result[k] = e.message
         result['collect_time'] = datetime.now().strftime(_DATETIME_FMT)
         nm_msg = Msg(self._agentid, Msg.A_NODE_METRIC, body=dump_json(result))
-        self._msg_queue.put(nm_msg)
+        self._agent.add_msg(nm_msg)
 
     def _find_services(self):
         logging.info('service discovery...')
@@ -667,9 +827,9 @@ class NodeCollector(threading.Thread):
 class NodeAgent:
     """Agent will running the node as and keep send stats data to Master via TCP connection."""
 
-    _SENDQ = Q.Queue(maxsize=64)
+    _SENDQ = Q.Queue(maxsize=2)
 
-    def __init__(self, master_host='localhost', master_port=7890, configfile="./nodem.conf.json"):
+    def __init__(self, master_host='localhost', master_port=7890, configfile="./agent.json"):
 
         if not os.path.isfile(configfile):
             raise ConfigError('agent can not find any config file in %s', configfile)
@@ -680,9 +840,13 @@ class NodeAgent:
         self._started = False
         self._retry = threading.Event()
         self._config = AgentConfig(configfile)
-        self._stat_collector = NodeCollector(self._agentid, self._config, self._SENDQ)
+        self._stat_collector = NodeCollector(self, self._config)
         logging.info('agent init with id=%s, master=%s, config=%s, hostname=%s',
                      self._agentid, self._master_addr, configfile, self._hostname)
+
+    @property
+    def agentid(self):
+        return self._agentid
 
     def _gen_agentid(self):
         if ostype() == OSType.WIN:
@@ -729,11 +893,30 @@ class NodeAgent:
         self.sock.close()
         logging.info('agent %s stopped.', self._agentid)
 
+    def add_msg(self, msg):
+        """Add new msg to the queue and remove oldest msg if its full"""
+        retry = 0
+        while True:
+            try:
+                if self._SENDQ.full():
+                    oldest_msg = self._SENDQ.get_nowait()
+                    logging.debug('q is full, msg %s abandoned, qsize=%d.',
+                                  oldest_msg, self._SENDQ.qsize())
+                self._SENDQ.put_nowait(msg)
+                logging.debug('msg %s added to queue, retry=%d, qsize=%d.',
+                              msg, retry, self._SENDQ.qsize())
+                break;
+            except Q.Full:
+                # Queue is full, retry
+                retry += 1
+
+
     def _do_reg(self):
         """Produce a agent reg message after connected"""
+        logging.info('do registration...')
         osname = os.name
         reg_msg = Msg(agentid=self._agentid, mtype=Msg.A_REG, body=dump_json(osname))
-        self._SENDQ.put(reg_msg)
+        self.add_msg(reg_msg)
 
     def _loop(self):
         logging.info('start agent looping...')
@@ -781,7 +964,7 @@ class NodeAgent:
 # ==============================
 #   Main and scripts
 # ==============================
-_FILES_TO_COPY = ['node_monitor.py', 'nodem.conf.json']
+_FILES_TO_COPY = ['node_monitor.py', 'agent.json']
 _INSTALL_PY27 = True
 _FILE_OF_PY27 = ['Python-2.7.14.tgz']
 

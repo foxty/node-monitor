@@ -106,3 +106,6 @@ ENV/
 
 # python install pkc
 src/Python*.tgz
+
+# db files
+*.db

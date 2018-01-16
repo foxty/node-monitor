@@ -1,8 +1,8 @@
 {
   "node_metrics": {
     "w": ["w"],
-    "free": ["free"],
-    "stat": ["vmstat","1", "2"],
+    "free": ["free", "-m"],
+    "vmstat": ["vmstat","1", "2"],
     "netstat": ["netstat", "-s"],
     "dmesg": ["dmesg1"]
   },
