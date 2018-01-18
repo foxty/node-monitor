@@ -11,8 +11,8 @@ import base64
 import os
 import sys
 import socket
-import node_monitor as nm
-from datetime import datetime, date, time, timedelta
+import master as nm
+from datetime import datetime, timedelta
 
 nm._MASTER_DB_NAME = 'test.db'
 
@@ -29,46 +29,6 @@ class BaseDBTest(unittest.TestCase):
 
 
 class GlobalFuncTest(unittest.TestCase):
-
-    def test_dumpjson(self):
-        dt = datetime(2018, 1, 8, 17, 26, 26, 999)
-        json_dt = nm.dump_json(dt)
-        self.assertEqual('"2018-01-08 17:26:26.000999"', json_dt)
-
-        d = dt.date()
-        json_d = nm.dump_json(d)
-        self.assertEqual('"2018-01-08"', json_d)
-
-        t = dt.time()
-        json_t = nm.dump_json(t)
-        self.assertEqual('"17:26:26.000999"', json_t)
-
-    def test_loadjson(self):
-        json_dt = '{"date":"2018-01-08 17:26:26.000999", ' \
-                  '"entry1":{"start_dt":"2018-01-08 17:26:27.999000", "d":"2018-01-01", "t":"01:01:01:100"}}'
-        dt = nm.load_json(json_dt)
-        self.assertEqual('2018-01-08 17:26:26.000999', dt['date'].strftime(nm._DATETIME_FMT))
-        self.assertEqual('2018-01-01', dt['entry1']['d'].strftime(nm._DATE_FMT))
-
-        def test_parse_w_linux(self):
-            m = nm.Master()
-        ctime = datetime.now()
-        r = nm.parse_w('1', collect_time=ctime, content='''
-         21:25:14 up 45 days,  3:18,  12 user,  load average: 10.00, 10.03, 10.05
-        USER     TTY      FROM             LOGIN@   IDLE   JCPU   PCPU WHAT
-        root     pts/0    pc-itian.arrs.ar 27Dec17  2.00s  8:47   0.00s w
-        ''')
-        self.assertEqual('1', r.aid)
-        self.assertEqual(ctime, r.collect_at)
-        self.assertEqual(45*24*3600, r.uptime)
-        self.assertEqual(12, r.users)
-        self.assertEqual(10.00, r.load1)
-        self.assertEqual(10.03, r.load5)
-        self.assertEqual(10.05, r.load15)
-        self.assertIsNone(r.procs_r)
-        self.assertIsNone(r.procs_b)
-        self.assertIsNone(r.sys_in)
-        self.assertIsNone(r.sys_cs)
 
     def test_parse_w_solaris(self):
         m = nm.Master()
@@ -170,89 +130,6 @@ class GlobalFuncTest(unittest.TestCase):
         nm.download_py()
         self.assertTrue(os.path.exists(nm._FILE_OF_PY27))
         self.assertEqual(17176758, os.stat(nm._FILE_OF_PY27).st_size)
-
-
-class TextTableTest(unittest.TestCase):
-
-    _TABLE = '''
-        A   b   c   d   e   f    g   g
-        a1  b1  c1  d1  e1  f1   g1  g2
-    1   2   3   4   5   6    7  77
-        1.1  2.2  3.3  4.4  5.5  6.6  7.7 77.77
-        '''
-
-    def test_creation(self):
-        t = nm.TextTable(self._TABLE)
-
-        self.assertEqual(4, t.size)
-        self.assertEqual(8, len(t._hheader))
-        self.assertEqual('Abcdefgg', ''.join(t._hheader))
-
-        t = nm.TextTable(self._TABLE, 1)
-
-        self.assertEqual(4, t.size)
-        self.assertEqual(8, len(t._hheader))
-        self.assertEqual('a1b1c1d1e1f1g1g2', ''.join(t._hheader))
-
-    def test_gets(self):
-        t = nm.TextTable(self._TABLE)
-        self.assertEqual('a1', t.get(1, 'A'))
-        self.assertEqual('b1', t.get(1, 'b'))
-        self.assertEqual('g1', t.get(1, 'g'))
-        self.assertEqual(['g1', 'g2'], t.gets(1, 'g'))
-        self.assertIsNone(t.get(1, 'non-exist'))
-        self.assertEqual('aa', t.get(1, 'non-exist', 'aa'))
-
-        self.assertEqual(1, t.get_int(2, 'A'))
-        self.assertEqual(2, t.get_int(2, 'b'))
-        self.assertEqual(7, t.get_int(2, 'g'))
-        self.assertEqual([7, 77], t.get_ints(2, 'g'))
-        self.assertIsNone(t.get(2, 'non-exist'))
-        self.assertEqual(8, t.get(2, 'non-exist', 8))
-
-        self.assertEqual(1.1, t.get_float(3, 'A'))
-        self.assertEqual(2.2, t.get_float(3, 'b'))
-        self.assertEqual(7.7, t.get_float(3, 'g'))
-        self.assertEqual([7.7, 77.77], t.get_floats(3, 'g'))
-        self.assertIsNone(t.get(3, 'non-exist'))
-        self.assertEqual(8.8, t.get(2, 'non-exist', 8.8))
-
-
-class MonMsgTest(unittest.TestCase):
-
-    def test_create(self):
-        m1 = nm.Msg("12345678")
-        self.assertEqual("12345678", m1.agentid)
-        self.assertEqual(nm.Msg.NONE, m1.msg_type)
-        self.assertEqual('', m1.body)
-
-    def test_eq(self):
-        m1 = nm.Msg("12345678")
-        m2 = nm.Msg("12345678")
-        self.assertEqual(m1, m2)
-
-        m2.msg_type = nm.Msg.A_HEARTBEAT
-        self.assertNotEqual(m1, m2)
-
-        m1.msg_type = nm.Msg.A_HEARTBEAT
-        self.assertEqual(m1, m2)
-
-        m1.body = "123"
-        self.assertNotEqual(m1, m2)
-
-    def test_encode_decode(self):
-        msg_body = "12\n\t\n\t34"
-        msg = nm.Msg("12345678", nm.Msg.A_HEARTBEAT, body=msg_body)
-        self.assertEqual(nm.Msg.A_HEARTBEAT, msg.msg_type)
-
-        header_list, encbody = msg.encode()
-        self.assertEqual(4, len(header_list))
-        self.assertEqual(msg_body, base64.b64decode(encbody))
-
-        msg1 = nm.Msg.decode(header_list, encbody)
-        self.assertEqual(msg, msg1)
-        self.assertEqual(msg.sendtime, msg1.sendtime)
-        self.assertEqual(True, isinstance(msg.sendtime, datetime))
 
 
 class MasterDAOTest(BaseDBTest):
