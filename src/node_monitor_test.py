@@ -9,6 +9,7 @@ Created on 2017-12-22
 import unittest
 import base64
 import os
+import sys
 import socket
 import node_monitor as nm
 from datetime import datetime, date, time, timedelta
@@ -164,6 +165,11 @@ class GlobalFuncTest(unittest.TestCase):
         self.assertEqual(2047, r.total_swap)
         self.assertEqual(0, r.used_swap)
         self.assertEqual(2047, r.free_swap)
+
+    def test_download_py(self):
+        nm.download_py()
+        self.assertTrue(os.path.exists(nm._FILE_OF_PY27))
+        self.assertEqual(17176758, os.stat(nm._FILE_OF_PY27).st_size)
 
 
 class TextTableTest(unittest.TestCase):
