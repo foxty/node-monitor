@@ -13,16 +13,13 @@ Node monitor master:
 #   Node Master
 # ==============================
 import os
-import sys
-import re
-import logging
 import collections
-from datetime import datetime
-from struct import *
 import socket
 import SocketServer
 import sqlite3
+from multiprocessing import Process
 from common import *
+from master_ui import ui_main
 
 
 # Global status for Master
@@ -533,6 +530,12 @@ def push_to_nodes(nodelist):
     return nodelist
 
 
+def master_main():
+    global _MASTER
+    _MASTER = Master('0.0.0.0')
+    _MASTER.start()
+
+
 if __name__ == '__main__':
 
     # try:
@@ -545,9 +548,16 @@ if __name__ == '__main__':
     #     if opt in ['-m', '--master']:
 
     if 'push' in sys.argv:
-        push_to_nodes([('cycad.ip.lab.chn.arrisi.com', 'root', 'no$go^')])
-    elif 'master' in sys.argv:
-        _MASTER = Master('0.0.0.0')
-        _MASTER.start()
+        push_to_nodes([('cycad.ip.lab.chn.arrisi.com', 'root', 'no$go^'),
+                       ('saaszdev107.ip.lab.chn.arrisi.com', 'root', 'no$go^')])
     else:
-        print('No action specified, exit.')
+        master_proc = Process(target=master_main)
+        masterui_proc = Process(target=ui_main)
+        master_proc.start()
+        logging.info('master backend process started: %s', master_proc)
+        masterui_proc.start()
+        logging.info('master ui process started: %s', masterui_proc)
+
+        master_proc.join()
+        masterui_proc.join()
+        logging.info('master exited.')
