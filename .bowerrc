@@ -1,0 +1,9 @@
+{
+  "directory": "web/static/lib/",
+  "timeout": 120000,
+  "registry": {
+    "search": [
+      "https://registry.bower.io"
+    ]
+  }
+}

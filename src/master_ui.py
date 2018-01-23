@@ -23,6 +23,8 @@ def index():
 
 def ui_main(host='0.0.0.0', port=8080, debug=False):
     logging.info('starting master ui...')
+    app.jinja_env.variable_start_string = '{-'
+    app.jinja_env.variable_end_string = '-}'
     app.run(host=host, port=port, debug=debug)
 
 

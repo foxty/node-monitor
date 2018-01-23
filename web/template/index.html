@@ -2,9 +2,55 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Node Monitor UI</title>
+    <link rel="stylesheet" href="/static/lib/bootstrap/dist/css/bootstrap.min.css" type="text/css" />
 </head>
 <body>
-UI of node monitor.
+    <div id="navi">
+        <nav class="navbar navbar-default">
+            <div class="container-fluid">
+                <!-- Brand and toggle get grouped for better mobile display -->
+                <div class="navbar-header">
+                    <a class="navbar-brand" href="#">Node monitor</a>
+                </div>
+
+                <!-- Collect the nav links, forms, and other content for toggling -->
+                <div class="collapse navbar-collapse">
+                    <ul class="nav navbar-nav">
+                        <li :class="{'active': idx == curIndex}" @click="enableApp(idx)" v-for="(app, idx) in apps">
+                            <a href="#">{{app.title}}</a>
+                        </li>
+                    </ul>
+                    <ul class="nav navbar-nav navbar-right">
+                    </ul>
+                </div><!-- /.navbar-collapse -->
+            </div><!-- /.container-fluid -->
+        </nav>
+    </div>
+    <!--div>
+        <ol class="breadcrumb">
+        <li><a href="#">Home</a></li>
+        <li><a href="#">Library</a></li>
+        <li class="active">Data</li>
+        </ol>
+    </div-->
+    <div id="app">
+        <div id="dashboard-app" v-show="enabled">Dashboard</div>
+        <div id="nodes-app" v-show="enabled">Nodes</div>
+        <div id="alarms-app" v-show="enabled">Alarm</div>
+        <div id="settings-app" v-show="enabled">Settings</div>
+    </div>
+    <div id="footer">Copyright &copy; 2018</div>
 </body>
+<script type="text/javascript" src="/static/lib/jquery/dist/jquery.min.js"></script>
+<script type="text/javascript" src="/static/lib/bootstrap/dist/js/bootstrap.min.js"></script>
+<script type="text/javascript" src="/static/lib/vue/dist/vue.min.js"></script>
+<script type="text/javascript" src="/static/js/vue-apps.js"></script>
+<script type="text/javascript">
+    $(document).ready(function(){
+        var naviApp = navi("#navi");
+        naviApp.enableApp(0);
+    })
+</script>
 </html>
