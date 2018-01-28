@@ -28,6 +28,10 @@ var Ajax = {
 		});
 	},
 
+	get: function(url, succ) {
+	    this.doAjax(url,'GET', succ);
+	},
+
 	post: function(url, data, succ) {
 		this.doAjax(url, "POST", data, succ);
 	},
@@ -135,81 +139,172 @@ Vue.component("v-window", {
 
 /**Vue Apps**/
 
-function navi(ele) {
-    return new Vue({
-    		el: ele,
-    		data: {
-    		    curIndex: 0
-    		},
-
-    		created: function() {
-    		    this.apps = [dashboard("#dashboard-app"),
-    		                nodes("#nodes-app"),
-    		                alarms("#alarms-app"),
-    		                settings("#settings-app")]
-    		},
-
-    		methods: {
-                enableApp: function(idx) {
-                    app = this.apps[idx]
-                    this.apps.forEach(function(app, index) {
-                        app.enabled = idx == index;
-                    })
-                    this.curIndex = idx;
-                }
-    		}
-    	});
-}
-
-function dashboard(ele) {
-	return new Vue({
-		el: ele,
-		data: {
-		    title:'Dashboard',
-		    enabled: false
-		},
-		
-		computed: {
-		},
-		
-		created: function() {
-		},
-		
-		methods: {
-
-		}
-	});
-}
-
-function nodes(ele) {
-	return new Vue({
-		el: ele,
-		data: {
-		    title:'Node List',
-		    enabled: false
-		},
-
-		computed: {
-		},
-
-		created: function() {
+const Dashboard = {
+		template: `<div><div class="page-header"><h1>Dashboard</h1></div>
+		</div>`,
+		data: function() {
+		    return {};
 		},
 
 		methods: {
-
+            hello: function() {
+                alert('hello')
+            }
 		}
-	});
-}
+	};
 
-function alarms(ele) {
-	return new Vue({
-		el: ele,
-		data: {
-		    title:'Alarms',
-		    enabled: false
+const Agents = {
+		template: `<div><div class="page-header"><h1>Agent List</h1></div>
+		    <table class="table" v-if="agents">
+               <thead>
+                   <tr>
+                       <th>Name</th>
+                       <th>Host</th>
+                       <th>Create Time</th>
+                       <th>Latest CPU Util(%)</th>
+                       <th>Latest Mem Util(%)</th>
+                       <th>Latest Load(1m)</th>
+                       <th>Latest CS</th>
+                   </tr>
+               </thead>
+               <tbody>
+                   <tr v-for="a in agents">
+                       <td><router-link :to="{name: 'agent', params: {aid:a.aid}}">{{a.aid}}:{{a.name}}</router-link></td>
+                       <td>{{a.host}}</td>
+                       <td>{{a.created_at}}</td>
+                       <td>{{a.last_cpu_util}}</td>
+                       <td>{{a.last_mem_util}}</td>
+                       <td>{{a.last_sys_load1}}</td>
+                       <td>{{a.last_sys_cs}}</td>
+                   </tr>
+               </tbody>
+           </table>
+           <div v-if="!agents" class="well">no agents</div>
+       </div>`,
+		data: function() {
+		    return {
+		        title:'Agent List',
+		        agents: null
+		    }
 		},
 
-		computed: {
+		created: function() {
+		    this.loadAgents()
+		},
+
+		methods: {
+            loadAgents: function() {
+                var self = this;
+                Ajax.get('/api/agents', function(data) {
+                    self.agents = data;
+                })
+            }
+		}
+	}
+
+const Agent = {
+        props: ['aid'],
+
+		template: `<div><div class="page-header"><h1>Agent {{aid}}</h1></div>
+            <div class="panel panel-default">
+                <div class="panel-heading">System</div>
+                <div class="panel-body">
+                    <chart :option="sysLoad1"></chart>
+                </div>
+            </div>
+
+            <div class="panel panel-default">
+                <div class="panel-heading">CPU</div>
+                <div class="panel-body">
+                    <div v-for="r in cpuReports">{{r}}</div>
+                </div>
+            </div>
+
+            <div class="panel panel-default">
+                <div class="panel-heading">Memory</div>
+                <div class="panel-body">
+                    <div v-for="r in memReports">{{r}}</div>
+                </div>
+            </div>
+		</div>`,
+
+		data: function() {
+		    return {
+		        agent: null,
+		        sysReports: null,
+		        cpuReports: null,
+		        memReports: null,
+		        sysLoad1: {
+                             xAxis: {
+                                 type: 'category',
+                                 data: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
+                             },
+                             yAxis: {
+                                 type: 'value'
+                             },
+                             series: [{
+                                 data: [820, 932, 901, 934, 1290, 1330, 1320],
+                                 type: 'line'
+                             }]
+                         }
+		    }
+		},
+
+		watch: {
+		    sysReports: function(n, o) {
+		        this.sysLoad1 = {
+                                    xAxis: {
+                                        type: 'category',
+                                        data: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
+                                    },
+                                    yAxis: {
+                                        type: 'value'
+                                    },
+                                    series: [{
+                                        data: [820, 932, 901, 934, 1290, 1330, 1320],
+                                        type: 'line'
+                                    }]
+                                };
+		    }
+		},
+
+		created: function() {
+            this.loadSysReports();
+            this.loadCpuReports();
+            this.loadMemReports();
+		},
+
+		methods: {
+            loadSysReports: function() {
+                var self = this;
+                var aid = self.aid;
+                Ajax.get(`/api/agents/${aid}/report/system`, function(reports) {
+                    self.sysReports = reports
+                })
+            },
+            loadCpuReports: function() {
+                var self = this;
+                var aid = self.aid;
+                Ajax.get(`/api/agents/${aid}/report/cpu`, function(reports) {
+                    self.cpuReports = reports
+                })
+            },
+            loadMemReports: function() {
+                var self = this;
+                var aid = self.aid;
+                Ajax.get(`/api/agents/${aid}/report/memory`, function(reports) {
+                    self.memReports = reports
+                })
+            }
+		}
+	}
+
+const Alarms = {
+		template: `<div>
+		<div class="page-header"><h1>Alarms</h1></div>
+		</div>`,
+		data: function() {
+		    return {}
 		},
 
 		created: function() {
@@ -218,18 +313,15 @@ function alarms(ele) {
 		methods: {
 
 		}
-	});
-}
+	}
 
-function settings(ele) {
-	return new Vue({
-		el: ele,
-		data: {
-		    title:'Settings',
-		    enabled: false
-		},
 
-		computed: {
+const Settings = {
+		template: `<div>
+		    <div class="page-header"><h1>Settings</h1></div>
+		</div>`,
+		data: function() {
+		    return {}
 		},
 
 		created: function() {
@@ -238,5 +330,15 @@ function settings(ele) {
 		methods: {
 
 		}
-	});
-}
+	}
+
+const router = new VueRouter({
+      routes: [
+        // 动态路径参数 以冒号开头
+        {path: '/dashboard', component:  Dashboard},
+        {path: '/agents', component:  Agents},
+        {path: '/agents/:aid', name: 'agent', component: Agent, props: true},
+        {path: '/alarms', component:  Alarms},
+        {path: '/settings', component:  Settings}
+      ]
+    })

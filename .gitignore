@@ -108,3 +108,6 @@ src/Python*.tgz
 
 # db files
 *.db
+
+# bower components
+/web/static/lib

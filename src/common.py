@@ -18,7 +18,7 @@ import json, json.decoder
 from datetime import datetime, date, time
 from struct import *
 
-logging.basicConfig(level=logging.DEBUG,
+logging.basicConfig(level=logging.INFO,
                     format='%(asctime)s - %(threadName)s:%(levelname)s:%(name)s:%(funcName)s:%(message)s')
 DATETIME_FMT = '%Y-%m-%d %H:%M:%S.%f'
 DATETIME_RE = re.compile('^\\d{4}-\\d{1,2}-\\d{1,2} \\d{2}:\\d{2}:\\d{2}\\.\\d{6}$')
@@ -112,7 +112,7 @@ class Msg(object):
             return False
 
     def __str__(self):
-        return '%s->%s'%(self.msg_type, self.body)
+        return '%s from %s'%(self.msg_type, self.agentid)
 
     @classmethod
     def decode(cls, header_list=[], body=''):
@@ -223,6 +223,10 @@ def dump_json(obj):
             return o.strftime(TIME_FMT)
         else:
             raise TypeError('Object %s not supporot by JSON encoder', o)
+
+    # to support namedtupple, we must convert the namedtuple to dict before converting.
+    if getattr(obj, '_asdict', None):
+        obj = obj._asdict()
 
     return json.dumps(obj, default=dt_converter)
 

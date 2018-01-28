@@ -17,25 +17,81 @@ import collections
 import socket
 import SocketServer
 import sqlite3
-from multiprocessing import Process
 from common import *
-from master_ui import ui_main
 
 
 # Global status for Master
 _MASTER = None
 _MASTER_DB_NAME = 'master.db'
-_AGENT_FIELDS = 'aid, name, host, created_at'
-_NMETRIC_FIELDS = 'aid, collect_at, category, content, created_at'
-_NMEM_FIELDS = 'aid, collect_at, total_mem, used_mem, free_mem, cache_mem, total_swap, used_swap, free_swap'
-_NCPU_FIELDS = 'aid, collect_at, us, sy, id, wa, st'
-_NSYS_FIELDS = 'aid, collect_at, uptime, users, load1, load5, load15, procs_r, procs_b, sys_in, sys_cs'
 
-Agent = collections.namedtuple('Agent', _AGENT_FIELDS)
-NMetric = collections.namedtuple('NMetric', _NMETRIC_FIELDS)
-NMemoryReport = collections.namedtuple('NMemoryReport', _NMEM_FIELDS)
-NCPUReport = collections.namedtuple('NCPUReport', _NCPU_FIELDS)
-NSystemReport = collections.namedtuple('NSystemReport', _NSYS_FIELDS)
+
+class InvalidFieldError(Exception): pass
+
+
+class Model(dict):
+
+    FIELDS = []
+
+    def __init__(self, *args, **kwargs):
+        upd = None
+        if args:
+            upd = zip(self.FIELDS[:len(args)], args)
+        if kwargs:
+            diff = kwargs.viewkeys() - set(self.FIELDS)
+            if diff:
+                raise InvalidFieldError(','.jion(diff))
+            else:
+                upd = kwargs.items() if not upd else upd + kwargs.items()
+        if upd:
+            self.update({k: v for k, v in upd if v is not None})
+
+    def __getattr__(self, item):
+        return self.get(item, None)
+
+    def __setattr__(self, key, value):
+        self[key] = value
+
+    @property
+    def field_count(self):
+        return len(self.FIELDS)
+
+    def as_tuple(self):
+        return tuple(self.get(f, None) for f in self.FIELDS)
+
+
+class Agent(Model):
+    FIELDS = ['aid', 'name', 'host', 'created_at', 'last_msg_at',
+              'last_cpu_util', 'last_mem_util', 'last_sys_load1', 'last_sys_cs']
+
+
+class NMetric(Model):
+    FIELDS = ['aid', 'collect_at', 'category', 'content', 'created_at']
+
+
+class NMemoryReport(Model):
+    FIELDS = ['aid', 'collect_at', 'total_mem', 'used_mem', 'free_mem',
+              'cache_mem', 'total_swap', 'used_swap', 'free_swap']
+
+    @property
+    def used_util(self):
+        return self.used_mem*100/self.total_mem if self.used_mem and self.total_mem else None
+
+    @property
+    def free_util(self):
+        return self.free_mem*100/self.total_mem if self.free_mem and self.total_mem else None
+
+
+class NCPUReport(Model):
+    FIELDS = ['aid', 'collect_at', 'us', 'sy', 'id', 'wa', 'st']
+
+    @property
+    def used_util(self):
+        return self.us + self.sy if self.us is not None and self.sy is not None else None
+
+
+class NSystemReport(Model):
+     FIELDS = ['aid', 'collect_at', 'uptime', 'users', 'load1', 'load5',
+               'load15', 'procs_r', 'procs_b', 'sys_in', 'sys_cs']
 
 
 def dao(f):
@@ -245,14 +301,27 @@ class AgentRequestHandler(SocketServer.StreamRequestHandler):
 class MasterDAO(object):
     """DAO for master use to manipulate data with database"""
     _DB_SCHEMA = r'''
-    CREATE TABLE IF NOT EXISTS agent(aid UNIQUE, name, host, created_at timestamp);
+    CREATE TABLE IF NOT EXISTS agent(aid UNIQUE, name, host, created_at timestamp, 
+        last_msg_at, last_cpu_util, last_mem_util, last_sys_load1, last_sys_cs);
+    
     CREATE TABLE IF NOT EXISTS node_metric_raw(aid, collect_at timestamp, category, content, created_at timestamp);
+    CREATE INDEX IF NOT EXISTS `idx_nmr_aid` ON `node_metric_raw` (`aid` DESC);
+    CREATE INDEX IF NOT EXISTS `idx_nmr_collect_at` ON `node_metric_raw` (collect_at DESC);
+    
     CREATE TABLE IF NOT EXISTS node_memory_report(
         aid, collect_at timestamp, total_mem, used_mem, 
         free_mem, cache_mem, total_swap, used_swap, free_swap);
+    CREATE INDEX IF NOT EXISTS `idx_nmre_aid` ON `node_memory_report` (`aid` DESC);
+    CREATE INDEX IF NOT EXISTS `idx_nmre_collect_at` ON `node_memory_report` (collect_at DESC);
+        
     CREATE TABLE IF NOT EXISTS node_cpu_report(aid, collect_at timestamp, us, sy, id, wa, st);
+    CREATE INDEX IF NOT EXISTS `idx_ncr_aid` ON `node_cpu_report` (`aid` DESC);
+    CREATE INDEX IF NOT EXISTS `idx_ncr_collect_at` ON `node_cpu_report` (collect_at DESC);
+    
     CREATE TABLE IF NOT EXISTS node_system_report(aid, collect_at timestamp, uptime, users, 
         load1, load5, load15, procs_r, procs_b, sys_in, sys_cs);
+    CREATE INDEX IF NOT EXISTS idx_nsr_aid ON node_system_report (aid DESC);
+    CREATE INDEX IF NOT EXISTS idx_nsr_collect_at ON node_system_report (collect_at DESC);
     '''
 
     def __init__(self, pool_size=5):
@@ -265,62 +334,71 @@ class MasterDAO(object):
 
     @dao
     def add_agent(self, agent, cursor):
-        cursor.execute('insert into agent (aid, name, host, created_at) values(?,?,?,?)'
-                       , (agent.aid, agent.name, agent.host, agent.created_at))
+        cursor.execute('insert into agent (%s) values(%s)' %
+                       (','.join(agent.FIELDS), ','.join('?'*agent.field_count)),
+                       agent.as_tuple())
 
     @dao
     def get_agents(self, cursor):
-        cursor.execute('select * from agent')
+        cursor.execute('select %s from agent' % ','.join(Agent.FIELDS))
         return [Agent(*a) for a in cursor.fetchall()]
+
+    @dao
+    def update_agent_status(self, aid, last_cpu_util, last_mem_util, last_sys_load1, last_sys_cs, cursor):
+        cursor.execute('UPDATE agent SET last_cpu_util=?, last_mem_util=?, last_sys_load1=?, last_sys_cs=? '
+                       'WHERE aid=?',
+                       (last_cpu_util, last_mem_util, last_sys_load1, last_sys_cs, aid))
 
     @dao
     def add_nmetrics(self, agentid, collect_time, contents, cursor):
         metrics = map(lambda x: (agentid, collect_time, x[0], x[1], datetime.now()), contents.items())
         logging.debug('add node metrics to db:agent=%s, collect_time=%s, recs=%d',
                       agentid, collect_time, len(metrics))
-        cursor.executemany('INSERT INTO node_metric_raw (%s) VALUES (?,?,?,?,?)' % _NMETRIC_FIELDS, metrics)
+        cursor.executemany('INSERT INTO node_metric_raw (%s) VALUES (?,?,?,?,?)' % ','.join(NMetric.FIELDS), metrics)
 
     @dao
     def get_nmetrics(self, agentid, start, end=datetime.now(), category=None, cursor=None):
         cursor.execute('select %s from node_metric_raw '
-                       'where aid=? and collect_at>=? and collect_at <=?' % _NMETRIC_FIELDS,
+                       'where aid=? and collect_at>=? and collect_at <=?' % ','.join(NMetric.FIELDS),
                        (agentid, start, end))
         return [NMetric(*r) for r in cursor.fetchall()]
 
     @dao
     def add_memreport(self, mem, cursor):
         logging.debug('add node memory report to db:%s', mem)
-        cursor.execute('INSERT INTO node_memory_report (%s) VALUES (?,?,?,?,?,?,?,?,?)' % _NMEM_FIELDS,
-                       mem)
+        cursor.execute('INSERT INTO node_memory_report (%s) VALUES (?,?,?,?,?,?,?,?,?)' %
+                       ','.join(NMemoryReport.FIELDS), mem.as_tuple())
 
     @dao
     def get_memreports(self, aid, start, end=datetime.now(), cursor=None):
         cursor.execute('select %s from node_memory_report '
-                       'where aid=? and collect_at>=? and collect_at <=?' % _NMEM_FIELDS,
+                       'where aid=? and collect_at>=? and collect_at <=?' % ','.join(NMemoryReport.FIELDS),
                        (aid, start, end))
         return [NMemoryReport(*r) for r in cursor.fetchall()]
 
     @dao
     def add_sysreport(self, s, cursor):
-        cursor.execute('insert into node_system_report (%s) VALUES (?,?,?,?,?,?,?,?,?,?,?)' % _NSYS_FIELDS, s)
+        cursor.execute('insert into node_system_report (%s) VALUES (?,?,?,?,?,?,?,?,?,?,?)' %
+                       ','.join(NSystemReport.FIELDS), s.as_tuple())
         logging.debug('add node sys report to db:%s', s)
 
     @dao
     def get_sysreports(self, aid, start, end=datetime.now(), cursor=None):
         cursor.execute('select %s from node_system_report '
-                       'where aid=? and collect_at>=? and collect_at <=?' % _NSYS_FIELDS,
+                       'where aid=? and collect_at>=? and collect_at <=?' % ','.join(NSystemReport.FIELDS),
                        (aid, start, end))
         return [NSystemReport(*r) for r in cursor.fetchall()]
 
     @dao
     def add_cpureport(self, cpu, cursor):
         logging.debug('add node cpu report to db:%s', cpu)
-        cursor.execute('INSERT INTO node_cpu_report (%s) VALUES (?,?,?,?,?,?,?)' % _NCPU_FIELDS, cpu)
+        cursor.execute('INSERT INTO node_cpu_report (%s) VALUES (?,?,?,?,?,?,?)' %
+                       ','.join(NCPUReport.FIELDS), cpu.as_tuple())
 
     @dao
     def get_cpureports(self, aid, start, end=datetime.now(), cursor=None):
         cursor.execute('SELECT %s from node_cpu_report '
-                       'WHERE aid=? AND collect_at>=? AND collect_at <=?' % _NCPU_FIELDS,
+                       'WHERE aid=? AND collect_at>=? AND collect_at <=?' % ','.join(NCPUReport.FIELDS),
                        (aid, start, end))
         return [NCPUReport(*r) for r in cursor.fetchall()]
 
@@ -329,7 +407,7 @@ class MasterDAO(object):
         pass
 
 
-class Master:
+class Master(object):
     """Agent work as the service and received status report from every Agent."""
 
     def __init__(self, host=socket.gethostname(), port=7890):
@@ -381,6 +459,8 @@ class Master:
         body = load_json(msg.body)
         collect_time = body.pop('collect_time')
         self._dao.add_nmetrics(aid, collect_time, body)
+        memrep, cpurep, sysrep = None, None, None
+
         if 'free' in body:
             memrep = parse_free(aid, collect_time, body['free'])
             self._dao.add_memreport(memrep) if memrep else None
@@ -391,11 +471,15 @@ class Master:
         if 'w' in body:
             sysrep = parse_w(aid, collect_time, body['w'])
             if sysrep:
-                sysrep = sysrep._replace(procs_r=procs_r)
-                sysrep = sysrep._replace(procs_b=procs_b)
-                sysrep = sysrep._replace(sys_in=sys_in)
-                sysrep = sysrep._replace(sys_cs=sys_cs)
-            self._dao.add_sysreport(sysrep) if sysrep else None
+                sysrep.procs_r = procs_r
+                sysrep.procs_b = procs_b
+                sysrep.sys_in = sys_in
+                sysrep.sys_cs = sys_cs
+                self._dao.add_sysreport(sysrep)
+        last_cpu_util = cpurep.used_util if cpurep else None
+        last_mem_util = memrep.used_util if memrep else None
+        last_sys_load1, last_sys_cs = (sysrep.load1, sysrep.sys_cs) if sysrep else (None, None)
+        self._dao.update_agent_status(aid, last_cpu_util, last_mem_util, last_sys_load1, last_sys_cs)
         return True
 
     def _agent_smetrics(self, msg):
@@ -413,6 +497,7 @@ class Master:
         self._server.serve_forever()
 
     def handle_msg(self, msg):
+        logging.info('handle msg %s.', msg)
         return self._handlers[msg.msg_type](msg)
 
     def inactive_agent(self, agentid):
@@ -424,112 +509,6 @@ class Master:
         self._server.server_close()
 
 
-# ==============================
-#   Main and scripts
-# ==============================
-_FILES_TO_COPY = ['common.py', 'agent.py', 'agent.json']
-_INSTALL_PY27 = True
-_FILE_OF_PY27 = 'Python-2.7.14.tgz'
-
-
-class NodeConnector(object):
-    """Using ssh connect to node and provide list of operation utils"""
-
-    def __init__(self, node_host, username, password):
-        self.node_host = node_host
-        self.username = username
-        self.password = password
-
-    def __enter__(self):
-        from paramiko import SSHClient, AutoAddPolicy
-        self.ssh = SSHClient()
-        self.ssh.set_missing_host_key_policy(AutoAddPolicy())
-        logging.info('checking node %s', self.node_host)
-        self.ssh.connect(hostname=self.node_host, username=self.username, password=self.password)
-        return self
-
-    def __exit__(self, exc_type, exc_val, exc_tb):
-        self.ssh.close()
-        logging.info('exit node collector from %s', self.node_host)
-
-    def py27_installed(self):
-        ins, ous, ers = self.ssh.exec_command('python -V')
-        out_msg = ous.readline()
-        err_msg = ers.readline()
-        logging.debug('out=%s, err=%s', out_msg, err_msg)
-        return 'Python 2.7' in (out_msg or err_msg)
-
-    def install_py(self, filename):
-        logging.info('install %s ...', filename)
-        ins, outs, errs = self.ssh.exec_command('tar xvfz nodem/Python-2.7.14.tgz && cd Python-2.7.14 '
-                                                '&& ./configure && make && make install && python2 -V')
-        if self.py27_installed():
-            logging.info('%s installed success.', filename)
-        else:
-            logging.error(errs.readlines())
-            raise SetupError('Install py27 failed.')
-
-    def trans_files(self, files=[]):
-        with self.ssh.open_sftp() as sftp:
-            dirs = sftp.listdir()
-            if 'nodem' not in dirs:
-                # already have nodem folder
-                logging.info('nodem not exist in home, creat it')
-                sftp.mkdir('nodem')
-            logging.info('copying files %s to node', files)
-            for f in files:
-                sftp.put(f, 'nodem/' + f)
-                logging.info('file %s transferred successfully', f)
-
-    def launch_agent(self, mhost):
-        """Launch remote agent via ssh channel"""
-        logging.info('start agent on %s, master=%s', self.node_host, mhost)
-        self.ssh.exec_command('cd nodem && nohup python ./agent.py %s > agent.log 2>&1 & ' % (mhost,))
-        logging.info('agnet started on host %s', mhost)
-
-    def stop_agent(self):
-        """Stop agent in remote node"""
-        logging.info('try to stop agent on %s', self.node_host)
-        self.ssh.exec_command("ps -ef|grep node_m | grep -v grep| awk '{print $2}' | xargs kill -9")
-        logging.info('agent on %s stopped', self.node_host)
-
-
-def download_py():
-    """Download python installation package from www
-
-    py2:https://www.python.org/ftp/python/2.7.14/Python-2.7.14.tgz
-    py3:https://www.python.org/ftp/python/3.6.4/Python-3.6.4.tgz
-    """
-    logging.info('start download %s', _FILE_OF_PY27)
-    import requests
-    r = requests.get('https://www.python.org/ftp/python/2.7.14/Python-2.7.14.tgz')
-    with file(_FILE_OF_PY27, 'wb') as f:
-        f.write(r.content)
-
-
-def push_to_nodes(nodelist):
-    """push agent script to remote node and start the agent via ssh
-    node list should contains list of tuple like (host, userame, password)
-    """
-    mhost = socket.gethostbyaddr(socket.gethostname())[0]
-    for node in nodelist:
-        host, user, password = node
-        with NodeConnector(host, user, password) as nc:
-            logging.info('checking node %s', host)
-            need_py27 = _INSTALL_PY27 and not nc.py27_installed()
-            if need_py27:
-                if not os.path.exists(_FILE_OF_PY27):
-                    download_py()
-                nc.trans_files(_FILES_TO_COPY + [_FILE_OF_PY27])
-                nc.install_py(_FILE_OF_PY27)
-            else:
-                nc.trans_files(_FILES_TO_COPY)
-                logging.info('py27 already installed, skip installation process.')
-            nc.stop_agent()
-            nc.launch_agent(mhost)
-    return nodelist
-
-
 def master_main():
     global _MASTER
     _MASTER = Master('0.0.0.0')
@@ -537,27 +516,4 @@ def master_main():
 
 
 if __name__ == '__main__':
-
-    # try:
-    #     opts, args = getopt.getopt(sys.argv[:], "hma:", ['help', 'master', 'agent='])
-    # except getopt.GetoptError as e:
-    #     print('Wrong usage')
-    #     sys.exit(2)
-    #
-    # for opt, v in opts:
-    #     if opt in ['-m', '--master']:
-
-    if 'push' in sys.argv:
-        push_to_nodes([('cycad.ip.lab.chn.arrisi.com', 'root', 'no$go^'),
-                       ('saaszdev107.ip.lab.chn.arrisi.com', 'root', 'no$go^')])
-    else:
-        master_proc = Process(target=master_main)
-        masterui_proc = Process(target=ui_main)
-        master_proc.start()
-        logging.info('master backend process started: %s', master_proc)
-        masterui_proc.start()
-        logging.info('master ui process started: %s', masterui_proc)
-
-        master_proc.join()
-        masterui_proc.join()
-        logging.info('master exited.')
+    master_main()

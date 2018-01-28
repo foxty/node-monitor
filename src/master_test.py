@@ -7,7 +7,6 @@ Created on 2017-12-22
 """
 
 import unittest
-import base64
 import os
 import sys
 import socket
@@ -26,6 +25,102 @@ class BaseDBTest(unittest.TestCase):
     def tearDown(self):
         if os.path.exists(nm._MASTER_DB_NAME):
             os.remove(nm._MASTER_DB_NAME)
+
+
+class ModelTest(unittest.TestCase):
+
+    class ModelA(nm.Model):
+        FIELDS = ['a1', 'a2' , 'a3']
+
+    def test_model(self):
+        m = ModelTest.ModelA()
+        self.assertIsNone(m.a_nont_exist_field)
+
+    def test_astuple(self):
+        ma = ModelTest.ModelA()
+        t = ma.as_tuple()
+        self.assertEqual((None, None, None), t)
+
+        ma = ModelTest.ModelA(1,2,3)
+        t = ma.as_tuple()
+        self.assertEqual((1,2,3), t)
+
+    def test_nonexsit_fields(self):
+        ma = ModelTest.ModelA()
+        self.assertEqual(0, len(ma))
+        self.assertIsNone(ma.a1)
+
+    def test_init_fromtuple(self):
+        t = (1,2,3)
+        ma = ModelTest.ModelA(*t)
+        self.assertEqual(3, len(ma))
+        self.assertEqual(1, ma.a1)
+        self.assertEqual(2, ma.a2)
+        self.assertEqual(3, ma.a3)
+
+    def test_init_with_seq_params(self):
+        ma = ModelTest.ModelA(1, 'a2', 3.3)
+        self.assertEqual(3, len(ma))
+        self.assertEqual(1, ma.a1)
+        self.assertEqual('a2', ma.a2)
+        self.assertEqual(3.3, ma.a3)
+
+        ma = ModelTest.ModelA(1, 'a2')
+        self.assertEqual(2, len(ma))
+        self.assertEqual(1, ma.a1)
+        self.assertEqual('a2', ma.a2)
+        self.assertEqual(None, ma.a3)
+
+    def test_init_with_kv_params(self):
+        ma = ModelTest.ModelA(a1=1, a2='a2', a3=3.3)
+        self.assertEqual(3, len(ma))
+        self.assertEqual(1, ma.a1)
+        self.assertEqual('a2', ma.a2)
+        self.assertEqual(3.3, ma.a3)
+
+        ma = ModelTest.ModelA(a1=1, a3=3.3)
+        self.assertEqual(2, len(ma))
+        self.assertEqual(1, ma.a1)
+        self.assertEqual(None, ma.a2)
+        self.assertEqual(3.3, ma.a3)
+
+    def test_init_with_mix_params(self):
+        ma = ModelTest.ModelA(1, 2, a2='a2', a3=3.3)
+        self.assertEqual(3, len(ma))
+        self.assertEqual(1, ma.a1)
+        self.assertEqual('a2', ma.a2)
+        self.assertEqual(3.3, ma.a3)
+
+
+class ReportModelTest(unittest.TestCase):
+    def test_mem_report(self):
+        memrep = nm.NMemoryReport(total_mem=1000, used_mem=100, free_mem=900)
+        self.assertEqual(100*100/1000, memrep.used_util)
+        self.assertEqual(900*100/1000, memrep.free_util)
+
+        memrep = nm.NMemoryReport(total_mem=1100, used_mem=100, free_mem=900)
+        self.assertEqual(100*100/1100, memrep.used_util)
+        self.assertEqual(900*100/1100, memrep.free_util)
+
+        memrep = nm.NMemoryReport(total_mem=None, used_mem=100, free_mem=900)
+        self.assertEqual(None, memrep.used_util)
+        self.assertEqual(None, memrep.free_util)
+
+    def test_cpu_report(self):
+        cpurep = nm.NCPUReport(us=None, sy=100)
+        self.assertEqual(None, cpurep.used_util)
+
+        cpurep.us=1
+        cpurep.sy=None
+        self.assertEqual(None, cpurep.used_util)
+
+        cpurep.us=1
+        cpurep.sy=2
+        self.assertEqual(3, cpurep.used_util)
+
+        cpurep.us=0
+        cpurep.sy=0
+        self.assertEqual(0, cpurep.used_util)
 
 
 class GlobalFuncTest(unittest.TestCase):
@@ -126,11 +221,6 @@ class GlobalFuncTest(unittest.TestCase):
         self.assertEqual(0, r.used_swap)
         self.assertEqual(2047, r.free_swap)
 
-    def test_download_py(self):
-        nm.download_py()
-        self.assertTrue(os.path.exists(nm._FILE_OF_PY27))
-        self.assertEqual(17176758, os.stat(nm._FILE_OF_PY27).st_size)
-
 
 class MasterDAOTest(BaseDBTest):
 
@@ -144,6 +234,19 @@ class MasterDAOTest(BaseDBTest):
         aglist = self.dao.get_agents()
         self.assertEqual(1, len(aglist))
         self.assertEqual(ag, aglist[0])
+
+    def test_update_agent(self):
+        ag = nm.Agent('12345678', 'agent1', '127.0.0.1', datetime.now())
+        self.dao.add_agent(ag)
+        self.dao.update_agent_status(ag.aid, last_cpu_util=99, last_mem_util=55.5,
+                                     last_sys_load1=1.1, last_sys_cs=123)
+        aglist = self.dao.get_agents()
+        self.assertEqual(1, len(aglist))
+        nag = aglist[0]
+        self.assertEqual(99, nag.last_cpu_util)
+        self.assertEqual(55.5, nag.last_mem_util)
+        self.assertEqual(1.1, nag.last_sys_load1)
+        self.assertEqual(123, nag.last_sys_cs)
 
     def test_add_nmetrics(self):
         agentid = '12345678'
@@ -242,8 +345,10 @@ class MasterTest(BaseDBTest):
         self.assertTrue(re)
 
     def test_handle_nmetrics_linux(self):
-        aid = '2'
         m = nm.Master()
+        agent = nm.Agent('2', 'localhost', 'localhost', datetime.now())
+        self.dao.add_agent(agent)
+
         ctime = datetime.now()
         msgbody = {
             'collect_time': ctime,
@@ -261,30 +366,37 @@ class MasterTest(BaseDBTest):
                          1  0      0 580284    948 884556    0    0     0     0 1091  404 86 14  0  0  0
                       '''
         }
-        nmmsg = nm.Msg(aid, nm.Msg.A_NODE_METRIC, body=nm.dump_json(msgbody))
+        nmmsg = nm.Msg(agent.aid, nm.Msg.A_NODE_METRIC, body=nm.dump_json(msgbody))
         re = m.handle_msg(nmmsg)
         self.assertTrue(re)
 
         start = datetime.now() - timedelta(hours=1)
         end = datetime.now() + timedelta(hours=1)
-        memreports = self.dao.get_memreports(aid, start, end)
+        memreports = self.dao.get_memreports(agent.aid, start, end)
         self.assertEqual(1, len(memreports))
-        self.assertEqual(nm.NMemoryReport(aid=aid, collect_at=ctime,
+        self.assertEqual(nm.NMemoryReport(aid=agent.aid, collect_at=ctime,
                                           total_mem=1839, used_mem=408, free_mem=566, cache_mem=None,
                                           total_swap=2047, used_swap=0, free_swap=2047),
                          memreports[0])
 
-        cpureports = self.dao.get_cpureports(aid, start, end)
+        cpureports = self.dao.get_cpureports(agent.aid, start, end)
         self.assertEqual(1, len(cpureports))
-        self.assertEqual(nm.NCPUReport(aid=aid, collect_at=ctime, us=86, sy=14, id=0, wa=0, st=0),
+        self.assertEqual(nm.NCPUReport(aid=agent.aid, collect_at=ctime, us=86, sy=14, id=0, wa=0, st=0),
                          cpureports[0])
 
-        sysreports = self.dao.get_sysreports(aid, start, end)
+        sysreports = self.dao.get_sysreports(agent.aid, start, end)
         self.assertEqual(1, len(sysreports))
-        self.assertEqual(nm.NSystemReport(aid=aid, collect_at=ctime,
+        self.assertEqual(nm.NSystemReport(aid=agent.aid, collect_at=ctime,
                                           uptime=57*24*3600, users=1, load1=2.11, load5=2.54, load15=2.77,
                                           procs_r=1, procs_b=0, sys_in=1091, sys_cs=404),
                          sysreports[0])
+
+        agents = self.dao.get_agents()
+        self.assertEqual(1, len(agents))
+        self.assertEqual(memreports[0].used_util, agents[0].last_mem_util)
+        self.assertEqual(cpureports[0].used_util, agents[0].last_cpu_util)
+        self.assertEqual(sysreports[0].load1, agents[0].last_sys_load1)
+        self.assertEqual(sysreports[0].sys_cs, agents[0].last_sys_cs)
 
 
 if __name__ == '__main__':

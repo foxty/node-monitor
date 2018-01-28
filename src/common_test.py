@@ -5,14 +5,35 @@
 Created on 2017-12-22
 @author: foxty
 """
-
+from collections import namedtuple
 import unittest
 from common import *
+
+A = namedtuple('A', 'a1 a2 a3')
+
+
+class B(object):
+
+    def __init__(self):
+        self.b1 = 1
+        self.b2 = 'b2'
+        self.b3 = 3.3
 
 
 class CommonTest(unittest.TestCase):
 
-    def test_dumpjson(self):
+    def test_dumpjson_namedtuple(self):
+        a = A(a1=1, a2='a2', a3=3.3)
+        ajson = dump_json(a)
+        aobj = load_json(ajson)
+        a1 = A(**aobj)
+        self.assertEqual(a, a1)
+
+        listofa = [A(a1=1, a2='a2', a3=3.3), A(a1=2, a2='a2', a3=6.6)]
+        listjson = dump_json(listofa)
+        print listjson
+
+    def test_dumpjson_date(self):
         dt = datetime(2018, 1, 8, 17, 26, 26, 999)
         json_dt = dump_json(dt)
         self.assertEqual('"2018-01-08 17:26:26.000999"', json_dt)
@@ -25,7 +46,7 @@ class CommonTest(unittest.TestCase):
         json_t = dump_json(t)
         self.assertEqual('"17:26:26.000999"', json_t)
 
-    def test_loadjson(self):
+    def test_loadjson_date(self):
         json_dt = '{"date":"2018-01-08 17:26:26.000999", ' \
                   '"entry1":{"start_dt":"2018-01-08 17:26:27.999000", "d":"2018-01-01", "t":"01:01:01:100"}}'
         dt = load_json(json_dt)

@@ -178,8 +178,6 @@ class NodeCollector(threading.Thread):
 class NodeAgent:
     """Agent will running the node as and keep send stats data to Master via TCP connection."""
 
-    _SENDQ = Q.Queue(maxsize=2)
-
     def __init__(self, master_host='localhost', master_port=7890, configfile="./agent.json"):
 
         if not os.path.isfile(configfile):
@@ -189,6 +187,7 @@ class NodeAgent:
         self._agentid = self._gen_agentid()
         self._master_addr = (master_host, master_port)
         self._started = False
+        self._queue = Q.Queue(maxsize=16)
         self._retry = threading.Event()
         self._config = AgentConfig(configfile)
         self._stat_collector = NodeCollector(self, self._config)
@@ -249,18 +248,17 @@ class NodeAgent:
         retry = 0
         while True:
             try:
-                if self._SENDQ.full():
-                    oldest_msg = self._SENDQ.get_nowait()
+                if self._queue.full():
+                    oldest_msg = self._queue.get_nowait()
                     logging.debug('q is full, msg %s abandoned, qsize=%d.',
-                                  oldest_msg, self._SENDQ.qsize())
-                self._SENDQ.put_nowait(msg)
-                logging.debug('msg %s added to queue, retry=%d, qsize=%d.',
-                              msg, retry, self._SENDQ.qsize())
+                                  oldest_msg, self._queue.qsize())
+                self._queue.put_nowait(msg)
+                logging.info('msg %s added to queue, retry=%d, qsize=%d.',
+                              msg, retry, self._queue.qsize())
                 break;
             except Q.Full:
                 # Queue is full, retry
                 retry += 1
-
 
     def _do_reg(self):
         """Produce a agent reg message after connected"""
@@ -272,9 +270,13 @@ class NodeAgent:
     def _loop(self):
         logging.info('start agent looping...')
         while self._started:
-            sock_list = [self.sock]
+            rlist = elist = [self.sock]
+            wlist = []
+            if not self._queue.empty():
+                wlist = [self.sock]
             try:
-                rlist, wlist, elist = select.select([], sock_list, sock_list)
+                # wait for 5 seconds in each loop to avoid cpu consuming
+                rlist, wlist, elist = select.select(rlist, wlist, wlist, 5)
                 if rlist: self._do_read(rlist[0])
                 if wlist: self._do_write(wlist[0])
                 if elist: self._do_error(elist[0])
@@ -293,9 +295,9 @@ class NodeAgent:
             logging.info('get data %s from master', rdata.strip())
 
     def _do_write(self, sock):
-        if not self._SENDQ.empty():
+        while not self._queue.empty():
             try:
-                msg = self._SENDQ.get_nowait()
+                msg = self._queue.get_nowait()
             except Q.Empty as e:
                 logging.warn('Try to get msg from empty queue..')
                 return
@@ -305,11 +307,11 @@ class NodeAgent:
             datalen = len(data)
             sock.send('MSG:%d\n' % datalen)
             size = sock.send(data)
-            logging.debug('send msg type=%s, datalen=%d, size=%d, to=%s',
+            logging.info('send msg type=%s, datalen=%d, size=%d, to=%s',
                           msg.msg_type, datalen, size, self._master_addr)
 
     def _do_error(self, sock):
-        logging.debug('error')
+        logging.info('error happens for %s', sock)
 
 
 if __name__ == '__main__':
