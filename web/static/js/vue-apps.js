@@ -12,7 +12,7 @@ $(document).ajaxStart(function() {
 	}
 })
 
-// Shortcut for ajax calls
+/** Shortcut for ajax **/
 var Ajax = {
 	
 	doAjax: function(url, method, data, succ) {
@@ -44,8 +44,6 @@ var Ajax = {
 		this.doAjax(url, "DELETE", null, succ);
 	}
 }
-
-/**Plugins**/
 
 /**Filters**/
 Vue.filter('howLongAgo', function(date) {
@@ -137,8 +135,12 @@ Vue.component("v-window", {
 	}
 });
 
-/**Vue Apps**/
+/**Echarts**/
+function stackChart(title, array, category, graphMapping) {
+    //TODO:need fix
+}
 
+/**Vue Apps**/
 const Dashboard = {
 		template: `<div><div class="page-header"><h1>Dashboard</h1></div>
 		</div>`,
@@ -169,7 +171,7 @@ const Agents = {
                </thead>
                <tbody>
                    <tr v-for="a in agents">
-                       <td><router-link :to="{name: 'agent', params: {aid:a.aid}}">{{a.aid}}:{{a.name}}</router-link></td>
+                       <td><router-link :to="{name: 'agentStatus', params: {aid:a.aid}}">{{a.aid}}:{{a.name}}</router-link></td>
                        <td>{{a.host}}</td>
                        <td>{{a.created_at}}</td>
                        <td>{{a.last_cpu_util}}</td>
@@ -202,28 +204,31 @@ const Agents = {
 		}
 	}
 
-const Agent = {
+const AgentStatus = {
         props: ['aid'],
 
-		template: `<div><div class="page-header"><h1>Agent {{aid}}</h1></div>
+		template: `<div><div class="page-header"><h1>Agent {{aid}} Status</h1></div>
             <div class="panel panel-default">
                 <div class="panel-heading">System</div>
-                <div class="panel-body">
-                    <chart :option="sysLoad1"></chart>
+                <div class="panel-body row">
+                    <chart :options="sysLoad" style="width:100%;height:300px"></chart>
+                    <div class='col-md-6'><chart :options="sysUsers" style="width:100%;height:300px"></chart></div>
+                    <div class='col-md-6'><chart :options="sysCs" style="width:100%;height:300px"></chart></div>
                 </div>
             </div>
 
             <div class="panel panel-default">
                 <div class="panel-heading">CPU</div>
-                <div class="panel-body">
-                    <div v-for="r in cpuReports">{{r}}</div>
+                <div class="panel-body row">
+                    <chart :options="sysCpu" style="width:100%;height:300px"></chart>
                 </div>
             </div>
 
             <div class="panel panel-default">
                 <div class="panel-heading">Memory</div>
-                <div class="panel-body">
-                    <div v-for="r in memReports">{{r}}</div>
+                <div class="panel-body row">
+                    <div class="col-md-6"><chart :options="sysMemory" style="width:100%;height:300px"></chart></div>
+                    <div class="col-md-6"><chart :options="sysSwap" style="width:100%;height:300px"></chart></div>
                 </div>
             </div>
 		</div>`,
@@ -234,37 +239,255 @@ const Agent = {
 		        sysReports: null,
 		        cpuReports: null,
 		        memReports: null,
-		        sysLoad1: {
-                             xAxis: {
-                                 type: 'category',
-                                 data: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
-                             },
-                             yAxis: {
-                                 type: 'value'
-                             },
-                             series: [{
-                                 data: [820, 932, 901, 934, 1290, 1330, 1320],
-                                 type: 'line'
-                             }]
-                         }
+		        sysLoad: null,
+		        sysUsers: null,
+		        sysCs: null,
+		        sysCpu: null,
+		        sysMemory: null,
+		        sysSwap: null
 		    }
 		},
 
 		watch: {
 		    sysReports: function(n, o) {
-		        this.sysLoad1 = {
-                                    xAxis: {
-                                        type: 'category',
-                                        data: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
-                                    },
-                                    yAxis: {
-                                        type: 'value'
-                                    },
-                                    series: [{
-                                        data: [820, 932, 901, 934, 1290, 1330, 1320],
-                                        type: 'line'
-                                    }]
-                                };
+		        var category = []
+		        var load1 = []
+		        var load5 = []
+		        var load15 = []
+		        var users = []
+		        var sysin = []
+		        var syscs = []
+
+		        n.forEach(function(r) {
+		            category.push(r.collect_at.substr(0, 19))
+                    load1.push(r.load1)
+                    load5.push(r.load5)
+                    load15.push(r.load15)
+                    users.push(r.users)
+                    sysin.push(r.sys_in)
+                    syscs.push(r.sys_cs)
+
+		        })
+		        this.sysLoad = {
+                        title: {text: 'Sys Load'},
+                        tooltip: {
+                            trigger: 'axis'
+                        },
+                        legend: {
+                                data:['Load1','Load5','Load15']
+                        },
+                        xAxis: {
+                            type: 'category',
+                            data: category
+                        },
+                        yAxis: {
+                            type: 'value'
+                        },
+                        series: [{
+                            data: load1,
+                            type: 'line',
+                            name: 'Load1'
+                        },{
+                            data:load5,
+                            type:'line',
+                            name:'Load5'
+                        }, {
+                            data:load15,
+                            type:'line',
+                            name:'Load15'
+                        }]
+                    }
+                this.sysUsers = {
+                        title: {text: 'Sys Users'},
+                        tooltip: {
+                            trigger: 'axis'
+                        },
+                        xAxis: {
+                            type: 'category',
+                            data: category
+                        },
+                        yAxis: {
+                            type: 'value'
+                        },
+                        series: [{
+                            data: users,
+                            type: 'line'
+                        }]
+                    }
+                this.sysCs = {
+                        title: {text: 'Sys IN&CS'},
+                        tooltip: {
+                            trigger: 'axis'
+                        },
+                        legend: {
+                            data: ['IN', 'CS']
+                        },
+                        xAxis: {
+                            type: 'category',
+                            data: category
+                        },
+                        yAxis: {
+                            type: 'value'
+                        },
+                        series: [{
+                            data: sysin,
+                            type: 'line',
+                            name: 'IN'
+                        },{
+                            data: syscs,
+                            type: 'line',
+                            name: 'CS'
+                        }]
+                    }
+		    },
+		    cpuReports: function(n, o) {
+		        var category = []
+		        var us = []
+		        var sy = []
+		        var id = []
+		        var wa = []
+		        var st = []
+		        n.forEach(function(r) {
+                    category.push(r.collect_at.substr(0, 19))
+                    us.push(r.us)
+                    sy.push(r.sy)
+                    id.push(r.id)
+                    wa.push(r.wa)
+                    st.push(r.st)
+                })
+                this.sysCpu = {
+                        title: {text: 'CPU'},
+                        tooltip: {
+                            trigger: 'axis'
+                        },
+                        legend: {
+                                data:['User','System','Idle', 'Wait', 'Stolen']
+                        },
+                        xAxis: {
+                            type: 'category',
+                            data: category,
+                            boundaryGap : false
+                        },
+                        yAxis: {
+                            type: 'value',
+                            axisLabel: {
+                                formatter: '{value} %'
+                            }
+                        },
+                        series: [{
+                            name: 'User',
+                            type: 'line',
+                            stack:'Total',
+                            areaStyle: {normal: {}},
+                            data: us
+                        },{
+                            name: 'System',
+                            type: 'line',
+                            stack:'Total',
+                            areaStyle: {normal: {}},
+                            data: sy
+                        }, {
+                            name: 'Idle',
+                            type: 'line',
+                            stack:'Total',
+                            areaStyle: {normal: {}},
+                            data: id
+                        }, {
+                            name: 'Wait',
+                            type: 'line',
+                            stack:'Total',
+                            areaStyle: {normal: {}},
+                            data: wa
+                        }, {
+                            name: 'Stolen',
+                            type: 'line',
+                            stack:'Total',
+                            areaStyle: {normal: {}},
+                            data: st
+                        }]
+                    }
+		    },
+		    memReports: function(n, o) {
+		        var category = []
+                var total = []
+                var usedMem = []
+                var freeMem = []
+                var usedSwap = []
+                var freeSwap = []
+                n.forEach(function(r) {
+                    category.push(r.collect_at.substr(0, 19))
+                    total.push(r.total_mem)
+                    usedMem.push(r.used_mem)
+                    freeMem.push(r.free_mem)
+                    usedSwap.push(r.used_swap)
+                    freeSwap.push(r.free_swap)
+                })
+                this.sysMemory = {
+                        title: {text: 'Memory'},
+                        tooltip: {
+                            trigger: 'axis'
+                        },
+                        legend: {
+                                data:['Used','Free']
+                        },
+                        xAxis: {
+                            type: 'category',
+                            data: category,
+                            boundaryGap : false
+                        },
+                        yAxis: {
+                            type: 'value',
+                            axisLabel: {
+                                formatter: '{value}M'
+                            }
+                        },
+                        series: [{
+                            name: 'Used',
+                            type: 'line',
+                            stack:'Total',
+                            areaStyle: {normal: {}},
+                            data: usedMem
+                        },{
+                            name: 'Free',
+                            type: 'line',
+                            stack:'Total',
+                            areaStyle: {normal: {}},
+                            data: freeMem
+                        }]
+                    }
+                this.sysSwap = {
+                        title: {text: 'Swap'},
+                        tooltip: {
+                            trigger: 'axis'
+                        },
+                        legend: {
+                                data:['Used','Free']
+                        },
+                        xAxis: {
+                            type: 'category',
+                            data: category,
+                            boundaryGap : false
+                        },
+                        yAxis: {
+                            type: 'value',
+                            axisLabel: {
+                                formatter: '{value}M'
+                            }
+                        },
+                        series: [{
+                            name: 'Used',
+                            type: 'line',
+                            stack:'Total',
+                            areaStyle: {normal: {}},
+                            data: usedSwap
+                        },{
+                            name: 'Free',
+                            type: 'line',
+                            stack:'Total',
+                            areaStyle: {normal: {}},
+                            data: freeSwap
+                        }]
+                    }
 		    }
 		},
 
@@ -298,6 +521,10 @@ const Agent = {
             }
 		}
 	}
+
+const AgentServices = {
+    template: `Agent Services`
+}
 
 const Alarms = {
 		template: `<div>
@@ -337,7 +564,8 @@ const router = new VueRouter({
         // 动态路径参数 以冒号开头
         {path: '/dashboard', component:  Dashboard},
         {path: '/agents', component:  Agents},
-        {path: '/agents/:aid', name: 'agent', component: Agent, props: true},
+        {path: '/agents/:aid/status', name: 'agentStatus', component: AgentStatus, props: true},
+        {path: '/agents/:aid/services', name: 'agentServices', component: AgentServices, props: true},
         {path: '/alarms', component:  Alarms},
         {path: '/settings', component:  Settings}
       ]

@@ -104,10 +104,11 @@ ENV/
 *.iml
 
 # python install pkc
-src/Python*.tgz
+Python*.tgz
 
 # db files
 *.db
 
 # bower components
 /web/static/lib
+nodes.txt

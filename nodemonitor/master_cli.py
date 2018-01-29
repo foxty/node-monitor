@@ -13,6 +13,7 @@ import os
 import sys
 import socket
 import logging
+import getopt
 from multiprocessing import Process
 from common import SetupError
 from master import master_main
@@ -59,7 +60,7 @@ class NodeConnector(object):
         if self.py27_installed():
             logging.info('%s installed success.', filename)
         else:
-            logging.error(errs.readlines())
+            logging.error('\n'.join(errs.readlines()))
             raise SetupError('install py27 failed.')
 
     def trans_files(self, files=[]):
@@ -101,6 +102,12 @@ def download_py():
         f.write(r.content)
 
 
+def parse_nodelist(path):
+    with open(path, 'r') as nf:
+        return [tuple(field.strip() for field in line.strip().split(','))
+                for line in nf.readlines() if line.strip() and not line.strip().startswith('#')]
+
+
 def push_to_nodes(nodelist):
     """push agent script to remote node and start the agent via ssh
     node list should contains list of tuple like (host, userame, password)
@@ -108,47 +115,58 @@ def push_to_nodes(nodelist):
     mhost = socket.gethostbyaddr(socket.gethostname())[0]
     for node in nodelist:
         host, user, password = node
-        with NodeConnector(host, user, password) as nc:
-            logging.info('checking node %s', host)
-            need_py27 = _INSTALL_PY27 and not nc.py27_installed()
-            if need_py27:
-                if not os.path.exists(_FILE_OF_PY27):
-                    download_py()
-                nc.trans_files(_FILES_TO_COPY + [_FILE_OF_PY27])
-                nc.install_py(_FILE_OF_PY27)
-            else:
-                nc.trans_files(_FILES_TO_COPY)
-                logging.info('py27 already installed, skip installation process.')
-            nc.stop_agent()
-            nc.launch_agent(mhost)
+        try:
+            with NodeConnector(host, user, password) as nc:
+                logging.info('checking node %s', host)
+                need_py27 = _INSTALL_PY27 and not nc.py27_installed()
+                if need_py27:
+                    if not os.path.exists(_FILE_OF_PY27):
+                        download_py()
+                    nc.trans_files(_FILES_TO_COPY + [_FILE_OF_PY27])
+                    nc.install_py(_FILE_OF_PY27)
+                else:
+                    nc.trans_files(_FILES_TO_COPY)
+                    logging.info('py27 already installed, skip installation process.')
+                nc.stop_agent()
+                nc.launch_agent(mhost)
+        except Exception as e:
+            logging.error('error while push to %s', host)
     return nodelist
+
+
+def usage():
+    pass
 
 
 if __name__ == '__main__':
 
-    # try:
-    #     opts, args = getopt.getopt(sys.argv[:], "hma:", ['help', 'master', 'agent='])
-    # except getopt.GetoptError as e:
-    #     print('Wrong usage')
-    #     sys.exit(2)
-    #
-    # for opt, v in opts:
-    #     if opt in ['-m', '--master']:
-    nodelist = [
-        #('cycad.ip.lab.chn.arrisi.com', 'root', 'no$go^'),
-        ('saaszdev107.ip.lab.chn.arrisi.com', 'root', 'no$go^')
-    ]
+    try:
+        opts, args = getopt.getopt(sys.argv[1:], "hpm", ['help', 'push', 'master'])
+    except getopt.GetoptError as e:
+        print('Wrong usage', e)
+        sys.exit(2)
+    for opt, v in opts:
+        if opt in ['-p', '--push']:
+            if not len(args):
+                print('invalid node list provided')
+                break
+            with open(args[0], 'r') as f:
+                nodelist = [[ele.strip() for ele in l.strip().split(',')]
+                            for l in f.readlines() if l and not l.strip().startswith('#')]
+            push_to_nodes(nodelist)
+        elif opt in ['-m', '--master']:
+            master_proc = Process(target=master_main)
+            masterui_proc = Process(target=ui_main)
+            master_proc.start()
+            logging.info('master backend process started: %s', master_proc)
+            masterui_proc.start()
+            logging.info('master ui process started: %s', masterui_proc)
 
-    if 'push' in sys.argv:
-        push_to_nodes(nodelist)
-    else:
-        master_proc = Process(target=master_main)
-        masterui_proc = Process(target=ui_main)
-        master_proc.start()
-        logging.info('master backend process started: %s', master_proc)
-        masterui_proc.start()
-        logging.info('master ui process started: %s', masterui_proc)
-
-        master_proc.join()
-        masterui_proc.join()
-        logging.info('master exited.')
+            master_proc.join()
+            masterui_proc.join()
+            logging.info('master exited.')
+        elif opt in ['-h', '--help']:
+            logging.info('print help')
+        else:
+            print('invalid options %s', ' '.join(sys.argv))
+            exit(-1)
