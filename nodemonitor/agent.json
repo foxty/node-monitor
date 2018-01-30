@@ -1,14 +1,34 @@
 {
+  "clock_interval": 10,
+  "heartbeat_clocks": 6,
   "node_metrics": {
-    "w": ["w"],
-    "free": ["free", "-m"],
-    "vmstat": ["vmstat","1", "2"],
-    "netstat": ["netstat", "-s"],
-    "dmesg": ["dmesg1"]
+    "w": {
+      "cmd": ["w"],
+      "clocks": 6
+    },
+    "free": {
+      "cmd": ["free", "-m"],
+      "clocks":6
+    },
+    "vmstat": {
+      "cmd": ["vmstat","1", "2"],
+      "clocks": 6
+    },
+    "netstat": {
+      "cmd": ["netstat", "-s"],
+      "clocks": 6
+    },
+    "df": {
+      "cmd": ["df", "-h"],
+      "clocks":60
+    }
   },
 
   "service_metrics": {
-    "pidstat": ["pidstat", "-rtuh", "-p", "${pid}"]
+    "pidstat": {
+      "cmd":["pidstat", "-rtuh", "-p", "${pid}"],
+      "clocks":6
+    }
   },
 
   "services": [

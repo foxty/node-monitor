@@ -135,11 +135,33 @@ class GlobalFuncTest(unittest.TestCase):
         ''')
         self.assertEqual('2', r.aid)
         self.assertEqual(ctime, r.collect_at)
-        self.assertEqual(43*24*3600, r.uptime)
+        self.assertEqual(0, r.uptime)
         self.assertEqual(11, r.users)
         self.assertEqual(2.38, r.load1)
         self.assertEqual(2.41, r.load5)
         self.assertEqual(2.41, r.load15)
+        self.assertIsNone(r.procs_r)
+        self.assertIsNone(r.procs_b)
+        self.assertIsNone(r.sys_in)
+        self.assertIsNone(r.sys_cs)
+
+    def test_parse_w_linux(self):
+        m = nm.Master()
+        ctime = datetime.now()
+        r = nm.parse_w('2', collect_time=ctime, content='''
+        21:26:13 up  3:32,  3 users,  load average: 0.00, 0.03, 0.00
+        USER     TTY      FROM              LOGIN@   IDLE   JCPU   PCPU WHAT
+        root     pts/2    pc-llou.arrs.arr 17:53    3:32m  0.00s  0.00s -bash
+        root     pts/1    pc-yzhang3.arrs. 17:53    3:32m  0.00s  0.00s -bash
+        root     pts/0    pc-itian.arrs.ar 21:20    3:18   0.01s  0.01s -bash
+        ''')
+        self.assertEqual('2', r.aid)
+        self.assertEqual(ctime, r.collect_at)
+        self.assertEqual(0, r.uptime)
+        self.assertEqual(3, r.users)
+        self.assertEqual(0.00, r.load1)
+        self.assertEqual(0.03, r.load5)
+        self.assertEqual(0.00, r.load15)
         self.assertIsNone(r.procs_r)
         self.assertIsNone(r.procs_b)
         self.assertIsNone(r.sys_in)
@@ -387,7 +409,7 @@ class MasterTest(BaseDBTest):
         sysreports = self.dao.get_sysreports(agent.aid, start, end)
         self.assertEqual(1, len(sysreports))
         self.assertEqual(nm.NSystemReport(aid=agent.aid, collect_at=ctime,
-                                          uptime=57*24*3600, users=1, load1=2.11, load5=2.54, load15=2.77,
+                                          uptime=0, users=1, load1=2.11, load5=2.54, load15=2.77,
                                           procs_r=1, procs_b=0, sys_in=1091, sys_cs=404),
                          sysreports[0])
 

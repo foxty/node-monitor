@@ -39,22 +39,22 @@ class AgentConfig(object):
         self._valid_services = None
         self._validate()
 
-        self._hb_interval = 30 # seconds
-        self._nmetrics_interval = 60 # seconds
-        self._smetrcis_interval = 300 # seconds
+        # clocks
+        self._clock_interval = config.get('clock_interval', 10)
+        self._hb_clocks = config.get('heartbeat_clocks', 60)
 
     def _validate(self):
         checkcmd = 'where' if is_win() else 'which'
         # check node metrics
         logging.info('check node command by %s', checkcmd)
         self._valid_node_metrics = {k: v for k, v in self._node_metrics.items()
-                                    if call([checkcmd, v[0]]) == 0}
+                                    if call([checkcmd, v['cmd'][0]]) == 0}
         logging.info('valid node metrics = %s', self._valid_node_metrics)
 
         # check service metrics
         logging.info('check service command by %s', checkcmd)
         self._valid_service_metrics = {k: v for k, v in self._service_metrics.items()
-                                       if call([checkcmd, v[0]]) == 0}
+                                       if call([checkcmd, v['cmd'][0]]) == 0}
         logging.info('valid service metrics = %s', self._valid_service_metrics)
 
         # check services
@@ -66,8 +66,16 @@ class AgentConfig(object):
                      invalid_serivces)
 
     @property
+    def node_metrics(self):
+        return self._node_metrics
+
+    @property
     def valid_node_metrics(self):
         return self._valid_node_metrics
+
+    @property
+    def service_metrics(self):
+        return self._service_metrics
 
     @property
     def valid_service_metrics(self):
@@ -78,16 +86,12 @@ class AgentConfig(object):
         return self._valid_services
 
     @property
-    def hb_interval(self):
-        return self._hb_interval
+    def clock_interval(self):
+        return self._clock_interval
 
     @property
-    def nmetrics_interval(self):
-        return self._nmetrics_interval
-
-    @property
-    def smetrics_interval(self):
-        return self._smetrcis_interval
+    def hb_clocks(self):
+        return self._hb_clocks
 
 
 class NodeCollector(threading.Thread):
@@ -96,34 +100,30 @@ class NodeCollector(threading.Thread):
         super(NodeCollector, self).__init__(target=self._collect, name='NodeCollector')
         self._agent = agent
         self._agentid = agent.agentid
-        self._def_interval = 10
         self._delay = threading.Event()
         self._config = config
         self.setDaemon(True)
 
     def _collect(self):
-        interval = self._def_interval
-        hb_loop = self._config.hb_interval / interval
-        nmetrics_loop = self._config.nmetrics_interval / interval
-        smetrics_loop = self._config.smetrics_interval / interval
+        interval = self._config.clock_interval
         loops = 1;
         while True:
             self._delay.wait(interval)
             time1 = datetime.now()
             try:
-                if loops % hb_loop == 0:
+                if loops % self._config.hb_clocks == 0:
                     self._prod_heartbeat()
-                if loops % nmetrics_loop == 0:
-                    self._collect_nmetrics()
-                if loops % smetrics_loop == 0:
-                    self._collect_smetrics()
+
+                self._collect_nmetrics(loops)
+
+                # TODO: collet service metrics
             except BaseException as e:
                 logging.exception('error during collect metrics, wait to next round. %s', e)
             finally:
                 loops = loops + 1
             time2 = datetime.now()
             time_used = (time2 - time1).seconds
-            interval = self._def_interval - time_used
+            interval = self._config.clock_interval - time_used
 
     def _prod_heartbeat(self):
         logging.info('produce heartbeat...')
@@ -131,20 +131,38 @@ class NodeCollector(threading.Thread):
         hb_msg = Msg(self._agentid, Msg.A_HEARTBEAT, body=dump_json(body))
         self._agent.add_msg(hb_msg)
 
-    def _collect_nmetrics(self):
-        """Collect node metrics"""
-        logging.info('collecting node metrics...')
-        result = {}
-        for k, cmd in self._config.valid_node_metrics.items():
-            try:
-                output = check_output(cmd)
-                result[k] = output
-            except BaseException as e:
-                logging.exception('call cmd %s failed', cmd)
-                result[k] = e.message
-        result['collect_time'] = datetime.now().strftime(DATETIME_FMT)
-        nm_msg = Msg(self._agentid, Msg.A_NODE_METRIC, body=dump_json(result))
-        self._agent.add_msg(nm_msg)
+    def _collect_nmetrics(self, loops):
+        """
+        Collect node metrics
+        :param loops: current loops
+        """
+        logging.info('try to collecting node metrics, loops=%d', loops)
+        nmetrics_result = {}
+        for k, v in self._config.valid_node_metrics.items():
+            if loops % v.get('clocks', 6) == 0:
+                nmetrics_result[k] = self._get_cmd_result(v['cmd'])
+        if nmetrics_result:
+            nmetrics_result['collect_time'] = datetime.now()
+            nm_msg = Msg(self._agentid, Msg.A_NODE_METRIC, body=dump_json(nmetrics_result))
+            self._agent.add_msg(nm_msg)
+            logging.info('%d node metrics collected', len(nmetrics_result) - 1)
+        else:
+            logging.info('no metric collected ')
+
+    def _get_cmd_result(self, cmd):
+        """
+        Execute cmd on local OS and return output of cmd
+        :param cmd:
+        :return: result string
+        """
+        result = 'NOT COLLECTED'
+        try:
+            output = check_output(cmd)
+            result = output
+        except BaseException as e:
+            logging.exception('call cmd %s failed', cmd)
+            result = e.message
+        return result
 
     def _find_services(self):
         logging.info('service discovery...')

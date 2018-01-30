@@ -126,11 +126,11 @@ def push_to_nodes(nodelist):
                     nc.install_py(_FILE_OF_PY27)
                 else:
                     nc.trans_files(_FILES_TO_COPY)
-                    logging.info('py27 already installed, skip installation process.')
+                    logging.info('python27 already installed, skip installation process.')
                 nc.stop_agent()
                 nc.launch_agent(mhost)
         except Exception as e:
-            logging.error('error while push to %s', host)
+            logging.exception('error while push to %s', host)
     return nodelist
 
 

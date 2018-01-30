@@ -107,7 +107,7 @@ def dao(f):
     return dao_decorator
 
 
-_RE_SYSREPORT = re.compile('.*?(?P<days>\\d+)\\s+day.*?(?P<users>\\d+)\\suser.*'
+_RE_SYSREPORT = re.compile('.*?(?P<users>\\d+)\\suser.*'
                            'age: (?P<load1>\\d+\\.\\d+), (?P<load5>\\d+\\.\\d+), (?P<load15>\\d+\\.\\d+).*',
                            re.S)
 
@@ -124,7 +124,7 @@ def parse_w(aid, collect_time, content):
     """
     m = _RE_SYSREPORT.match(content)
     if m:
-        days = int(m.group('days'))
+        days = 0
         users = int(m.group('users'))
         load1 = float(m.group('load1'))
         load5 = float(m.group('load5'))
@@ -133,6 +133,7 @@ def parse_w(aid, collect_time, content):
                              load1=load1, load5=load5, load15=load15,
                              procs_r=None, procs_b=None, sys_in=None, sys_cs=None)
     else:
+        logging.warn('invalid content of `w`: %s', content)
         return None
 
 
@@ -159,8 +160,9 @@ def parse_free(aid, collect_time, content):
         return NMemoryReport(aid, collect_time, total_mem=total_mem, used_mem=used_mem,
                              free_mem=free_mem, cache_mem=None, total_swap=total_swap,
                              used_swap=use_swap, free_swap=free_swap)
-    logging.warn('invalid output of free: %s', content)
-    return None
+    else:
+        logging.warn('invalid content of`free`: %s', content)
+        return None
 
 
 def parse_vmstat(aid, collect_time, content):
@@ -194,8 +196,9 @@ def parse_vmstat(aid, collect_time, content):
         r = NCPUReport(aid=aid, collect_at=collect_time,
                        us=us, sy=sy,id=id_, wa=wa, st=st)
         return r, procs_r, procs_b, sys_in, sys_cs
-    logging.warn('invalid output of vmstat : %s', content)
-    return None, None, None, None, None
+    else:
+        logging.warn('invalid content of `vmstat` : %s', content)
+        return None, None, None, None, None
 
 
 class AgentStatus(object):
@@ -345,9 +348,9 @@ class MasterDAO(object):
 
     @dao
     def update_agent_status(self, aid, last_cpu_util, last_mem_util, last_sys_load1, last_sys_cs, cursor):
-        cursor.execute('UPDATE agent SET last_cpu_util=?, last_mem_util=?, last_sys_load1=?, last_sys_cs=? '
-                       'WHERE aid=?',
-                       (last_cpu_util, last_mem_util, last_sys_load1, last_sys_cs, aid))
+        cursor.execute('UPDATE agent SET last_msg_at=?, last_cpu_util=?, last_mem_util=?, '
+                       'last_sys_load1=?, last_sys_cs=? WHERE aid=?',
+                       (datetime.now(), last_cpu_util, last_mem_util, last_sys_load1, last_sys_cs, aid))
 
     @dao
     def add_nmetrics(self, agentid, collect_time, contents, cursor):

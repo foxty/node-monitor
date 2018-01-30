@@ -22,6 +22,20 @@ _APP = Flask(__name__,
 _DAO = MasterDAO()
 
 
+def calc_daterange(r):
+    if r == 'last_hour':
+        hours = 1
+    elif r == 'last_day':
+        hours = 24
+    elif r == 'last_week':
+        hours = 24*7
+    else:
+        hours = 1
+    end = datetime.now()
+    start = end - timedelta(hours=hours)
+    return start, end
+
+
 @_APP.route("/")
 def index():
     return render_template('index.html')
@@ -33,27 +47,21 @@ def get_agents():
     return dump_json(agents)
 
 
-@_APP.route('/api/agents/<aid>/report/system', methods=['GET'])
-def get_agent_sysreports(aid):
-    end = datetime.now()
-    start = end - timedelta(hours=1)
-    reports = _DAO.get_sysreports(aid, start, end)
+@_APP.route('/api/agents/<aid>/report/system/<any(last_hour,last_day,last_week):date_range>', methods=['GET'])
+def get_agent_sysreports(aid, date_range='last_hour'):
+    reports = _DAO.get_sysreports(aid, *calc_daterange(date_range))
     return dump_json(reports)
 
 
-@_APP.route('/api/agents/<aid>/report/cpu', methods=['GET'])
-def get_agent_cpureports(aid):
-    end = datetime.now()
-    start = end - timedelta(hours=1)
-    reports = _DAO.get_cpureports(aid, start, end)
+@_APP.route('/api/agents/<aid>/report/cpu/<any(last_hour,last_day,last_week):date_range>', methods=['GET'])
+def get_agent_cpureports(aid, date_range='last_hour'):
+    reports = _DAO.get_cpureports(aid, *calc_daterange(date_range))
     return dump_json(reports)
 
 
-@_APP.route('/api/agents/<aid>/report/memory', methods=['GET'])
-def get_agent_memreports(aid):
-    end = datetime.now()
-    start = end - timedelta(hours=1)
-    reports = _DAO.get_memreports(aid, start, end)
+@_APP.route('/api/agents/<aid>/report/memory/<any(last_hour,last_day,last_week):date_range>', methods=['GET'])
+def get_agent_memreports(aid, date_range='last_hour'):
+    reports = _DAO.get_memreports(aid, *calc_daterange(date_range))
     return dump_json(reports)
 
 

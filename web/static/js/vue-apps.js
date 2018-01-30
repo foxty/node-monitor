@@ -136,8 +136,66 @@ Vue.component("v-window", {
 });
 
 /**Echarts**/
-function stackChart(title, array, category, graphMapping) {
-    //TODO:need fix
+function genChartOption(title, data, cateProp, seriesPropsMapping, graphOptions) {
+    graphOptions = graphOptions || {}
+    graphOptions.isStack = graphOptions.isStack || false
+    graphOptions.yAxisFmt = graphOptions.yAxisFmt || '{value}'
+    var category = []
+    var seriesMap = {}
+    var legends = []
+    data.forEach(function(d) {
+        category.push(d[cateProp]);
+        for(serieName in seriesPropsMapping) {
+            if (!seriesMap[serieName]) {
+                seriesMap[serieName] = {name: serieName, type: 'line', data: []};
+            }
+            serie = seriesMap[serieName];
+            serieDataProp = seriesPropsMapping[serieName];
+            if(graphOptions.isStack) {
+                serie.stack = 'Total';
+                serie.areaStyle = {normal: {}};
+            }
+            serie.data.push(d[serieDataProp])
+        }
+    })
+    var series = [];
+    for(serieName in seriesMap) {
+        legends.push(serieName);
+        series.push(seriesMap[serieName]);
+    }
+
+    return {
+        title: {text: title},
+        tooltip: {
+            trigger: 'axis'
+        },
+        legend: {
+                data:legends
+        },
+        xAxis: {
+            type: 'category',
+            data: category,
+            boundaryGap : false,
+            axisLabel: {
+                formatter: function(v, idx) {
+                    return v && v.length > 19 ?  v.substr(0,19) : v;
+                }
+            }
+        },
+        yAxis: {
+            type: 'value',
+            axisLabel: {
+                formatter: graphOptions.yAxisFmt
+            }
+        },
+        dataZoom: [{
+                type: 'slider', // 这个 dataZoom 组件是 slider 型 dataZoom 组件
+                start: 0,      // 左边在 10% 的位置。
+                end: 100         // 右边在 60% 的位置。
+            }
+        ],
+        series: series
+    }
 }
 
 /**Vue Apps**/
@@ -158,28 +216,36 @@ const Dashboard = {
 const Agents = {
 		template: `<div><div class="page-header"><h1>Agent List</h1></div>
 		    <table class="table" v-if="agents">
-               <thead>
-                   <tr>
-                       <th>Name</th>
-                       <th>Host</th>
-                       <th>Create Time</th>
-                       <th>Latest CPU Util(%)</th>
-                       <th>Latest Mem Util(%)</th>
-                       <th>Latest Load(1m)</th>
-                       <th>Latest CS</th>
-                   </tr>
-               </thead>
-               <tbody>
-                   <tr v-for="a in agents">
-                       <td><router-link :to="{name: 'agentStatus', params: {aid:a.aid}}">{{a.aid}}:{{a.name}}</router-link></td>
-                       <td>{{a.host}}</td>
-                       <td>{{a.created_at}}</td>
-                       <td>{{a.last_cpu_util}}</td>
-                       <td>{{a.last_mem_util}}</td>
-                       <td>{{a.last_sys_load1}}</td>
-                       <td>{{a.last_sys_cs}}</td>
-                   </tr>
-               </tbody>
+		        <thead>
+                    <tr>
+                        <th>Name</th>
+                        <th>Node Host</th>
+                        <th>Service(s)</th>
+                        <th>CPU Util(%)</th>
+                        <th>Mem Util(%)</th>
+                        <th>Load(1m)</th>
+                        <th>CS</th>
+                        <th>Reports</th>
+                        <th>Create Time</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr v-for="a in agents">
+                        <td>{{a.name}}</td>
+                        <td>{{a.host}}</td>
+                        <td>N/A</td>
+                        <td>{{a.last_cpu_util}}</td>
+                        <td>{{a.last_mem_util}}</td>
+                        <td>{{a.last_sys_load1}}</td>
+                        <td>{{a.last_sys_cs}}</td>
+                        <td>
+                            <router-link :to="{name: 'agentStatus', params: {aid:a.aid}}">
+                                Reports <span class="glyphicon glyphicon-stats" aria-hidden="true"></span>
+                            </router-link>
+                        </td>
+                        <td>{{a.created_at}}</td>
+                    </tr>
+                </tbody>
            </table>
            <div v-if="!agents" class="well">no agents</div>
        </div>`,
@@ -209,7 +275,13 @@ const AgentStatus = {
 
 		template: `<div><div class="page-header"><h1>Agent {{aid}} Status</h1></div>
             <div class="panel panel-default">
-                <div class="panel-heading">System</div>
+                <div class="panel-heading">
+                    System
+                    <button class="btn btn-sm btn-link" @click="sysReportsRange='last_hour'">Last Hour</button>
+                    <button class="btn btn-sm btn-link" @click="sysReportsRange='last_day'">Last Day</button>
+                    <button class="btn btn-sm btn-link" @click="sysReportsRange='last_week'">Last Week</button>
+                    <button class="btn btn-sm btn-success" @click="loadSysReports()">Reload</button>
+                </div>
                 <div class="panel-body row">
                     <chart :options="sysLoad" style="width:100%;height:300px"></chart>
                     <div class='col-md-6'><chart :options="sysUsers" style="width:100%;height:300px"></chart></div>
@@ -218,14 +290,26 @@ const AgentStatus = {
             </div>
 
             <div class="panel panel-default">
-                <div class="panel-heading">CPU</div>
+                <div class="panel-heading">
+                    CPU
+                    <button class="btn btn-sm btn-link" @click="cpuReportsRange='last_hour'">Last Hour</button>
+                    <button class="btn btn-sm btn-link" @click="cpuReportsRange='last_day'">Last Day</button>
+                    <button class="btn btn-sm btn-link" @click="cpuReportsRange='last_week'">Last Week</button>
+                    <button class="btn btn-sm btn-success" @click="loadCpuReports()">Reload</button>
+                 </div>
                 <div class="panel-body row">
                     <chart :options="sysCpu" style="width:100%;height:300px"></chart>
                 </div>
             </div>
 
             <div class="panel panel-default">
-                <div class="panel-heading">Memory</div>
+                <div class="panel-heading">
+                    Memory
+                    <button class="btn btn-sm btn-link" @click="memReportsRange='last_hour'">Last Hour</button>
+                    <button class="btn btn-sm btn-link" @click="memReportsRange='last_day'">Last Day</button>
+                    <button class="btn btn-sm btn-link" @click="memReportsRange='last_week'">Last Week</button>
+                    <button class="btn btn-sm btn-success" @click="loadMemReports()">Reload</button>
+                </div>
                 <div class="panel-body row">
                     <div class="col-md-6"><chart :options="sysMemory" style="width:100%;height:300px"></chart></div>
                     <div class="col-md-6"><chart :options="sysSwap" style="width:100%;height:300px"></chart></div>
@@ -236,8 +320,11 @@ const AgentStatus = {
 		data: function() {
 		    return {
 		        agent: null,
+		        sysReportsRange: 'last_hour',
 		        sysReports: null,
+		        cpuReportsRange: 'last_hour',
 		        cpuReports: null,
+		        memReportsRange: 'last_hour',
 		        memReports: null,
 		        sysLoad: null,
 		        sysUsers: null,
@@ -249,245 +336,39 @@ const AgentStatus = {
 		},
 
 		watch: {
+		    sysReportsRange: function(n, o) {
+                if(n != o) {
+                    this.loadSysReports()
+                }
+		    },
+		    cpuReportsRange: function(n, o) {
+		        if (n != 0) {
+		            this.loadCpuReports()
+		        }
+		    },
+		    memReportsRange: function(n, o) {
+		        if(n != o) {
+		            this.loadMemReports()
+		        }
+		    },
 		    sysReports: function(n, o) {
-		        var category = []
-		        var load1 = []
-		        var load5 = []
-		        var load15 = []
-		        var users = []
-		        var sysin = []
-		        var syscs = []
-
-		        n.forEach(function(r) {
-		            category.push(r.collect_at.substr(0, 19))
-                    load1.push(r.load1)
-                    load5.push(r.load5)
-                    load15.push(r.load15)
-                    users.push(r.users)
-                    sysin.push(r.sys_in)
-                    syscs.push(r.sys_cs)
-
-		        })
-		        this.sysLoad = {
-                        title: {text: 'Sys Load'},
-                        tooltip: {
-                            trigger: 'axis'
-                        },
-                        legend: {
-                                data:['Load1','Load5','Load15']
-                        },
-                        xAxis: {
-                            type: 'category',
-                            data: category
-                        },
-                        yAxis: {
-                            type: 'value'
-                        },
-                        series: [{
-                            data: load1,
-                            type: 'line',
-                            name: 'Load1'
-                        },{
-                            data:load5,
-                            type:'line',
-                            name:'Load5'
-                        }, {
-                            data:load15,
-                            type:'line',
-                            name:'Load15'
-                        }]
-                    }
-                this.sysUsers = {
-                        title: {text: 'Sys Users'},
-                        tooltip: {
-                            trigger: 'axis'
-                        },
-                        xAxis: {
-                            type: 'category',
-                            data: category
-                        },
-                        yAxis: {
-                            type: 'value'
-                        },
-                        series: [{
-                            data: users,
-                            type: 'line'
-                        }]
-                    }
-                this.sysCs = {
-                        title: {text: 'Sys IN&CS'},
-                        tooltip: {
-                            trigger: 'axis'
-                        },
-                        legend: {
-                            data: ['IN', 'CS']
-                        },
-                        xAxis: {
-                            type: 'category',
-                            data: category
-                        },
-                        yAxis: {
-                            type: 'value'
-                        },
-                        series: [{
-                            data: sysin,
-                            type: 'line',
-                            name: 'IN'
-                        },{
-                            data: syscs,
-                            type: 'line',
-                            name: 'CS'
-                        }]
-                    }
+		        this.sysLoad = genChartOption("Sys Load", n, "collect_at",
+		                            {"Load1":"load1", "Load5":"load5", "Load15":"load15"});
+                this.sysUsers = genChartOption("Sys Users",n, "collect_at", {"Users":"users"});
+                this.sysCs =  genChartOption("Sys IN&CS", n, "collect_at", {"IN":"sys_in", "CS":"sys_cs"});
 		    },
 		    cpuReports: function(n, o) {
-		        var category = []
-		        var us = []
-		        var sy = []
-		        var id = []
-		        var wa = []
-		        var st = []
-		        n.forEach(function(r) {
-                    category.push(r.collect_at.substr(0, 19))
-                    us.push(r.us)
-                    sy.push(r.sy)
-                    id.push(r.id)
-                    wa.push(r.wa)
-                    st.push(r.st)
-                })
-                this.sysCpu = {
-                        title: {text: 'CPU'},
-                        tooltip: {
-                            trigger: 'axis'
-                        },
-                        legend: {
-                                data:['User','System','Idle', 'Wait', 'Stolen']
-                        },
-                        xAxis: {
-                            type: 'category',
-                            data: category,
-                            boundaryGap : false
-                        },
-                        yAxis: {
-                            type: 'value',
-                            axisLabel: {
-                                formatter: '{value} %'
-                            }
-                        },
-                        series: [{
-                            name: 'User',
-                            type: 'line',
-                            stack:'Total',
-                            areaStyle: {normal: {}},
-                            data: us
-                        },{
-                            name: 'System',
-                            type: 'line',
-                            stack:'Total',
-                            areaStyle: {normal: {}},
-                            data: sy
-                        }, {
-                            name: 'Idle',
-                            type: 'line',
-                            stack:'Total',
-                            areaStyle: {normal: {}},
-                            data: id
-                        }, {
-                            name: 'Wait',
-                            type: 'line',
-                            stack:'Total',
-                            areaStyle: {normal: {}},
-                            data: wa
-                        }, {
-                            name: 'Stolen',
-                            type: 'line',
-                            stack:'Total',
-                            areaStyle: {normal: {}},
-                            data: st
-                        }]
-                    }
+                this.sysCpu = genChartOption("CPU", n, "collect_at",
+                                {"User":"us","System":"sy","Idle":"id","Wait":"wa","Stolen":"st"},
+                                {isStack:true, yAxisFmt: "{value}%"});
 		    },
 		    memReports: function(n, o) {
-		        var category = []
-                var total = []
-                var usedMem = []
-                var freeMem = []
-                var usedSwap = []
-                var freeSwap = []
-                n.forEach(function(r) {
-                    category.push(r.collect_at.substr(0, 19))
-                    total.push(r.total_mem)
-                    usedMem.push(r.used_mem)
-                    freeMem.push(r.free_mem)
-                    usedSwap.push(r.used_swap)
-                    freeSwap.push(r.free_swap)
-                })
-                this.sysMemory = {
-                        title: {text: 'Memory'},
-                        tooltip: {
-                            trigger: 'axis'
-                        },
-                        legend: {
-                                data:['Used','Free']
-                        },
-                        xAxis: {
-                            type: 'category',
-                            data: category,
-                            boundaryGap : false
-                        },
-                        yAxis: {
-                            type: 'value',
-                            axisLabel: {
-                                formatter: '{value}M'
-                            }
-                        },
-                        series: [{
-                            name: 'Used',
-                            type: 'line',
-                            stack:'Total',
-                            areaStyle: {normal: {}},
-                            data: usedMem
-                        },{
-                            name: 'Free',
-                            type: 'line',
-                            stack:'Total',
-                            areaStyle: {normal: {}},
-                            data: freeMem
-                        }]
-                    }
-                this.sysSwap = {
-                        title: {text: 'Swap'},
-                        tooltip: {
-                            trigger: 'axis'
-                        },
-                        legend: {
-                                data:['Used','Free']
-                        },
-                        xAxis: {
-                            type: 'category',
-                            data: category,
-                            boundaryGap : false
-                        },
-                        yAxis: {
-                            type: 'value',
-                            axisLabel: {
-                                formatter: '{value}M'
-                            }
-                        },
-                        series: [{
-                            name: 'Used',
-                            type: 'line',
-                            stack:'Total',
-                            areaStyle: {normal: {}},
-                            data: usedSwap
-                        },{
-                            name: 'Free',
-                            type: 'line',
-                            stack:'Total',
-                            areaStyle: {normal: {}},
-                            data: freeSwap
-                        }]
-                    }
+                this.sysMemory = genChartOption("Memory", n, "collect_at",
+                                    {"Used":"used_mem", "Free":"free_mem"},
+                                    {isStack:true, yAxisFmt:"{value}M"});
+                this.sysSwap = genChartOption("Swap", n, "collect_at",
+                                   {"Used":"used_swap", "Free":"free_swap"},
+                                   {isStack:true, yAxisFmt:"{value}M"});
 		    }
 		},
 
@@ -501,21 +382,24 @@ const AgentStatus = {
             loadSysReports: function() {
                 var self = this;
                 var aid = self.aid;
-                Ajax.get(`/api/agents/${aid}/report/system`, function(reports) {
+                var range = self.sysReportsRange
+                Ajax.get(`/api/agents/${aid}/report/system/${range}`, function(reports) {
                     self.sysReports = reports
                 })
             },
             loadCpuReports: function() {
                 var self = this;
                 var aid = self.aid;
-                Ajax.get(`/api/agents/${aid}/report/cpu`, function(reports) {
+                var range = self.cpuReportsRange
+                Ajax.get(`/api/agents/${aid}/report/cpu/${range}`, function(reports) {
                     self.cpuReports = reports
                 })
             },
             loadMemReports: function() {
                 var self = this;
                 var aid = self.aid;
-                Ajax.get(`/api/agents/${aid}/report/memory`, function(reports) {
+                var range = self.memReportsRange
+                Ajax.get(`/api/agents/${aid}/report/memory/${range}`, function(reports) {
                     self.memReports = reports
                 })
             }
