@@ -16,8 +16,6 @@ import logging
 import getopt
 from multiprocessing import Process
 from common import SetupError
-from master import master_main
-from master_ui import ui_main
 _FILES_TO_COPY = ['common.py', 'agent.py', 'agent.json']
 _INSTALL_PY27 = True
 _FILE_OF_PY27 = 'Python-2.7.14.tgz'
@@ -155,6 +153,8 @@ if __name__ == '__main__':
                             for l in f.readlines() if l and not l.strip().startswith('#')]
             push_to_nodes(nodelist)
         elif opt in ['-m', '--master']:
+            from master import master_main
+            from master_ui import ui_main
             master_proc = Process(target=master_main)
             masterui_proc = Process(target=ui_main)
             master_proc.start()

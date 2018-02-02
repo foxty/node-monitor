@@ -69,9 +69,13 @@ class TextTableTest(unittest.TestCase):
         self.assertEqual(4, t.size)
         self.assertEqual(8, len(t._hheader))
         self.assertEqual('Abcdefgg', ''.join(t._hheader))
+        rows = t.get_rows()
+        self.assertEqual(3, len(rows))
+        self.assertEqual(('a1', 'b1', 'c1', 'd1', 'e1', 'f1', 'g1', 'g2'), rows[0])
+        self.assertEqual(('1', '2', '3', '4', '5', '6', '7', '77'), rows[1])
+        self.assertEqual(('1.1', '2.2', '3.3', '4.4', '5.5', '6.6', '7.7', '77.77'), rows[2])
 
         t = TextTable(self._TABLE, 1)
-
         self.assertEqual(4, t.size)
         self.assertEqual(8, len(t._hheader))
         self.assertEqual('a1b1c1d1e1f1g1g2', ''.join(t._hheader))

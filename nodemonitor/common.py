@@ -146,6 +146,7 @@ class TextTable(object):
                        for l in content.splitlines() if l.strip()]
         self._size = len(self._table)
         self._hheader = self._table[header_ln] if self.size > header_ln else None
+        self._tbody = self._table[header_ln + 1:] if self.size > header_ln + 1 else None
         if vheader:
             self._vheader = [row[0] for row in self._table]
 
@@ -176,6 +177,9 @@ class TextTable(object):
         values = self.gets(rowno, header, conv_func=conv_func)
         return values[0] if values else default
 
+    def get_row(self, rowno):
+        return tuple(self._table[rowno])
+
     def get_ints(self, rowno, header):
         return self.gets(rowno, header, conv_func=int)
 
@@ -187,6 +191,9 @@ class TextTable(object):
 
     def get_float(self, rowno, header, default=None):
         return self.get(rowno, header, default, conv_func=float)
+
+    def get_rows(self):
+        return [tuple(content) for content in self._tbody]
 
 
 def ostype():

@@ -28,70 +28,7 @@ _MASTER_DB_NAME = 'master.db'
 class InvalidFieldError(Exception): pass
 
 
-class Model(dict):
-
-    FIELDS = []
-
-    def __init__(self, *args, **kwargs):
-        upd = None
-        if args:
-            upd = zip(self.FIELDS[:len(args)], args)
-        if kwargs:
-            diff = kwargs.viewkeys() - set(self.FIELDS)
-            if diff:
-                raise InvalidFieldError(','.jion(diff))
-            else:
-                upd = kwargs.items() if not upd else upd + kwargs.items()
-        if upd:
-            self.update({k: v for k, v in upd if v is not None})
-
-    def __getattr__(self, item):
-        return self.get(item, None)
-
-    def __setattr__(self, key, value):
-        self[key] = value
-
-    @property
-    def field_count(self):
-        return len(self.FIELDS)
-
-    def as_tuple(self):
-        return tuple(self.get(f, None) for f in self.FIELDS)
-
-
-class Agent(Model):
-    FIELDS = ['aid', 'name', 'host', 'created_at', 'last_msg_at',
-              'last_cpu_util', 'last_mem_util', 'last_sys_load1', 'last_sys_cs']
-
-
-class NMetric(Model):
-    FIELDS = ['aid', 'collect_at', 'category', 'content', 'created_at']
-
-
-class NMemoryReport(Model):
-    FIELDS = ['aid', 'collect_at', 'total_mem', 'used_mem', 'free_mem',
-              'cache_mem', 'total_swap', 'used_swap', 'free_swap']
-
-    @property
-    def used_util(self):
-        return self.used_mem*100/self.total_mem if self.used_mem and self.total_mem else None
-
-    @property
-    def free_util(self):
-        return self.free_mem*100/self.total_mem if self.free_mem and self.total_mem else None
-
-
-class NCPUReport(Model):
-    FIELDS = ['aid', 'collect_at', 'us', 'sy', 'id', 'wa', 'st']
-
-    @property
-    def used_util(self):
-        return self.us + self.sy if self.us is not None and self.sy is not None else None
-
-
-class NSystemReport(Model):
-     FIELDS = ['aid', 'collect_at', 'uptime', 'users', 'load1', 'load5',
-               'load15', 'procs_r', 'procs_b', 'sys_in', 'sys_cs']
+class NoPKError(Exception): pass
 
 
 def dao(f):
@@ -105,6 +42,159 @@ def dao(f):
             c.close()
         return r
     return dao_decorator
+
+
+class Model(dict):
+    TABLE = 'model'
+    FIELDS = []
+    PK = []
+    ISQL = None
+
+    def __init__(self, *args, **kwargs):
+        upd = None
+        if args:
+            upd = zip(self.FIELDS[:len(args)], args)
+        kwupd = self._check_updates(kwargs)
+        upd = kwupd if not upd else upd + kwupd
+        if upd:
+            self.update({k: v for k, v in upd if v is not None})
+
+    def __getattr__(self, item):
+        if item in self.FIELDS:
+            return self.get(item, None)
+        else:
+            raise InvalidFieldError('field %s not defined.' % item)
+
+    def __setattr__(self, key, value):
+        if key in self.FIELDS:
+            self[key] = value
+        else:
+            raise InvalidFieldError('field %s not defined.' % key)
+
+    def _check_updates(self, kwargs):
+        if kwargs:
+            diff = kwargs.viewkeys() - set(self.FIELDS)
+            if diff:
+                raise InvalidFieldError(','.join(diff))
+            else:
+                upd = kwargs.items()
+        else:
+            upd = []
+        return upd
+
+    def as_tuple(self):
+        return tuple(self.get(f, None) for f in self.FIELDS)
+
+    @dao
+    def save(self, cursor):
+        """
+        save current model to db (INSERT TO)
+        :param cursor:
+        :return:
+        """
+        logging.debug('saving model %s to db', self)
+        cursor.execute(self.isql(), self.as_tuple())
+
+    @dao
+    def set(self, **kwargs):
+        """
+        update the model and save to db
+        :param kwargs:
+        :return:
+        """
+        if not self.PK:
+            raise NoPKError(self.TABLE)
+        logging.debug('update model %s with %s', self.TABLE, kwargs)
+        cursor = kwargs['cursor']
+        del kwargs['cursor']
+        kwupd = self._check_updates(kwargs)
+        if kwupd:
+            # clever
+            fields, values = zip(*kwupd)
+            setphrase = ','.join(['%s=?' % f for f in fields])
+            wherephrase = ','.join(['%s=?' % pk for pk in self.PK])
+            pkvalues = tuple([self.get(pk) for pk in self.PK])
+            sql = 'UPDATE %s SET %s WHERE %s' % (self.TABLE, setphrase, wherephrase)
+            params = values + pkvalues
+            logging.debug('%s : %s', sql, params)
+            cursor.execute(sql, params)
+
+    @classmethod
+    def isql(cls):
+        if not cls.ISQL:
+            cls.ISQL = 'INSERT INTO %s (%s) VALUES(%s)' % (cls.TABLE, ','.join(cls.FIELDS), ','.join('?'*len(cls.FIELDS)))
+        return cls.ISQL
+
+    @classmethod
+    @dao
+    def save_all(cls, l, cursor):
+        records = [m.as_tuple() for m in l]
+        cursor.executemany(cls.isql(), records)
+
+    @classmethod
+    @dao
+    def query(cls, where=None, orderby=None, params=None, cursor=None):
+        """
+        query model list
+        :param where: SQL where clause
+        :param orderby: SQL order by clause
+        :param params: parameters used in where clause
+        :return: lis to of model
+        """
+        sql = 'SELECT %s FROM %s %s %s' % (','.join(cls.FIELDS), cls.TABLE,
+                                           'WHERE %s' % where if where else '',
+                                           'ORDER BY %s' % orderby if orderby else '')
+        logging.debug('%s : %s', sql, params)
+        cursor.execute(sql, params if params else [])
+        result = cursor.fetchall()
+        return [cls(*r) for r in result]
+
+
+class Agent(Model):
+    TABLE = 'agent'
+    FIELDS = ['aid', 'name', 'host', 'create_at', 'last_msg_at',
+              'last_cpu_util', 'last_mem_util', 'last_sys_load1', 'last_sys_cs']
+    PK = ['aid']
+
+
+class NMetric(Model):
+    TABLE = 'node_metric_raw'
+    FIELDS = ['aid', 'collect_at', 'category', 'content', 'create_at']
+
+
+class NMemoryReport(Model):
+    TABLE = 'node_memory_report'
+    FIELDS = ['aid', 'collect_at', 'total_mem', 'used_mem', 'free_mem',
+              'cache_mem', 'total_swap', 'used_swap', 'free_swap', 'create_at']
+
+    @property
+    def used_util(self):
+        return self.used_mem*100/self.total_mem if self.used_mem and self.total_mem else None
+
+    @property
+    def free_util(self):
+        return self.free_mem*100/self.total_mem if self.free_mem and self.total_mem else None
+
+
+class NCPUReport(Model):
+    TABLE = 'node_cpu_report'
+    FIELDS = ['aid', 'collect_at', 'us', 'sy', 'id', 'wa', 'st', 'create_at']
+
+    @property
+    def used_util(self):
+        return self.us + self.sy if self.us is not None and self.sy is not None else None
+
+
+class NSystemReport(Model):
+    TABLE = 'node_system_report'
+    FIELDS = ['aid', 'collect_at', 'uptime', 'users', 'load1', 'load5',
+              'load15', 'procs_r', 'procs_b', 'sys_in', 'sys_cs', 'create_at']
+
+
+class NDiskReport(Model):
+    TABLE = 'node_disk_report'
+    FIELDS = ['aid', 'collect_at', 'fs', 'size', 'used',
+              'available', 'used_util', 'mount_point', 'create_at']
 
 
 _RE_SYSREPORT = re.compile('.*?(?P<users>\\d+)\\suser.*'
@@ -131,7 +221,8 @@ def parse_w(aid, collect_time, content):
         load15 = float(m.group('load15'))
         return NSystemReport(aid, collect_time, uptime=days*24*3600, users=users,
                              load1=load1, load5=load5, load15=load15,
-                             procs_r=None, procs_b=None, sys_in=None, sys_cs=None)
+                             procs_r=None, procs_b=None, sys_in=None, sys_cs=None
+                             , create_at=datetime.now())
     else:
         logging.warn('invalid content of `w`: %s', content)
         return None
@@ -159,7 +250,7 @@ def parse_free(aid, collect_time, content):
         free_swap = t.get_int('Swap:', 'free')
         return NMemoryReport(aid, collect_time, total_mem=total_mem, used_mem=used_mem,
                              free_mem=free_mem, cache_mem=None, total_swap=total_swap,
-                             used_swap=use_swap, free_swap=free_swap)
+                             used_swap=use_swap, free_swap=free_swap, create_at=datetime.now())
     else:
         logging.warn('invalid content of`free`: %s', content)
         return None
@@ -194,64 +285,32 @@ def parse_vmstat(aid, collect_time, content):
         id_, wa = t.get_int(data_rn,'id'), t.get_int(data_rn,'wa')
         st = t.get_int(data_rn,'st')
         r = NCPUReport(aid=aid, collect_at=collect_time,
-                       us=us, sy=sy,id=id_, wa=wa, st=st)
+                       us=us, sy=sy,id=id_, wa=wa, st=st, create_at=datetime.now())
         return r, procs_r, procs_b, sys_in, sys_cs
     else:
         logging.warn('invalid content of `vmstat` : %s', content)
         return None, None, None, None, None
 
 
-class AgentStatus(object):
+def parse_df(aid, collect_time, content):
+    """
+    Parse the output of df command get disk utilization data
+    :param aid: agentid
+    :param collect_time: local time in node
+    :param content: output of command `df -k`
+    :return: list of disk utilization record
+    """
+    t = TextTable(content)
+    if t.size > 1:
+        diskreps = [NDiskReport(aid, collect_time, *row, create_at=datetime.now()) for row in t.get_rows()]
+        return diskreps
+    else:
+        logging.warn('invalid content of `vmstat` : %s', content)
+        return None, None, None, None, None
 
-    def __init__(self, agent, client_addr=None, heartbeat_at=datetime.now(), active=False):
-        self._agent = agent
-        self._client_addr = client_addr
-        self._heartbeat_at = heartbeat_at
-        self._active = active
 
-    @property
-    def agent(self):
-        return self._agent
-
-    @property
-    def client_addr(self):
-        return self._client_addr
-
-    @client_addr.setter
-    def client_addr(self, v):
-        self._client_addr = v
-
-    @property
-    def heartbeat_at(self):
-        return self._heartbeat_at
-
-    def heartbeat(self):
-        self._heartbeat_at = datetime.now()
-        self.activate()
-
-    @property
-    def active(self):
-        return self._active
-
-    def refresh(self):
-        self._heartbeat_at = datetime.now()
-
-    def inactive(self):
-        self._active = False
-
-    def activate(self):
-        self._active = True
-
-    def __eq__(self, other):
-        if isinstance(other, AgentStatus):
-            return other.agentid == self.agentid and \
-                   other.client_addr == self.client_addr
-        else:
-            return False
-
-    def __str__(self):
-        return '[AgentStatus:agent=%s, addr=%s, active=%s]' % \
-               (self._agent, self._client_addr, self._active)
+def parse_netstat(aid, collect_time, content):
+    pass
 
 
 class AgentRequestHandler(SocketServer.StreamRequestHandler):
@@ -264,19 +323,21 @@ class AgentRequestHandler(SocketServer.StreamRequestHandler):
         except Exception as e:
             logging.exception('error while processing data for %s', self.client_address)
         finally:
-            status = _MASTER.inactive_agent(self.agentid)
-            logging.info('agent %s quit', status)
+            if self.agentid:
+                status = _MASTER.inactive_agent(self.agentid)
+                logging.info('inactive agent %s ', status)
+            else:
+                logging.info('agent from %s not registered, exit handler.', self.client_address)
 
     def _chk_msg(self, msg):
         if not _MASTER.find_agent(msg.agentid) and msg.msg_type != Msg.A_REG:
-            raise InvalidMsgError('agentid %s not registered from %s',
-                                  msg.agentid, self.client_address)
+            raise InvalidMsgError('agentid %s not registered from %s' % (msg.agentid, self.client_address))
         elif not self.agentid:
             self.agentid = msg.agentid
             logging.info('new agent %s joined', self.client_address)
         elif self.agentid != msg.agentid:
-            raise InvalidMsgError('agentid change detected %d->%d from %s',
-                                  self.agentid, msg.agentid, self.client_address)
+            raise InvalidMsgError('agentid change detected %d->%d from %s'
+                                  % (self.agentid, msg.agentid, self.client_address))
 
     def _recv_msg(self):
         header = self.rfile.readline().strip().split(':')
@@ -296,7 +357,7 @@ class AgentRequestHandler(SocketServer.StreamRequestHandler):
         while process:
             msg = self._recv_msg()
             self._chk_msg(msg)
-            process = _MASTER.handle_msg(msg)
+            process = _MASTER.handle_msg(msg, self.client_address)
             if not process:
                 logging.info('msg handler stopped for %s from %s', msg, self.agentid)
 
@@ -304,27 +365,37 @@ class AgentRequestHandler(SocketServer.StreamRequestHandler):
 class MasterDAO(object):
     """DAO for master use to manipulate data with database"""
     _DB_SCHEMA = r'''
-    CREATE TABLE IF NOT EXISTS agent(aid UNIQUE, name, host, created_at timestamp, 
+    CREATE TABLE IF NOT EXISTS agent(aid UNIQUE, name, host, create_at timestamp, 
         last_msg_at, last_cpu_util, last_mem_util, last_sys_load1, last_sys_cs);
     
-    CREATE TABLE IF NOT EXISTS node_metric_raw(aid, collect_at timestamp, category, content, created_at timestamp);
+    CREATE TABLE IF NOT EXISTS node_metric_raw(aid, collect_at timestamp, category, content, create_at timestamp);
     CREATE INDEX IF NOT EXISTS `idx_nmr_aid` ON `node_metric_raw` (`aid` DESC);
     CREATE INDEX IF NOT EXISTS `idx_nmr_collect_at` ON `node_metric_raw` (collect_at DESC);
+    CREATE INDEX IF NOT EXISTS `idx_nmr_create_at` ON `node_metric_raw` (create_at DESC);
     
     CREATE TABLE IF NOT EXISTS node_memory_report(
-        aid, collect_at timestamp, total_mem, used_mem, 
-        free_mem, cache_mem, total_swap, used_swap, free_swap);
+        aid, collect_at timestamp, total_mem, used_mem, free_mem, cache_mem, 
+        total_swap, used_swap, free_swap, create_at timestamp);
     CREATE INDEX IF NOT EXISTS `idx_nmre_aid` ON `node_memory_report` (`aid` DESC);
     CREATE INDEX IF NOT EXISTS `idx_nmre_collect_at` ON `node_memory_report` (collect_at DESC);
+    CREATE INDEX IF NOT EXISTS `idx_nmre_create_at` ON `node_memory_report` (create_at DESC);
         
-    CREATE TABLE IF NOT EXISTS node_cpu_report(aid, collect_at timestamp, us, sy, id, wa, st);
+    CREATE TABLE IF NOT EXISTS node_cpu_report(aid, collect_at timestamp, us, sy, id, wa, st, create_at timestamp);
     CREATE INDEX IF NOT EXISTS `idx_ncr_aid` ON `node_cpu_report` (`aid` DESC);
     CREATE INDEX IF NOT EXISTS `idx_ncr_collect_at` ON `node_cpu_report` (collect_at DESC);
+    CREATE INDEX IF NOT EXISTS `idx_ncr_create_at` ON `node_cpu_report` (create_at DESC);
     
     CREATE TABLE IF NOT EXISTS node_system_report(aid, collect_at timestamp, uptime, users, 
-        load1, load5, load15, procs_r, procs_b, sys_in, sys_cs);
+        load1, load5, load15, procs_r, procs_b, sys_in, sys_cs, create_at timestamp);
     CREATE INDEX IF NOT EXISTS idx_nsr_aid ON node_system_report (aid DESC);
     CREATE INDEX IF NOT EXISTS idx_nsr_collect_at ON node_system_report (collect_at DESC);
+    CREATE INDEX IF NOT EXISTS idx_nsr_create_at ON node_system_report (create_at DESC);
+    
+    CREATE TABLE IF NOT EXISTS node_disk_report(aid, collect_at timestamp, fs, size, used, 
+        available, used_util, mount_point, create_at timestamp);
+    CREATE INDEX IF NOT EXISTS idx_ndr_aid ON node_disk_report (aid DESC);
+    CREATE INDEX IF NOT EXISTS idx_ndr_collect_at ON node_disk_report (collect_at DESC);
+    CREATE INDEX IF NOT EXISTS idx_ndr_create_at ON node_disk_report (create_at DESC);
     '''
 
     def __init__(self, pool_size=5):
@@ -333,77 +404,62 @@ class MasterDAO(object):
 
     @dao
     def _init_db(self, cursor):
+        logging.info('init master db with schema %s', self._DB_SCHEMA)
         cursor.executescript(self._DB_SCHEMA)
 
     @dao
-    def add_agent(self, agent, cursor):
-        cursor.execute('insert into agent (%s) values(%s)' %
-                       (','.join(agent.FIELDS), ','.join('?'*agent.field_count)),
-                       agent.as_tuple())
-
-    @dao
     def get_agents(self, cursor):
-        cursor.execute('select %s from agent' % ','.join(Agent.FIELDS))
+        cursor.execute('SELECT %s FROM agent ORDER BY last_msg_at DESC' % ','.join(Agent.FIELDS))
         return [Agent(*a) for a in cursor.fetchall()]
-
-    @dao
-    def update_agent_status(self, aid, last_cpu_util, last_mem_util, last_sys_load1, last_sys_cs, cursor):
-        cursor.execute('UPDATE agent SET last_msg_at=?, last_cpu_util=?, last_mem_util=?, '
-                       'last_sys_load1=?, last_sys_cs=? WHERE aid=?',
-                       (datetime.now(), last_cpu_util, last_mem_util, last_sys_load1, last_sys_cs, aid))
 
     @dao
     def add_nmetrics(self, agentid, collect_time, contents, cursor):
         metrics = map(lambda x: (agentid, collect_time, x[0], x[1], datetime.now()), contents.items())
         logging.debug('add node metrics to db:agent=%s, collect_time=%s, recs=%d',
                       agentid, collect_time, len(metrics))
-        cursor.executemany('INSERT INTO node_metric_raw (%s) VALUES (?,?,?,?,?)' % ','.join(NMetric.FIELDS), metrics)
+        cursor.executemany(NMetric.isql(), metrics)
 
     @dao
     def get_nmetrics(self, agentid, start, end=datetime.now(), category=None, cursor=None):
         cursor.execute('select %s from node_metric_raw '
-                       'where aid=? and collect_at>=? and collect_at <=?' % ','.join(NMetric.FIELDS),
+                       'where aid=? and collect_at>=? and collect_at <=? '
+                       'ORDER BY collect_at ASC' % ','.join(NMetric.FIELDS),
                        (agentid, start, end))
         return [NMetric(*r) for r in cursor.fetchall()]
 
     @dao
-    def add_memreport(self, mem, cursor):
-        logging.debug('add node memory report to db:%s', mem)
-        cursor.execute('INSERT INTO node_memory_report (%s) VALUES (?,?,?,?,?,?,?,?,?)' %
-                       ','.join(NMemoryReport.FIELDS), mem.as_tuple())
-
-    @dao
     def get_memreports(self, aid, start, end=datetime.now(), cursor=None):
         cursor.execute('select %s from node_memory_report '
-                       'where aid=? and collect_at>=? and collect_at <=?' % ','.join(NMemoryReport.FIELDS),
+                       'where aid=? and collect_at>=? and collect_at <=? '
+                       'ORDER BY collect_at ASC' % ','.join(NMemoryReport.FIELDS),
                        (aid, start, end))
         return [NMemoryReport(*r) for r in cursor.fetchall()]
 
     @dao
-    def add_sysreport(self, s, cursor):
-        cursor.execute('insert into node_system_report (%s) VALUES (?,?,?,?,?,?,?,?,?,?,?)' %
-                       ','.join(NSystemReport.FIELDS), s.as_tuple())
-        logging.debug('add node sys report to db:%s', s)
-
-    @dao
     def get_sysreports(self, aid, start, end=datetime.now(), cursor=None):
         cursor.execute('select %s from node_system_report '
-                       'where aid=? and collect_at>=? and collect_at <=?' % ','.join(NSystemReport.FIELDS),
+                       'where aid=? and collect_at>=? and collect_at <=? '
+                       'ORDER BY collect_at ASC' % ','.join(NSystemReport.FIELDS),
                        (aid, start, end))
         return [NSystemReport(*r) for r in cursor.fetchall()]
 
     @dao
-    def add_cpureport(self, cpu, cursor):
-        logging.debug('add node cpu report to db:%s', cpu)
-        cursor.execute('INSERT INTO node_cpu_report (%s) VALUES (?,?,?,?,?,?,?)' %
-                       ','.join(NCPUReport.FIELDS), cpu.as_tuple())
-
-    @dao
     def get_cpureports(self, aid, start, end=datetime.now(), cursor=None):
         cursor.execute('SELECT %s from node_cpu_report '
-                       'WHERE aid=? AND collect_at>=? AND collect_at <=?' % ','.join(NCPUReport.FIELDS),
+                       'WHERE aid=? AND collect_at>=? AND collect_at <=? '
+                       'ORDER BY collect_at ASC' % ','.join(NCPUReport.FIELDS),
                        (aid, start, end))
         return [NCPUReport(*r) for r in cursor.fetchall()]
+        return [NCPUReport(*r) for r in cursor.fetchall()]
+
+
+    @dao
+    def get_diskreports(self, aid, start, end=datetime.now(), cursor=None):
+        cursor.execute('SELECT %s from node_disk_report '
+                       'WHERE aid=? AND collect_at>=? AND collect_at <=? '
+                       'ORDER BY collect_at ASC' % ','.join(NDiskReport.FIELDS),
+                       (aid, start, end))
+        return [NDiskReport(*r) for r in cursor.fetchall()]
 
     @dao
     def add_smetrics(selfs, agentid, serv_name, contents):
@@ -433,32 +489,31 @@ class Master(object):
 
     def _load_agents(self):
         agents = self._dao.get_agents()
-        self._agents = {a.aid: AgentStatus(a) for a in agents}
+        self._agents = {a.aid: a for a in agents}
         logging.info('load %d agents from db', len(agents))
 
     # Message handlers
     def _agent_reg(self, msg):
-        agent_status = self._agents.get(msg.agentid, None)
-        if agent_status:
-            logging.info('activate existing agent %s', agent_status)
-            agent_status.client_addr = msg.client_addr
-            agent_status.activate()
-            return True
+        agent = self.find_agent(msg.agentid)
+        if agent:
+            logging.info('activate existing agent %s', agent)
+            # TODO activation
         else:
             agent = Agent(msg.agentid, msg.client_addr[0], msg.client_addr[0], datetime.now())
-            self._dao.add_agent(agent)
-            agent_status = AgentStatus(agent, msg.client_addr, active=True)
-            logging.info('new agent %s', agent_status)
-            self._agents[agent.aid] = agent_status
-            return True
+            agent.save()
+            logging.info('new agent %s registered', agent)
+            self._agents[agent.aid] = agent
+        agent.client_addr = msg.client_addr
+        return True
 
     def _agent_heartbeat(self, msg):
-        agentstatus = self.find_agent(msg.agentid)
-        agentstatus.heartbeat()
+        agent = self.find_agent(msg.agentid)
+        logging.debug('heart beat get from %s', agent)
         return True
 
     def _agent_nmetrics(self, msg):
         aid = msg.agentid
+        agent = self._agents.get(aid)
         body = load_json(msg.body)
         collect_time = body.pop('collect_time')
         self._dao.add_nmetrics(aid, collect_time, body)
@@ -466,11 +521,11 @@ class Master(object):
 
         if 'free' in body:
             memrep = parse_free(aid, collect_time, body['free'])
-            self._dao.add_memreport(memrep) if memrep else None
+            memrep.save() if memrep else None
         if 'vmstat' in body:
             cpurep, procs_r, procs_b, sys_in, sys_cs \
                 = parse_vmstat(aid, collect_time, body['vmstat'])
-            self._dao.add_cpureport(cpurep) if cpurep else None
+            cpurep.save() if cpurep else None
         if 'w' in body:
             sysrep = parse_w(aid, collect_time, body['w'])
             if sysrep:
@@ -478,11 +533,19 @@ class Master(object):
                 sysrep.procs_b = procs_b
                 sysrep.sys_in = sys_in
                 sysrep.sys_cs = sys_cs
-                self._dao.add_sysreport(sysrep)
+                sysrep.save()
+        if 'df' in body:
+            dfreps = parse_df(aid, collect_time, body['df'])
+            if dfreps:
+                NDiskReport.save_all(dfreps)
         last_cpu_util = cpurep.used_util if cpurep else None
         last_mem_util = memrep.used_util if memrep else None
         last_sys_load1, last_sys_cs = (sysrep.load1, sysrep.sys_cs) if sysrep else (None, None)
-        self._dao.update_agent_status(aid, last_cpu_util, last_mem_util, last_sys_load1, last_sys_cs)
+        agent.set(last_msg_at=datetime.now(),
+                  last_cpu_util=last_cpu_util,
+                  last_mem_util=last_mem_util,
+                  last_sys_load1=last_sys_load1,
+                  last_sys_cs=last_sys_cs)
         return True
 
     def _agent_smetrics(self, msg):
@@ -499,14 +562,13 @@ class Master(object):
         self._server = SocketServer.ThreadingTCPServer(self._addr, AgentRequestHandler)
         self._server.serve_forever()
 
-    def handle_msg(self, msg):
-        logging.info('handle msg %s.', msg)
+    def handle_msg(self, msg, client_addr):
+        logging.info('handle msg %s, client=%s.', msg, client_addr)
         return self._handlers[msg.msg_type](msg)
 
     def inactive_agent(self, agentid):
-        agent_status = self._agents[agentid]
-        agent_status.inactive()
-        return agent_status
+        agent = self._agents[agentid]
+        return agent
 
     def stop(self):
         self._server.server_close()

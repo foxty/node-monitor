@@ -30,11 +30,23 @@ class BaseDBTest(unittest.TestCase):
 class ModelTest(unittest.TestCase):
 
     class ModelA(nm.Model):
-        FIELDS = ['a1', 'a2' , 'a3']
+        FIELDS = ['a1', 'a2', 'a3']
 
     def test_model(self):
         m = ModelTest.ModelA()
-        self.assertIsNone(m.a_nont_exist_field)
+        self.assertIsNone(m.a1)
+
+    def test_model_invalidfield(self):
+        with self.assertRaises(nm.InvalidFieldError) as cm:
+            ModelTest.ModelA(a4=1)
+            self.assertEqual('a4', cm.exception.msg)
+        with self.assertRaises(nm.InvalidFieldError) as cm:
+            ModelTest.ModelA().non_exist_field1
+            self.assertEqual('field a non_exist_field1 not defined.', cm.exception.msg)
+        with self.assertRaises(nm.InvalidFieldError) as cm:
+            ModelTest.ModelA().non_exist_field2 = 1
+            self.assertEqual('field a non_exist_field2 not defined.', cm.exception.msg)
+
 
     def test_astuple(self):
         ma = ModelTest.ModelA()
@@ -144,6 +156,7 @@ class GlobalFuncTest(unittest.TestCase):
         self.assertIsNone(r.procs_b)
         self.assertIsNone(r.sys_in)
         self.assertIsNone(r.sys_cs)
+        self.assertIsNotNone(r.create_at)
 
     def test_parse_w_linux(self):
         m = nm.Master()
@@ -166,6 +179,7 @@ class GlobalFuncTest(unittest.TestCase):
         self.assertIsNone(r.procs_b)
         self.assertIsNone(r.sys_in)
         self.assertIsNone(r.sys_cs)
+        self.assertIsNotNone(r.create_at)
 
     def test_parse_vmstat_linux(self):
         m = nm.Master()
@@ -187,6 +201,7 @@ class GlobalFuncTest(unittest.TestCase):
         self.assertEqual(5, procs_b)
         self.assertEqual(310, sys_in)
         self.assertEqual(550, sys_cs)
+        self.assertIsNotNone(r.create_at)
 
     def test_parse_vmstat_solaris(self):
         m = nm.Master()
@@ -208,6 +223,7 @@ class GlobalFuncTest(unittest.TestCase):
         self.assertEqual(2, procs_b)
         self.assertEqual(2236, sys_in)
         self.assertEqual(2002, sys_cs)
+        self.assertIsNotNone(r.create_at)
 
     def test_parse_free(self):
         m = nm.Master()
@@ -227,6 +243,7 @@ class GlobalFuncTest(unittest.TestCase):
         self.assertEqual(10063, r.total_swap)
         self.assertEqual(0, r.used_swap)
         self.assertEqual(10063, r.free_swap)
+        self.assertIsNotNone(r.create_at)
 
         r = nm.parse_free('1', collect_time=ctime, content='''
                       total        used        free      shared  buff/cache   available
@@ -242,6 +259,63 @@ class GlobalFuncTest(unittest.TestCase):
         self.assertEqual(2047, r.total_swap)
         self.assertEqual(0, r.used_swap)
         self.assertEqual(2047, r.free_swap)
+        self.assertIsNotNone(r.create_at)
+
+    def _assert_dr(self, aid, ctime, fs, size, used, avai, used_util, mount, dr):
+        self.assertEqual(aid, dr.aid)
+        self.assertEqual(ctime, dr.collect_at)
+        self.assertEqual(fs, dr.fs)
+        self.assertEqual(size, dr.size)
+        self.assertEqual(used, dr.used)
+        self.assertEqual(avai, dr.available)
+        self.assertEqual(used_util, dr.used_util)
+        self.assertEqual(mount, dr.mount_point)
+        self.assertIsNotNone(dr.create_at)
+
+    def test_parse_df_linux(self):
+        content = '''
+        Filesystem          1K-blocks    Used Available Use% Mounted on
+        /dev/mapper/cl-root  52403200 3294392  49108808   7% /
+        devtmpfs               931344       0    931344   0% /dev
+        tmpfs                  942056       0    942056   0% /dev/shm
+        tmpfs                  942056   25116    916940   3% /run
+        tmpfs                  942056       0    942056   0% /sys/fs/cgroup
+        /dev/mapper/cl-home 112134660   32944 112101716   1% /home
+        /dev/sda1             1038336  187756    850580  19% /boot
+        tmpfs                  188412       0    188412   0% /run/user/0
+        '''
+        m = nm.Master()
+        ctime = datetime.now()
+        drs = nm.parse_df('1', collect_time=ctime, content=content)
+        self.assertEqual(8, len(drs))
+        self._assert_dr('1', ctime, '/dev/mapper/cl-root', '52403200', '3294392', '49108808', '7%', '/', drs[0])
+        self._assert_dr('1', ctime, 'tmpfs', '188412', '0', '188412', '0%', '/run/user/0', drs[-1])
+
+    def test_parse_df_solaris(self):
+        content = '''
+        Filesystem            kbytes    used   avail capacity  Mounted on
+        /                    369884093 25200224 344683869     7%    /
+        /dev                 369884093 25200224 344683869     7%    /dev
+        /lib                 842900159 4687993 838212166     1%    /lib
+        /platform            842900159 4687993 838212166     1%    /platform
+        /sbin                842900159 4687993 838212166     1%    /sbin
+        proc                       0       0       0     0%    /proc
+        ctfs                       0       0       0     0%    /system/contract
+        mnttab                     0       0       0     0%    /etc/mnttab
+        objfs                      0       0       0     0%    /system/object
+        swap                 1326612     344 1326268     1%    /etc/svc/volatile
+        /usr/lib/libc/libc_hwcap1.so.1 369884093 25200224 344683869     7%    /lib/libc.so.1
+        fd                         0       0       0     0%    /dev/fd
+        swap                 1326624     356 1326268     1%    /tmp
+        swap                 1326292      24 1326268     1%    /var/run
+
+        '''
+        m = nm.Master()
+        ctime = datetime.now()
+        drs = nm.parse_df('1', collect_time=ctime, content=content)
+        self.assertEqual(14, len(drs))
+        self._assert_dr('1', ctime, '/', '369884093', '25200224', '344683869', '7%', '/', drs[0])
+        self._assert_dr('1', ctime, 'swap', '1326292', '24', '1326268', '1%', '/var/run', drs[-1])
 
 
 class MasterDAOTest(BaseDBTest):
@@ -251,17 +325,26 @@ class MasterDAOTest(BaseDBTest):
         self.assertEqual(0, len(aglist))
 
         ag = nm.Agent('12345678', 'agent1', '127.0.0.1', datetime.now())
-        self.dao.add_agent(ag)
+        ag.save()
 
         aglist = self.dao.get_agents()
         self.assertEqual(1, len(aglist))
         self.assertEqual(ag, aglist[0])
 
+    def test_agent_query(self):
+        ag = nm.Agent('1', 'agent1', '127.0.0.1', datetime.now())
+        ag.save()
+        ag.aid='2'
+        ag.name = 'agent2'
+        ag.save()
+
+        agents = nm.Agent.query()
+        self.assertEqual(2, len(agents))
+
     def test_update_agent(self):
         ag = nm.Agent('12345678', 'agent1', '127.0.0.1', datetime.now())
-        self.dao.add_agent(ag)
-        self.dao.update_agent_status(ag.aid, last_cpu_util=99, last_mem_util=55.5,
-                                     last_sys_load1=1.1, last_sys_cs=123)
+        ag.save()
+        ag.set(last_cpu_util=99, last_mem_util=55.5, last_sys_load1=1.1, last_sys_cs=123)
         aglist = self.dao.get_agents()
         self.assertEqual(1, len(aglist))
         nag = aglist[0]
@@ -301,7 +384,7 @@ class MasterDAOTest(BaseDBTest):
         mem = nm.NMemoryReport(aid='12345678', collect_at=datetime.now(),
                                total_mem=100, used_mem=50, cache_mem=10, free_mem=50,
                                total_swap=100, used_swap=20, free_swap=80)
-        self.dao.add_memreport(mem)
+        mem.save()
 
         mems = self.dao.get_memreports('12345678',
                                        datetime.now() - timedelta(days=1),
@@ -313,7 +396,7 @@ class MasterDAOTest(BaseDBTest):
         sys = nm.NSystemReport(aid='123', collect_at=datetime.now(),
                                uptime=12345, users=5, load1=1, load5=5, load15=15,
                                procs_r=1, procs_b=2, sys_in=1, sys_cs=2)
-        self.dao.add_sysreport(sys)
+        sys.save()
         reports = self.dao.get_sysreports('123', datetime.now() - timedelta(hours=1),
                                           datetime.now() + timedelta(hours=1))
         self.assertEqual(1, len(reports))
@@ -322,11 +405,24 @@ class MasterDAOTest(BaseDBTest):
     def test_add_cpureport(self):
         cpu = nm.NCPUReport(aid='123', collect_at=datetime.now(),
                             us=2, sy=18, id=80, wa=0, st=0)
-        self.dao.add_cpureport(cpu)
+        cpu.save()
         cpus = self.dao.get_cpureports('123', datetime.now() - timedelta(hours=1),
                                        datetime.now() + timedelta(hours=1))
         self.assertEqual(1, len(cpus))
         self.assertEqual(cpu, cpus[0])
+
+    def test_add_diskreports(self):
+        dr1 = nm.NDiskReport(aid='123', collect_at=datetime.now(),
+                             fs="/", size=1024, used=256, available=768, used_util='25%', mount_point="/root")
+        dr2 = nm.NDiskReport(aid='123', collect_at=datetime.now(),
+                             fs="/abc", size=1024, used=256, available=768, used_util='25%', mount_point="/var")
+        drs = [dr1, dr2]
+        nm.NDiskReport.save_all(drs)
+        reports = self.dao.get_diskreports('123', datetime.now() - timedelta(hours=1),
+                                          datetime.now() + timedelta(hours=1))
+        self.assertEqual(2, len(reports))
+        self.assertEqual(dr1, reports[0])
+        self.assertEqual(dr2, reports[1])
 
 
 class MasterTest(BaseDBTest):
@@ -342,18 +438,12 @@ class MasterTest(BaseDBTest):
         # test a new agent join
         regmsg = nm.Msg('1', nm.Msg.A_REG, body='''{}''')
         regmsg.client_addr = ('127.0.0.1', 1234)
-        master.handle_msg(regmsg)
-        agent_status = master.find_agent('1')
-        self.assertEqual('1', agent_status.agent.aid)
-        self.assertEqual('127.0.0.1', agent_status.agent.host)
-        self.assertEqual('127.0.0.1', agent_status.agent.name)
-        self.assertEqual(('127.0.0.1', 1234), agent_status.client_addr)
-        self.assertTrue(agent_status.active)
-
-        # test a agent rejoin
-        agent_status.inactive()
-        master.handle_msg(regmsg)
-        self.assertTrue(agent_status.active)
+        master.handle_msg(regmsg, None)
+        agent = master.find_agent('1')
+        self.assertEqual('1', agent.aid)
+        self.assertEqual('127.0.0.1', agent.host)
+        self.assertEqual('127.0.0.1', agent.name)
+        self.assertEqual(('127.0.0.1', 1234), agent.client_addr)
 
     def test_handle_hearbeat(self):
         pass
@@ -362,15 +452,19 @@ class MasterTest(BaseDBTest):
         m = nm.Master()
         ctime = datetime.now()
         body = {'collect_time': ctime}
+        regmsg = nm.Msg('2', nm.Msg.A_REG, body='''{}''')
+        regmsg.client_addr = ('127.0.0.1', 1234)
+        m.handle_msg(regmsg, None)
+
         nmmsg = nm.Msg('2', nm.Msg.A_NODE_METRIC, body=nm.dump_json(body))
-        re = m.handle_msg(nmmsg)
+        re = m.handle_msg(nmmsg, None)
         self.assertTrue(re)
 
     def test_handle_nmetrics_linux(self):
-        m = nm.Master()
         agent = nm.Agent('2', 'localhost', 'localhost', datetime.now())
-        self.dao.add_agent(agent)
+        agent.save()
 
+        m = nm.Master()
         ctime = datetime.now()
         msgbody = {
             'collect_time': ctime,
@@ -389,13 +483,15 @@ class MasterTest(BaseDBTest):
                       '''
         }
         nmmsg = nm.Msg(agent.aid, nm.Msg.A_NODE_METRIC, body=nm.dump_json(msgbody))
-        re = m.handle_msg(nmmsg)
+        re = m.handle_msg(nmmsg, None)
         self.assertTrue(re)
 
         start = datetime.now() - timedelta(hours=1)
         end = datetime.now() + timedelta(hours=1)
         memreports = self.dao.get_memreports(agent.aid, start, end)
         self.assertEqual(1, len(memreports))
+        self.assertIsNotNone(memreports[0].create_at)
+        del memreports[0]['create_at']
         self.assertEqual(nm.NMemoryReport(aid=agent.aid, collect_at=ctime,
                                           total_mem=1839, used_mem=408, free_mem=566, cache_mem=None,
                                           total_swap=2047, used_swap=0, free_swap=2047),
@@ -403,11 +499,15 @@ class MasterTest(BaseDBTest):
 
         cpureports = self.dao.get_cpureports(agent.aid, start, end)
         self.assertEqual(1, len(cpureports))
+        self.assertIsNotNone(cpureports[0].create_at)
+        del cpureports[0]['create_at']
         self.assertEqual(nm.NCPUReport(aid=agent.aid, collect_at=ctime, us=86, sy=14, id=0, wa=0, st=0),
                          cpureports[0])
 
         sysreports = self.dao.get_sysreports(agent.aid, start, end)
         self.assertEqual(1, len(sysreports))
+        self.assertIsNotNone(sysreports[0].create_at)
+        del sysreports[0]['create_at']
         self.assertEqual(nm.NSystemReport(aid=agent.aid, collect_at=ctime,
                                           uptime=0, users=1, load1=2.11, load5=2.54, load15=2.77,
                                           procs_r=1, procs_b=0, sys_in=1091, sys_cs=404),

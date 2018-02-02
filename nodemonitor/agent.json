@@ -19,7 +19,7 @@
       "clocks": 6
     },
     "df": {
-      "cmd": ["df", "-h"],
+      "cmd": ["df", "-kP"],
       "clocks":60
     }
   },

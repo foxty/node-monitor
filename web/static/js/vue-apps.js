@@ -226,7 +226,7 @@ const Agents = {
                         <th>Load(1m)</th>
                         <th>CS</th>
                         <th>Reports</th>
-                        <th>Create Time</th>
+                        <th>Last Recv Time</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -243,7 +243,7 @@ const Agents = {
                                 Reports <span class="glyphicon glyphicon-stats" aria-hidden="true"></span>
                             </router-link>
                         </td>
-                        <td>{{a.created_at}}</td>
+                        <td>{{a.last_msg_at}}</td>
                     </tr>
                 </tbody>
            </table>
