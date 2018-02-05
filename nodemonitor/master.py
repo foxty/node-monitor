@@ -23,12 +23,42 @@ from common import *
 # Global status for Master
 _MASTER = None
 _MASTER_DB_NAME = 'master.db'
-
-
-class InvalidFieldError(Exception): pass
-
-
-class NoPKError(Exception): pass
+_DB_SCHEMA = r'''
+    CREATE TABLE IF NOT EXISTS agent(aid UNIQUE, name, host, create_at timestamp, 
+        last_msg_at, last_cpu_util, last_mem_util, last_sys_load1, last_sys_cs);
+    
+    CREATE TABLE IF NOT EXISTS node_metric_raw(aid, collect_at timestamp, category, content, recv_at timestamp);
+    CREATE INDEX IF NOT EXISTS `idx_nmr_aid` ON `node_metric_raw` (`aid` DESC);
+    CREATE INDEX IF NOT EXISTS `idx_nmr_collect_at` ON `node_metric_raw` (collect_at DESC);
+    CREATE INDEX IF NOT EXISTS `idx_nmr_recv_at` ON `node_metric_raw` (recv_at DESC);
+    
+    CREATE TABLE IF NOT EXISTS node_memory_report(
+        aid, collect_at timestamp, total_mem, used_mem, free_mem, cache_mem, 
+        total_swap, used_swap, free_swap, recv_at timestamp);
+    CREATE INDEX IF NOT EXISTS `idx_nmre_aid` ON `node_memory_report` (`aid` DESC);
+    CREATE INDEX IF NOT EXISTS `idx_nmre_collect_at` ON `node_memory_report` (collect_at DESC);
+    CREATE INDEX IF NOT EXISTS `idx_nmre_recv_at` ON `node_memory_report` (recv_at DESC);
+        
+    CREATE TABLE IF NOT EXISTS node_cpu_report(aid, collect_at timestamp, us, sy, id, wa, st, recv_at timestamp);
+    CREATE INDEX IF NOT EXISTS `idx_ncr_aid` ON `node_cpu_report` (`aid` DESC);
+    CREATE INDEX IF NOT EXISTS `idx_ncr_collect_at` ON `node_cpu_report` (collect_at DESC);
+    CREATE INDEX IF NOT EXISTS `idx_ncr_recv_at` ON `node_cpu_report` (recv_at DESC);
+    
+    CREATE TABLE IF NOT EXISTS node_system_report(aid, collect_at timestamp, uptime, users, 
+        load1, load5, load15, procs_r, procs_b, sys_in, sys_cs, recv_at timestamp);
+    CREATE INDEX IF NOT EXISTS idx_nsr_aid ON node_system_report (aid DESC);
+    CREATE INDEX IF NOT EXISTS idx_nsr_collect_at ON node_system_report (collect_at DESC);
+    CREATE INDEX IF NOT EXISTS idx_nsr_recv_at ON node_system_report (recv_at DESC);
+    
+    CREATE TABLE IF NOT EXISTS node_disk_report(aid, collect_at timestamp, fs, size, used, 
+        available, used_util, mount_point, recv_at timestamp);
+    CREATE INDEX IF NOT EXISTS idx_ndr_aid ON node_disk_report (aid DESC);
+    CREATE INDEX IF NOT EXISTS idx_ndr_collect_at ON node_disk_report (collect_at DESC);
+    CREATE INDEX IF NOT EXISTS idx_ndr_recv_at ON node_disk_report (recv_at DESC);
+    '''
+_RE_SYSREPORT = re.compile('.*?(?P<users>\\d+)\\suser.*'
+                           'age: (?P<load1>\\d+\\.\\d+), (?P<load5>\\d+\\.\\d+), (?P<load15>\\d+\\.\\d+).*',
+                           re.S)
 
 
 def dao(f):
@@ -42,6 +72,129 @@ def dao(f):
             c.close()
         return r
     return dao_decorator
+
+
+@dao
+def create_schema(cursor):
+    logging.info('init master db with schema %s', _DB_SCHEMA)
+    cursor.executescript(_DB_SCHEMA)
+
+
+def parse_w(aid, collect_time, content):
+    """parse the output of w command as follow:
+     21:25:14 up 45 days,  3:18,  1 user,  load average: 0.00, 0.03, 0.05
+    USER     TTY      FROM             LOGIN@   IDLE   JCPU   PCPU WHAT
+    root     pts/0    pc-itian.arrs.ar 27Dec17  2.00s  8:47   0.00s w
+    :param aid: agentid
+    :param collect_time: collect time from node
+    :param content: output of `w`
+    :return: NSystemReport
+    """
+    m = _RE_SYSREPORT.match(content)
+    if m:
+        days = 0
+        users = int(m.group('users'))
+        load1 = float(m.group('load1'))
+        load5 = float(m.group('load5'))
+        load15 = float(m.group('load15'))
+        return NSystemReport(aid, collect_time, uptime=days*24*3600, users=users,
+                             load1=load1, load5=load5, load15=load15,
+                             procs_r=None, procs_b=None, sys_in=None, sys_cs=None
+                             , recv_at=datetime.now())
+    else:
+        logging.warn('invalid content of `w`: %s', content)
+        return None
+
+
+def parse_free(aid, collect_time, content):
+    """parse output of `free -m` command get memory usage information:
+                 total       used       free     shared    buffers     cached
+    Mem:         19991       6428      13562          0        148       2656
+    -/+ buffers/cache:       3623      16367
+    Swap:        10063          0      10063
+
+    :param aid: agentid
+    :param collect_time: collect time from node
+    :param content: output of `free -m`
+    :return: NMemoryReport
+    """
+    t = TextTable('col ' + content.lstrip(), vheader=True)
+    if t.size >= 2:
+        total_mem = t.get_int('Mem:', 'total')
+        used_mem = t.get_int('Mem:', 'used')
+        free_mem = t.get_int('Mem:', 'free')
+        total_swap = t.get_int('Swap:', 'total')
+        use_swap = t.get_int('Swap:', 'used')
+        free_swap = t.get_int('Swap:', 'free')
+        return NMemoryReport(aid, collect_time, total_mem=total_mem, used_mem=used_mem,
+                             free_mem=free_mem, cache_mem=None, total_swap=total_swap,
+                             used_swap=use_swap, free_swap=free_swap, recv_at=datetime.now())
+    else:
+        logging.warn('invalid content of`free`: %s', content)
+        return None
+
+
+def parse_vmstat(aid, collect_time, content):
+    """parse output of command `vmstat` and extact the system/cpu section.
+
+    Linux output:
+    procs -----------memory---------- ---swap-- -----io---- --system-- -----cpu-----
+     r  b   swpd   free   buff  cache   si   so    bi    bo   in   cs us sy id wa st
+     0  0      0 13540540 161232 2972924    0    0     2    17   84   25  0  0 99  1  0
+     0  0      0 13540532 161232 2972956    0    0     0    48  310  550  0  0 99  1  0
+
+    Solaris output:
+     kthr      memory            page            disk          faults      cpu
+     r b w   swap  free  re  mf pi po fr de sr s0 s1 s2 --   in   sy   cs us sy id
+     3 0 0 69302168 22126772 4 62 0 0  0  0  0 -0  0 33  0 2503 4393 3645  2  4 94
+     1 0 0 68852484 24149452 11 53 0 0 0  0  0  0  0  0  0 1463 1273 1198  1  1 99
+
+    :param aid:
+    :param collect_time:
+    :param content:
+    :return: (NCPUReport, procs_r, procs_b, sys_in, sys_cs)
+    """
+    t = TextTable(content, 1)
+    if t.size == 4:
+        data_rn = -1
+        procs_r, procs_b = t.get_int(data_rn,'r'), t.get_int(data_rn,'b')
+        sys_in, sys_cs = t.get_int(data_rn,'in'), t.get_int(data_rn,'cs')
+        us, sy = t.get_int(data_rn,'us'), t.get_ints(data_rn,'sy')[-1]
+        id_, wa = t.get_int(data_rn,'id'), t.get_int(data_rn,'wa')
+        st = t.get_int(data_rn,'st')
+        r = NCPUReport(aid=aid, collect_at=collect_time,
+                       us=us, sy=sy,id=id_, wa=wa, st=st, recv_at=datetime.now())
+        return r, procs_r, procs_b, sys_in, sys_cs
+    else:
+        logging.warn('invalid content of `vmstat` : %s', content)
+        return None, None, None, None, None
+
+
+def parse_df(aid, collect_time, content):
+    """
+    Parse the output of df command get disk utilization data
+    :param aid: agentid
+    :param collect_time: local time in node
+    :param content: output of command `df -k`
+    :return: list of disk utilization record
+    """
+    t = TextTable(content)
+    if t.size > 1:
+        diskreps = [NDiskReport(aid, collect_time, *row, recv_at=datetime.now()) for row in t.get_rows()]
+        return diskreps
+    else:
+        logging.warn('invalid content of `vmstat` : %s', content)
+        return None, None, None, None, None
+
+
+def parse_netstat(aid, collect_time, content):
+    pass
+
+
+class InvalidFieldError(Exception): pass
+
+
+class NoPKError(Exception): pass
 
 
 class Model(dict):
@@ -150,22 +303,38 @@ class Model(dict):
         return [cls(*r) for r in result]
 
 
+class ChronoModel(object):
+
+    @classmethod
+    def query_by_ctime(cls, aid, start, end):
+        return cls.query(where='aid=? AND collect_at >= ? AND collect_at <= ?', params=[aid, start, end])
+
+    @classmethod
+    def query_by_rtime(cls, aid, start, end):
+        return cls.query(where='aid=? AND recv_at >= ? AND recv_at <= ?', params=[aid, start, end])
+
+
 class Agent(Model):
     TABLE = 'agent'
     FIELDS = ['aid', 'name', 'host', 'create_at', 'last_msg_at',
               'last_cpu_util', 'last_mem_util', 'last_sys_load1', 'last_sys_cs']
     PK = ['aid']
 
+    @classmethod
+    def get_by_id(cls, aid):
+        r = cls.query(where='aid=?', params=[aid])
+        return r[0] if r else None
 
-class NMetric(Model):
+
+class NMetric(Model, ChronoModel):
     TABLE = 'node_metric_raw'
-    FIELDS = ['aid', 'collect_at', 'category', 'content', 'create_at']
+    FIELDS = ['aid', 'collect_at', 'category', 'content', 'recv_at']
 
 
-class NMemoryReport(Model):
+class NMemoryReport(Model, ChronoModel):
     TABLE = 'node_memory_report'
     FIELDS = ['aid', 'collect_at', 'total_mem', 'used_mem', 'free_mem',
-              'cache_mem', 'total_swap', 'used_swap', 'free_swap', 'create_at']
+              'cache_mem', 'total_swap', 'used_swap', 'free_swap', 'recv_at']
 
     @property
     def used_util(self):
@@ -176,141 +345,25 @@ class NMemoryReport(Model):
         return self.free_mem*100/self.total_mem if self.free_mem and self.total_mem else None
 
 
-class NCPUReport(Model):
+class NCPUReport(Model, ChronoModel):
     TABLE = 'node_cpu_report'
-    FIELDS = ['aid', 'collect_at', 'us', 'sy', 'id', 'wa', 'st', 'create_at']
+    FIELDS = ['aid', 'collect_at', 'us', 'sy', 'id', 'wa', 'st', 'recv_at']
 
     @property
     def used_util(self):
         return self.us + self.sy if self.us is not None and self.sy is not None else None
 
 
-class NSystemReport(Model):
+class NSystemReport(Model, ChronoModel):
     TABLE = 'node_system_report'
     FIELDS = ['aid', 'collect_at', 'uptime', 'users', 'load1', 'load5',
-              'load15', 'procs_r', 'procs_b', 'sys_in', 'sys_cs', 'create_at']
+              'load15', 'procs_r', 'procs_b', 'sys_in', 'sys_cs', 'recv_at']
 
 
-class NDiskReport(Model):
+class NDiskReport(Model, ChronoModel):
     TABLE = 'node_disk_report'
     FIELDS = ['aid', 'collect_at', 'fs', 'size', 'used',
-              'available', 'used_util', 'mount_point', 'create_at']
-
-
-_RE_SYSREPORT = re.compile('.*?(?P<users>\\d+)\\suser.*'
-                           'age: (?P<load1>\\d+\\.\\d+), (?P<load5>\\d+\\.\\d+), (?P<load15>\\d+\\.\\d+).*',
-                           re.S)
-
-
-def parse_w(aid, collect_time, content):
-    """parse the output of w command as follow:
-     21:25:14 up 45 days,  3:18,  1 user,  load average: 0.00, 0.03, 0.05
-    USER     TTY      FROM             LOGIN@   IDLE   JCPU   PCPU WHAT
-    root     pts/0    pc-itian.arrs.ar 27Dec17  2.00s  8:47   0.00s w
-    :param aid: agentid
-    :param collect_time: collect time from node
-    :param content: output of `w`
-    :return: NSystemReport
-    """
-    m = _RE_SYSREPORT.match(content)
-    if m:
-        days = 0
-        users = int(m.group('users'))
-        load1 = float(m.group('load1'))
-        load5 = float(m.group('load5'))
-        load15 = float(m.group('load15'))
-        return NSystemReport(aid, collect_time, uptime=days*24*3600, users=users,
-                             load1=load1, load5=load5, load15=load15,
-                             procs_r=None, procs_b=None, sys_in=None, sys_cs=None
-                             , create_at=datetime.now())
-    else:
-        logging.warn('invalid content of `w`: %s', content)
-        return None
-
-
-def parse_free(aid, collect_time, content):
-    """parse output of `free -m` command get memory usage information:
-                 total       used       free     shared    buffers     cached
-    Mem:         19991       6428      13562          0        148       2656
-    -/+ buffers/cache:       3623      16367
-    Swap:        10063          0      10063
-
-    :param aid: agentid
-    :param collect_time: collect time from node
-    :param content: output of `free -m`
-    :return: NMemoryReport
-    """
-    t = TextTable('col ' + content.lstrip(), vheader=True)
-    if t.size >= 2:
-        total_mem = t.get_int('Mem:', 'total')
-        used_mem = t.get_int('Mem:', 'used')
-        free_mem = t.get_int('Mem:', 'free')
-        total_swap = t.get_int('Swap:', 'total')
-        use_swap = t.get_int('Swap:', 'used')
-        free_swap = t.get_int('Swap:', 'free')
-        return NMemoryReport(aid, collect_time, total_mem=total_mem, used_mem=used_mem,
-                             free_mem=free_mem, cache_mem=None, total_swap=total_swap,
-                             used_swap=use_swap, free_swap=free_swap, create_at=datetime.now())
-    else:
-        logging.warn('invalid content of`free`: %s', content)
-        return None
-
-
-def parse_vmstat(aid, collect_time, content):
-    """parse output of command `vmstat` and extact the system/cpu section.
-
-    Linux output:
-    procs -----------memory---------- ---swap-- -----io---- --system-- -----cpu-----
-     r  b   swpd   free   buff  cache   si   so    bi    bo   in   cs us sy id wa st
-     0  0      0 13540540 161232 2972924    0    0     2    17   84   25  0  0 99  1  0
-     0  0      0 13540532 161232 2972956    0    0     0    48  310  550  0  0 99  1  0
-
-    Solaris output:
-     kthr      memory            page            disk          faults      cpu
-     r b w   swap  free  re  mf pi po fr de sr s0 s1 s2 --   in   sy   cs us sy id
-     3 0 0 69302168 22126772 4 62 0 0  0  0  0 -0  0 33  0 2503 4393 3645  2  4 94
-     1 0 0 68852484 24149452 11 53 0 0 0  0  0  0  0  0  0 1463 1273 1198  1  1 99
-
-    :param aid:
-    :param collect_time:
-    :param content:
-    :return: (NCPUReport, procs_r, procs_b, sys_in, sys_cs)
-    """
-    t = TextTable(content, 1)
-    if t.size == 4:
-        data_rn = -1
-        procs_r, procs_b = t.get_int(data_rn,'r'), t.get_int(data_rn,'b')
-        sys_in, sys_cs = t.get_int(data_rn,'in'), t.get_int(data_rn,'cs')
-        us, sy = t.get_int(data_rn,'us'), t.get_ints(data_rn,'sy')[-1]
-        id_, wa = t.get_int(data_rn,'id'), t.get_int(data_rn,'wa')
-        st = t.get_int(data_rn,'st')
-        r = NCPUReport(aid=aid, collect_at=collect_time,
-                       us=us, sy=sy,id=id_, wa=wa, st=st, create_at=datetime.now())
-        return r, procs_r, procs_b, sys_in, sys_cs
-    else:
-        logging.warn('invalid content of `vmstat` : %s', content)
-        return None, None, None, None, None
-
-
-def parse_df(aid, collect_time, content):
-    """
-    Parse the output of df command get disk utilization data
-    :param aid: agentid
-    :param collect_time: local time in node
-    :param content: output of command `df -k`
-    :return: list of disk utilization record
-    """
-    t = TextTable(content)
-    if t.size > 1:
-        diskreps = [NDiskReport(aid, collect_time, *row, create_at=datetime.now()) for row in t.get_rows()]
-        return diskreps
-    else:
-        logging.warn('invalid content of `vmstat` : %s', content)
-        return None, None, None, None, None
-
-
-def parse_netstat(aid, collect_time, content):
-    pass
+              'available', 'used_util', 'mount_point', 'recv_at']
 
 
 class AgentRequestHandler(SocketServer.StreamRequestHandler):
@@ -362,110 +415,6 @@ class AgentRequestHandler(SocketServer.StreamRequestHandler):
                 logging.info('msg handler stopped for %s from %s', msg, self.agentid)
 
 
-class MasterDAO(object):
-    """DAO for master use to manipulate data with database"""
-    _DB_SCHEMA = r'''
-    CREATE TABLE IF NOT EXISTS agent(aid UNIQUE, name, host, create_at timestamp, 
-        last_msg_at, last_cpu_util, last_mem_util, last_sys_load1, last_sys_cs);
-    
-    CREATE TABLE IF NOT EXISTS node_metric_raw(aid, collect_at timestamp, category, content, create_at timestamp);
-    CREATE INDEX IF NOT EXISTS `idx_nmr_aid` ON `node_metric_raw` (`aid` DESC);
-    CREATE INDEX IF NOT EXISTS `idx_nmr_collect_at` ON `node_metric_raw` (collect_at DESC);
-    CREATE INDEX IF NOT EXISTS `idx_nmr_create_at` ON `node_metric_raw` (create_at DESC);
-    
-    CREATE TABLE IF NOT EXISTS node_memory_report(
-        aid, collect_at timestamp, total_mem, used_mem, free_mem, cache_mem, 
-        total_swap, used_swap, free_swap, create_at timestamp);
-    CREATE INDEX IF NOT EXISTS `idx_nmre_aid` ON `node_memory_report` (`aid` DESC);
-    CREATE INDEX IF NOT EXISTS `idx_nmre_collect_at` ON `node_memory_report` (collect_at DESC);
-    CREATE INDEX IF NOT EXISTS `idx_nmre_create_at` ON `node_memory_report` (create_at DESC);
-        
-    CREATE TABLE IF NOT EXISTS node_cpu_report(aid, collect_at timestamp, us, sy, id, wa, st, create_at timestamp);
-    CREATE INDEX IF NOT EXISTS `idx_ncr_aid` ON `node_cpu_report` (`aid` DESC);
-    CREATE INDEX IF NOT EXISTS `idx_ncr_collect_at` ON `node_cpu_report` (collect_at DESC);
-    CREATE INDEX IF NOT EXISTS `idx_ncr_create_at` ON `node_cpu_report` (create_at DESC);
-    
-    CREATE TABLE IF NOT EXISTS node_system_report(aid, collect_at timestamp, uptime, users, 
-        load1, load5, load15, procs_r, procs_b, sys_in, sys_cs, create_at timestamp);
-    CREATE INDEX IF NOT EXISTS idx_nsr_aid ON node_system_report (aid DESC);
-    CREATE INDEX IF NOT EXISTS idx_nsr_collect_at ON node_system_report (collect_at DESC);
-    CREATE INDEX IF NOT EXISTS idx_nsr_create_at ON node_system_report (create_at DESC);
-    
-    CREATE TABLE IF NOT EXISTS node_disk_report(aid, collect_at timestamp, fs, size, used, 
-        available, used_util, mount_point, create_at timestamp);
-    CREATE INDEX IF NOT EXISTS idx_ndr_aid ON node_disk_report (aid DESC);
-    CREATE INDEX IF NOT EXISTS idx_ndr_collect_at ON node_disk_report (collect_at DESC);
-    CREATE INDEX IF NOT EXISTS idx_ndr_create_at ON node_disk_report (create_at DESC);
-    '''
-
-    def __init__(self, pool_size=5):
-        self._pool_size = pool_size
-        self._init_db()
-
-    @dao
-    def _init_db(self, cursor):
-        logging.info('init master db with schema %s', self._DB_SCHEMA)
-        cursor.executescript(self._DB_SCHEMA)
-
-    @dao
-    def get_agents(self, cursor):
-        cursor.execute('SELECT %s FROM agent ORDER BY last_msg_at DESC' % ','.join(Agent.FIELDS))
-        return [Agent(*a) for a in cursor.fetchall()]
-
-    @dao
-    def add_nmetrics(self, agentid, collect_time, contents, cursor):
-        metrics = map(lambda x: (agentid, collect_time, x[0], x[1], datetime.now()), contents.items())
-        logging.debug('add node metrics to db:agent=%s, collect_time=%s, recs=%d',
-                      agentid, collect_time, len(metrics))
-        cursor.executemany(NMetric.isql(), metrics)
-
-    @dao
-    def get_nmetrics(self, agentid, start, end=datetime.now(), category=None, cursor=None):
-        cursor.execute('select %s from node_metric_raw '
-                       'where aid=? and collect_at>=? and collect_at <=? '
-                       'ORDER BY collect_at ASC' % ','.join(NMetric.FIELDS),
-                       (agentid, start, end))
-        return [NMetric(*r) for r in cursor.fetchall()]
-
-    @dao
-    def get_memreports(self, aid, start, end=datetime.now(), cursor=None):
-        cursor.execute('select %s from node_memory_report '
-                       'where aid=? and collect_at>=? and collect_at <=? '
-                       'ORDER BY collect_at ASC' % ','.join(NMemoryReport.FIELDS),
-                       (aid, start, end))
-        return [NMemoryReport(*r) for r in cursor.fetchall()]
-
-    @dao
-    def get_sysreports(self, aid, start, end=datetime.now(), cursor=None):
-        cursor.execute('select %s from node_system_report '
-                       'where aid=? and collect_at>=? and collect_at <=? '
-                       'ORDER BY collect_at ASC' % ','.join(NSystemReport.FIELDS),
-                       (aid, start, end))
-        return [NSystemReport(*r) for r in cursor.fetchall()]
-
-    @dao
-    def get_cpureports(self, aid, start, end=datetime.now(), cursor=None):
-        cursor.execute('SELECT %s from node_cpu_report '
-                       'WHERE aid=? AND collect_at>=? AND collect_at <=? '
-                       'ORDER BY collect_at ASC' % ','.join(NCPUReport.FIELDS),
-                       (aid, start, end))
-        return [NCPUReport(*r) for r in cursor.fetchall()]
-        return [NCPUReport(*r) for r in cursor.fetchall()]
-
-
-    @dao
-    def get_diskreports(self, aid, start, end=datetime.now(), cursor=None):
-        cursor.execute('SELECT %s from node_disk_report '
-                       'WHERE aid=? AND collect_at>=? AND collect_at <=? '
-                       'ORDER BY collect_at ASC' % ','.join(NDiskReport.FIELDS),
-                       (aid, start, end))
-        return [NDiskReport(*r) for r in cursor.fetchall()]
-
-    @dao
-    def add_smetrics(selfs, agentid, serv_name, contents):
-        pass
-
-
 class Master(object):
     """Agent work as the service and received status report from every Agent."""
 
@@ -473,7 +422,6 @@ class Master(object):
         self._addr = (host, port)
         self._agents = None
         self._handlers = {}
-        self._dao = MasterDAO()
         self._server = None
         self._init_handlers()
         self._load_agents()
@@ -488,7 +436,7 @@ class Master(object):
         logging.info('%s msg handlers prepared.', len(self._handlers))
 
     def _load_agents(self):
-        agents = self._dao.get_agents()
+        agents = Agent.query()
         self._agents = {a.aid: a for a in agents}
         logging.info('load %d agents from db', len(agents))
 
@@ -503,7 +451,6 @@ class Master(object):
             agent.save()
             logging.info('new agent %s registered', agent)
             self._agents[agent.aid] = agent
-        agent.client_addr = msg.client_addr
         return True
 
     def _agent_heartbeat(self, msg):
@@ -516,7 +463,10 @@ class Master(object):
         agent = self._agents.get(aid)
         body = load_json(msg.body)
         collect_time = body.pop('collect_time')
-        self._dao.add_nmetrics(aid, collect_time, body)
+
+        metrics = map(lambda x: NMetric(aid, collect_time, x[0], x[1], datetime.now()), body.items())
+        NMetric.save_all(metrics)
+
         memrep, cpurep, sysrep = None, None, None
 
         if 'free' in body:
@@ -575,6 +525,7 @@ class Master(object):
 
 
 def master_main():
+    create_schema()
     global _MASTER
     _MASTER = Master('0.0.0.0')
     _MASTER.start()

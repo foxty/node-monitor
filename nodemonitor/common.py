@@ -230,11 +230,6 @@ def dump_json(obj):
             return o.strftime(TIME_FMT)
         else:
             raise TypeError('Object %s not supporot by JSON encoder', o)
-
-    # to support namedtupple, we must convert the namedtuple to dict before converting.
-    if getattr(obj, '_asdict', None):
-        obj = obj._asdict()
-
     return json.dumps(obj, default=dt_converter)
 
 

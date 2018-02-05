@@ -8,6 +8,7 @@ $(document).ajaxStart(function() {
 	if(/application\/json/.test(ct)) {
 		alert(jqXHR.responseText);
 	} else {
+	    alert('Request error, please check console log.')
 		console.error(jqXHR.responseText);
 	}
 })
@@ -273,7 +274,7 @@ const Agents = {
 const AgentStatus = {
         props: ['aid'],
 
-		template: `<div><div class="page-header"><h1>Agent {{aid}} Status</h1></div>
+		template: `<div><div class="page-header"><h1>Agent {{agent ? agent.host : ''}}({{aid}}) Status</h1></div>
             <div class="panel panel-default">
                 <div class="panel-heading">
                     System
@@ -298,7 +299,7 @@ const AgentStatus = {
                     <button class="btn btn-sm btn-success" @click="loadCpuReports()">Reload</button>
                  </div>
                 <div class="panel-body row">
-                    <chart :options="sysCpu" style="width:100%;height:300px"></chart>
+                    <chart :options="cpuUtil" style="width:100%;height:300px"></chart>
                 </div>
             </div>
 
@@ -311,8 +312,21 @@ const AgentStatus = {
                     <button class="btn btn-sm btn-success" @click="loadMemReports()">Reload</button>
                 </div>
                 <div class="panel-body row">
-                    <div class="col-md-6"><chart :options="sysMemory" style="width:100%;height:300px"></chart></div>
-                    <div class="col-md-6"><chart :options="sysSwap" style="width:100%;height:300px"></chart></div>
+                    <div class="col-md-6"><chart :options="memoryUtil" style="width:100%;height:300px"></chart></div>
+                    <div class="col-md-6"><chart :options="swapUtil" style="width:100%;height:300px"></chart></div>
+                </div>
+            </div>
+
+            <div class="panel panel-default">
+                <div class="panel-heading">
+                    Disk Util
+                    <button class="btn btn-sm btn-link" @click="diskReportsRange='last_hour'">Last Hour</button>
+                    <button class="btn btn-sm btn-link" @click="diskReportsRange='last_day'">Last Day</button>
+                    <button class="btn btn-sm btn-link" @click="diskReportsRange='last_week'">Last Week</button>
+                    <button class="btn btn-sm btn-success" @click="loadDiskReports()">Reload</button>
+                </div>
+                <div class="panel-body row">
+                    <div class="col-md-12"><chart :options="diskUtil" style="width:100%;height:300px"></chart></div>
                 </div>
             </div>
 		</div>`,
@@ -322,16 +336,19 @@ const AgentStatus = {
 		        agent: null,
 		        sysReportsRange: 'last_hour',
 		        sysReports: null,
+		        sysLoad: null,
+                sysUsers: null,
+                sysCs: null,
 		        cpuReportsRange: 'last_hour',
 		        cpuReports: null,
+		        cpuUtil: null,
 		        memReportsRange: 'last_hour',
 		        memReports: null,
-		        sysLoad: null,
-		        sysUsers: null,
-		        sysCs: null,
-		        sysCpu: null,
-		        sysMemory: null,
-		        sysSwap: null
+		        memoryUtil: null,
+		        swapUtil: null,
+		        diskReportsRange: 'last_hour',
+		        diskReports: null,
+		        diskUtil: null
 		    }
 		},
 
@@ -351,6 +368,11 @@ const AgentStatus = {
 		            this.loadMemReports()
 		        }
 		    },
+		    diskReportsRange: function(n, o) {
+                if(n != o) {
+                    this.loadDiskReports()
+                }
+            },
 		    sysReports: function(n, o) {
 		        this.sysLoad = genChartOption("Sys Load", n, "collect_at",
 		                            {"Load1":"load1", "Load5":"load5", "Load15":"load15"});
@@ -358,27 +380,57 @@ const AgentStatus = {
                 this.sysCs =  genChartOption("Sys IN&CS", n, "collect_at", {"IN":"sys_in", "CS":"sys_cs"});
 		    },
 		    cpuReports: function(n, o) {
-                this.sysCpu = genChartOption("CPU", n, "collect_at",
+                this.cpuUtil = genChartOption("CPU", n, "collect_at",
                                 {"User":"us","System":"sy","Idle":"id","Wait":"wa","Stolen":"st"},
                                 {isStack:true, yAxisFmt: "{value}%"});
 		    },
 		    memReports: function(n, o) {
-                this.sysMemory = genChartOption("Memory", n, "collect_at",
+                this.memoryUtil = genChartOption("Memory", n, "collect_at",
                                     {"Used":"used_mem", "Free":"free_mem"},
                                     {isStack:true, yAxisFmt:"{value}M"});
-                this.sysSwap = genChartOption("Swap", n, "collect_at",
+                this.swapUtil = genChartOption("Swap", n, "collect_at",
                                    {"Used":"used_swap", "Free":"free_swap"},
                                    {isStack:true, yAxisFmt:"{value}M"});
+		    },
+		    diskReports: function(n, o) {
+		        var reportsMap = {}
+		        var spMapping = {}
+		        n.forEach(x => {
+                    if(!reportsMap[x.collect_at]) {
+                        reportsMap[x.collect_at] = {'aid': x.aid, collect_at: x.collect_at}
+                    }
+		            reportsMap[x.collect_at][x.mount_point] = Math.round(x.used*100.0/x.size)
+		            if(!spMapping[x.mount_point]) {
+		                spMapping[x.mount_point] = x.mount_point
+		            }
+		        })
+                var reports = []
+                var i=0
+                for(t in reportsMap) {
+                    reports[i++] = reportsMap[t]
+                }
+		        this.diskUtil = genChartOption("Disk Util", reports, "collect_at",
+                                               spMapping,
+                                               {yAxisFmt:"{value}%"});
 		    }
 		},
 
 		created: function() {
+		    this.getAgent();
             this.loadSysReports();
             this.loadCpuReports();
             this.loadMemReports();
+            this.loadDiskReports();
 		},
 
 		methods: {
+            getAgent: function() {
+                var self = this;
+                var aid = self.aid;
+                Ajax.get(`/api/agents/${aid}`, function(agent) {
+                    self.agent = agent
+                })
+            },
             loadSysReports: function() {
                 var self = this;
                 var aid = self.aid;
@@ -401,6 +453,14 @@ const AgentStatus = {
                 var range = self.memReportsRange
                 Ajax.get(`/api/agents/${aid}/report/memory/${range}`, function(reports) {
                     self.memReports = reports
+                })
+            },
+            loadDiskReports: function() {
+                var self = this;
+                var aid = self.aid;
+                var range = self.diskReportsRange
+                Ajax.get(`/api/agents/${aid}/report/disk/${range}`, function(reports) {
+                    self.diskReports = reports
                 })
             }
 		}

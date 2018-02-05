@@ -11,7 +11,7 @@ import logging
 from datetime import datetime, timedelta
 from flask import Flask, render_template, jsonify
 from common import dump_json
-from master import MasterDAO
+from master import Agent, NSystemReport, NCPUReport, NMemoryReport, NDiskReport
 logging.basicConfig(level=logging.INFO)
 
 
@@ -19,7 +19,6 @@ _APP = Flask(__name__,
              static_folder='../web/static/',
              static_url_path='/static',
              template_folder='../web/template/')
-_DAO = MasterDAO()
 
 
 def calc_daterange(r):
@@ -43,25 +42,37 @@ def index():
 
 @_APP.route('/api/agents', methods=['GET'])
 def get_agents():
-    agents = _DAO.get_agents()
+    agents = Agent.query(orderby='last_msg_at DESC')
     return dump_json(agents)
+
+
+@_APP.route('/api/agents/<string:aid>')
+def get_agent(aid):
+    agent = Agent.get_by_id(aid)
+    return dump_json(agent)
 
 
 @_APP.route('/api/agents/<aid>/report/system/<any(last_hour,last_day,last_week):date_range>', methods=['GET'])
 def get_agent_sysreports(aid, date_range='last_hour'):
-    reports = _DAO.get_sysreports(aid, *calc_daterange(date_range))
+    reports = NSystemReport.query_by_rtime(aid, *calc_daterange(date_range))
     return dump_json(reports)
 
 
 @_APP.route('/api/agents/<aid>/report/cpu/<any(last_hour,last_day,last_week):date_range>', methods=['GET'])
 def get_agent_cpureports(aid, date_range='last_hour'):
-    reports = _DAO.get_cpureports(aid, *calc_daterange(date_range))
+    reports = NCPUReport.query_by_rtime(aid, *calc_daterange(date_range))
     return dump_json(reports)
 
 
 @_APP.route('/api/agents/<aid>/report/memory/<any(last_hour,last_day,last_week):date_range>', methods=['GET'])
 def get_agent_memreports(aid, date_range='last_hour'):
-    reports = _DAO.get_memreports(aid, *calc_daterange(date_range))
+    reports = NMemoryReport.query_by_rtime(aid, *calc_daterange(date_range))
+    return dump_json(reports)
+
+
+@_APP.route('/api/agents/<aid>/report/disk/<any(last_hour,last_day,last_week):date_range>', methods=['GET'])
+def get_agent_diskreports(aid, date_range='last_hour'):
+    reports = NDiskReport.query_by_rtime(aid, *calc_daterange(date_range))
     return dump_json(reports)
 
 

@@ -9,29 +9,8 @@ from collections import namedtuple
 import unittest
 from common import *
 
-A = namedtuple('A', 'a1 a2 a3')
-
-
-class B(object):
-
-    def __init__(self):
-        self.b1 = 1
-        self.b2 = 'b2'
-        self.b3 = 3.3
-
 
 class CommonTest(unittest.TestCase):
-
-    def test_dumpjson_namedtuple(self):
-        a = A(a1=1, a2='a2', a3=3.3)
-        ajson = dump_json(a)
-        aobj = load_json(ajson)
-        a1 = A(**aobj)
-        self.assertEqual(a, a1)
-
-        listofa = [A(a1=1, a2='a2', a3=3.3), A(a1=2, a2='a2', a3=6.6)]
-        listjson = dump_json(listofa)
-        print listjson
 
     def test_dumpjson_date(self):
         dt = datetime(2018, 1, 8, 17, 26, 26, 999)
