@@ -202,25 +202,102 @@ function genChartOption(title, data, cateProp, seriesPropsMapping, graphOptions)
 /**Vue Apps**/
 const Dashboard = {
 		template: `<div><div class="page-header"><h1>Dashboard</h1></div>
+            <div class="row" style="padding:15px;">
+                <div class="col-md-3 alert alert-success" style="text-align:center">
+                    <h3>{{summary ? summary.agent_count : 'N/A'}} Nodes</h3></div>
+                <div class="col-md-3 alert alert-danger" style="text-align:center">
+                    <h3>{{summary ? summary.alarm_count : 'N/A'}} Alarms</h3></div>
+                <div class="col-md-3 alert alert-info" style="text-align:center">
+                    <h3>{{summary ? summary.service_count : 'N/A'}} Services</h3></div>
+                <div class="col-md-3 alert alert-info" style="text-align:center">
+                    <h3>{{summary ? summary.sample_count : 'N/A'}} Samples</h3></div>
+            </div>
+            <div class="row">
+                <div class="col-md-4">
+                    <div class="panel panel-default">
+                        <div class="panel-heading">
+                            Worst Nodes (Top 10)
+                        </div>
+                        <div class="panel-body row">
+                            <table class='table'>
+                                <thead>
+                                    <tr>
+                                        <th>Name</th>
+                                        <th>Load1</th>
+                                        <th>CPU%</th>
+                                        <th>Memory%</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr v-for="node in worstNodes" style="padding:5px 0px 5px 10px;">
+                                    <td><router-link :to="{name: 'nodeStatus', params: {aid:node.aid}}">{{node.name}}</router-link></td>
+                                    <td>{{node.last_sys_load1}}</td>
+                                    <td>{{node.last_cpu_util}}</td>
+                                    <td>{{node.last_mem_util}}</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="panel panel-default">
+                        <div class="panel-heading">
+                            Worst Services
+                        </div>
+                        <div class="panel-body row">
+
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="panel panel-default">
+                        <div class="panel-heading">
+                            New Alarms
+                        </div>
+                        <div class="panel-body row">
+
+                        </div>
+                    </div>
+                </div>
+            </div>
 		</div>`,
+
 		data: function() {
-		    return {};
+		    return {
+		        summary: null,
+		        worstNodes: null
+		    };
+		},
+
+		created: function() {
+		    this.loadSummary();
+		    this.loadWorstNodes();
 		},
 
 		methods: {
-            hello: function() {
-                alert('hello')
+		    loadSummary: function() {
+		        var self = this;
+		        Ajax.get('/api/dashboard/summary', function(summary) {
+		            self.summary = summary;
+		        })
+		    },
+            loadWorstNodes: function() {
+                var self = this;
+                Ajax.get('/api/agents/by_load1', function(agents) {
+                    self.worstNodes = agents;
+                })
             }
 		}
 	};
 
-const Agents = {
-		template: `<div><div class="page-header"><h1>Agent List</h1></div>
+const Nodes = {
+		template: `<div><div class="page-header"><h1>Node List</h1></div>
 		    <table class="table" v-if="agents">
 		        <thead>
                     <tr>
                         <th>Name</th>
-                        <th>Node Host</th>
+                        <th>Host</th>
                         <th>Service(s)</th>
                         <th>CPU Util(%)</th>
                         <th>Mem Util(%)</th>
@@ -240,7 +317,7 @@ const Agents = {
                         <td>{{a.last_sys_load1}}</td>
                         <td>{{a.last_sys_cs}}</td>
                         <td>
-                            <router-link :to="{name: 'agentStatus', params: {aid:a.aid}}">
+                            <router-link :to="{name: 'nodeStatus', params: {aid:a.aid}}">
                                 Reports <span class="glyphicon glyphicon-stats" aria-hidden="true"></span>
                             </router-link>
                         </td>
@@ -271,10 +348,10 @@ const Agents = {
 		}
 	}
 
-const AgentStatus = {
+const NodeStatus = {
         props: ['aid'],
 
-		template: `<div><div class="page-header"><h1>Agent {{agent ? agent.host : ''}}({{aid}}) Status</h1></div>
+		template: `<div><div class="page-header"><h1>Node {{agent ? agent.host : ''}}({{aid}}) Status</h1></div>
             <div class="panel panel-default">
                 <div class="panel-heading">
                     System
@@ -466,7 +543,7 @@ const AgentStatus = {
 		}
 	}
 
-const AgentServices = {
+const NodeServices = {
     template: `Agent Services`
 }
 
@@ -507,9 +584,9 @@ const router = new VueRouter({
       routes: [
         // 动态路径参数 以冒号开头
         {path: '/dashboard', component:  Dashboard},
-        {path: '/agents', component:  Agents},
-        {path: '/agents/:aid/status', name: 'agentStatus', component: AgentStatus, props: true},
-        {path: '/agents/:aid/services', name: 'agentServices', component: AgentServices, props: true},
+        {path: '/nodes', component:  Nodes},
+        {path: '/nodes/:aid/status', name: 'nodeStatus', component: NodeStatus, props: true},
+        {path: '/nodes/:aid/services', name: 'nodeServices', component: NodeServices, props: true},
         {path: '/alarms', component:  Alarms},
         {path: '/settings', component:  Settings}
       ]

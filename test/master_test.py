@@ -342,6 +342,17 @@ class MasterDAOTest(BaseDBTest):
         self.assertEqual(ag1, agents[0])
         self.assertEqual(ag2, agents[1])
 
+    def test_agent_count(self):
+        ag1 = nm.Agent('1', 'agent1', '127.0.0.1', datetime.now())
+        ag2 = nm.Agent('2', 'agent2', '127.0.0.1', datetime.now())
+        ag3 = nm.Agent('3', 'agent3', '127.0.0.1', datetime.now())
+        nm.Agent.save_all([ag1, ag2, ag3])
+
+        self.assertEqual(3, nm.Agent.count())
+        self.assertEqual(1, nm.Agent.count(where='aid=?', params=['1']))
+        self.assertEqual(2, nm.Agent.count(where='aid>?', params=['1']))
+        self.assertEqual(0, nm.Agent.count(where='name=?', params=['1']))
+
     def test_update_agent(self):
         ag = nm.Agent('12345678', 'agent1', '127.0.0.1', datetime.now())
         ag.save()

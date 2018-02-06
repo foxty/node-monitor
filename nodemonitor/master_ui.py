@@ -40,6 +40,21 @@ def index():
     return render_template('index.html')
 
 
+@_APP.route('/api/dashboard/summary')
+def dashboard_summary():
+    summary = {'agent_count': Agent.count(),
+               'service_count': 0,
+               'alarm_count': 0,
+               'sample_count': 0}
+    return dump_json(summary)
+
+
+@_APP.route('/api/agents/by_load1')
+def get_agents_byload1():
+    agents = Agent.query_by_load1()
+    return dump_json(agents)
+
+
 @_APP.route('/api/agents', methods=['GET'])
 def get_agents():
     agents = Agent.query(orderby='last_msg_at DESC')

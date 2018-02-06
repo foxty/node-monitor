@@ -302,6 +302,14 @@ class Model(dict):
         result = cursor.fetchall()
         return [cls(*r) for r in result]
 
+    @classmethod
+    @dao
+    def count(cls, where=None, params=None, cursor=None):
+        cursor.execute('SELECT COUNT(1) FROM %s %s' % (cls.TABLE, 'WHERE '+where if where else ''),
+                       params if params else ())
+        r = cursor.fetchone()
+        return r[0] if r else 0
+
 
 class ChronoModel(object):
 
@@ -324,6 +332,10 @@ class Agent(Model):
     def get_by_id(cls, aid):
         r = cls.query(where='aid=?', params=[aid])
         return r[0] if r else None
+
+    @classmethod
+    def query_by_load1(cls, count=10):
+        return cls.query(orderby='last_sys_load1 DESC LIMIT ?', params=[count])
 
 
 class NMetric(Model, ChronoModel):
