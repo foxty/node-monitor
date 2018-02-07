@@ -583,7 +583,8 @@ const Settings = {
 const router = new VueRouter({
       routes: [
         // 动态路径参数 以冒号开头
-        {path: '/dashboard', component:  Dashboard},
+        {path: '/', redirect: {name: 'dashboard'}},
+        {path: '/dashboard', name: 'dashboard', component:  Dashboard},
         {path: '/nodes', component:  Nodes},
         {path: '/nodes/:aid/status', name: 'nodeStatus', component: NodeStatus, props: true},
         {path: '/nodes/:aid/services', name: 'nodeServices', component: NodeServices, props: true},

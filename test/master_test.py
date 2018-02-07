@@ -233,6 +233,81 @@ class GlobalFuncTest(unittest.TestCase):
         self._assert_dr('1', ctime, '/', '369884093', '25200224', '344683869', '7%', '/', drs[0])
         self._assert_dr('1', ctime, 'swap', '1326292', '24', '1326268', '1%', '/var/run', drs[-1])
 
+    def test_parse_dstat_sys(self):
+        content = """
+        [7l---load-avg--- ---system-- ---procs---
+         1m   5m  15m | int   csw |run blk new
+        0.05 0.18 0.09| 401   749 |  0   0 0.4
+        0.05 0.18 0.09| 394   707 |  0   0   0
+        """
+        ctime = datetime.now()
+        sys = nm.parse_dstat_sys('1', ctime, content)
+        self.assertIsNotNone(sys)
+        self.assertEqual('1', sys.aid)
+        self.assertEqual(ctime, sys.collect_at)
+        self.assertEqual(0.05, sys.load1)
+        self.assertEqual(0.18, sys.load5)
+        self.assertEqual(0.09, sys.load15)
+        self.assertEqual(394, sys.sys_in)
+        self.assertEqual(707, sys.sys_cs)
+        self.assertEqual(0, sys.procs_r)
+        self.assertEqual(0, sys.procs_b)
+        self.assertIsNotNone(sys.recv_at)
+
+    def test_parse_dstat_cpu(self):
+        c = """
+        [7l----total-cpu-usage----
+        usr sys idl wai hiq siq
+          0   0  99   1   0   0
+          1   2  95   2   0   0
+
+        """
+        ctime = datetime.now()
+        cpu = nm.parse_dstat_cpu('1', ctime, c)
+        self.assertIsNotNone(cpu)
+        self.assertEqual('1', cpu.aid)
+        self.assertEqual(ctime, cpu.collect_at)
+        self.assertEqual(1, cpu.us)
+        self.assertEqual(2, cpu.sy)
+        self.assertEqual(95, cpu.id)
+        self.assertEqual(2, cpu.wa)
+        self.assertEqual(None, cpu.st)
+        self.assertIsNotNone(cpu.recv_at)
+
+    def test_conv_to_mega(self):
+        self.assertEqual(1536, nm.conv_to_mega('1.5G'))
+        self.assertEqual(1536, nm.conv_to_mega('1.5g'))
+        self.assertEqual(1.5, nm.conv_to_mega('1.5m'))
+        self.assertEqual(1.5, nm.conv_to_mega('1.5M'))
+        self.assertEqual(1.5, nm.conv_to_mega('1536k'))
+        self.assertEqual(1.5, nm.conv_to_mega('1536K'))
+        self.assertEqual(1, nm.conv_to_mega('1048576b'))
+        self.assertEqual(1, nm.conv_to_mega('1048576B'))
+        self.assertEqual(0, nm.conv_to_mega('0'))
+        self.assertIsNone(nm.conv_to_mega('000a'))
+
+    def test_parse_dstat_mem(self):
+        c = """
+        [7l------memory-usage----- ----swap--- ---paging--
+         used  buff  cach  free| used  free|  in   out 
+        3666M  197M 9.80G 6096M|   0    10G|   0     0 
+        3666M  197M 9.80G 6096M|   0    10G|   0     0 
+        """
+        ctime = datetime.now()
+        mem = nm.parse_dstat_mem('1', ctime, c)
+        self.assertIsNotNone(mem)
+        self.assertEqual('1', mem.aid)
+        self.assertEqual(ctime, mem.collect_at)
+        self.assertEqual(9.80*1024+6096+3666, mem.total_mem)
+        self.assertEqual(3666, mem.used_mem)
+        self.assertEqual(9.8*1024, mem.cache_mem)
+        self.assertEqual(6096, mem.free_mem)
+        self.assertEqual(10*1024, mem.total_swap)
+        self.assertEqual(0, mem.used_swap)
+        self.assertEqual(10*1024, mem.free_swap)
+        self.assertIsNotNone(mem.recv_at)
+
+
 
 class ModelTest(unittest.TestCase):
 

@@ -141,7 +141,7 @@ class TextTable(object):
     ]
 
     """
-    def __init__(self, content, header_ln=0, vheader = False):
+    def __init__(self, content, header_ln=0, vheader=False):
         self._table = [[ele.strip() for ele in l.strip().split(' ') if ele.strip()]
                        for l in content.splitlines() if l.strip()]
         self._size = len(self._table)

@@ -14,6 +14,7 @@ Node monitor master:
 # ==============================
 import os
 import collections
+import re
 import socket
 import SocketServer
 import sqlite3
@@ -188,6 +189,101 @@ def parse_df(aid, collect_time, content):
 
 
 def parse_netstat(aid, collect_time, content):
+    pass
+
+
+def parse_dstat(content, data_size):
+    """ parse the output of dstat command and get last line of data.
+    :param content:
+    :param data_size:
+    :return: List[str] for data and None if invalid content
+    """
+    if content:
+        data = re.split('\s*\|?\s*', [l.strip() for l in content.splitlines() if l.strip()][-1])
+        return data if len(data) == data_size else None
+    logging.warn('invalid content for dstat %s', content)
+    return None
+
+
+def parse_dstat_sys(aid, collect_time, content):
+    """ parse the output of `dstat -lyp` to NSystemReport
+     ---load-avg--- ---system-- ---procs---
+     1m   5m  15m | int   csw |run blk new
+     0 0.02    0| 401   750 |  0   0 0.4
+     0 0.02    0| 223   501 |  0   0   0
+    :param aid:
+    :param collect_time:
+    :param content:
+    :return: NSystemReport
+    """
+    data = parse_dstat(content, 8)
+    return NSystemReport(aid=aid, collect_at=collect_time,
+                         load1=float(data[0]), load5=float(data[1]), load15=float(data[2]),
+                         sys_in=int(data[3]), sys_cs=int(data[4]), procs_r=int(data[5]),
+                         procs_b=int(data[6]), recv_at=datetime.now()) if data else None
+
+
+def parse_dstat_cpu(aid, collect_time, content):
+    """ parse the output of `dstat -c` to NCPUReport
+     ----total-cpu-usage----
+     usr sys idl wai hiq siq
+     0   0  99   1   0   0
+     0   0 100   0   0   0
+    :param aid:
+    :param collect_time:
+    :param content:
+    :return: NCPUReport
+    """
+    data = parse_dstat(content, 6)
+    return NCPUReport(aid=aid, collect_at=collect_time, us=int(data[0]), sy=int(data[1]),
+                         id=int(data[2]), wa=int(data[3]), recv_at=datetime.now()) if data else None
+
+
+def conv_to_mega(value, multiplier=1024):
+    if value[-1] in ('G', "g"):
+        return float(value[:-1]) * multiplier
+    elif value[-1] in ('M', 'm'):
+        return float(value[:-1])
+    elif value[-1] in ('K', 'k'):
+        return float(value[:-1]) / multiplier
+    elif value[-1] in ('B', 'b'):
+        return float(value[:-1]) / (multiplier ** 2)
+    elif value.isdigit():
+        return float(value)
+    else:
+        return None
+
+
+def parse_dstat_mem(aid, collect_time, content):
+    """
+    ------memory-usage----- ----swap--- ---paging--
+    used  buff  cach  free| used  free|  in   out
+    3666M  197M 9.80G 6096M|   0    10G|   0     0
+    3666M  197M 9.80G 6096M|   0    10G|   0     0
+    :param aid:
+    :param collect_time:
+    :param content:
+    :return: NMemoryReport
+    """
+    data = parse_dstat(content, 8)
+    if data:
+        used_mem = conv_to_mega(data[0])
+        cache_mem = conv_to_mega(data[2])
+        free_mem = conv_to_mega(data[3])
+        used_swap = conv_to_mega(data[4])
+        free_swap = conv_to_mega(data[5])
+        page_in, page_out = int(data[6]), int(data[7])
+    return NMemoryReport(aid, collect_time, total_mem=used_mem+cache_mem+free_mem,
+                         used_mem=used_mem, free_mem=free_mem, cache_mem=cache_mem,
+                         total_swap=used_swap+free_swap, used_swap=used_swap,
+                         free_swap=free_swap, recv_at=datetime.now()) if data else None
+
+
+def parse_dstat_sock(aid, collect_time, content):
+    pass
+
+
+def parse_dstat_dio(aid, collect_time, content):
     pass
 
 

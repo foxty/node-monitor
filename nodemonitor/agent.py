@@ -58,12 +58,12 @@ class AgentConfig(object):
         logging.info('valid service metrics = %s', self._valid_service_metrics)
 
         # check services
-        invalid_serivces = [s for s in self._services if 'name' not in s or 'lookup' not in s]
+        invalid_serivces = [s for s in self._services if 'name' not in s or 'lookup_keyword' not in s]
         self._valid_services = [s for s in self._services if s not in invalid_serivces] \
             if invalid_serivces else self._services
         logging.info('valid service=%s, invalid services=%s',
                      map(lambda x: x['name'], self._valid_services),
-                     invalid_serivces)
+                     map(lambda x: x['name'], invalid_serivces))
 
     @property
     def node_metrics(self):
@@ -113,10 +113,8 @@ class NodeCollector(threading.Thread):
             try:
                 if loops % self._config.hb_clocks == 0:
                     self._prod_heartbeat()
-
                 self._collect_nmetrics(loops)
-
-                # TODO: collet service metrics
+                self._collect_smetrics(loops)
             except BaseException as e:
                 logging.exception('error during collect metrics, wait to next round. %s', e)
             finally:
@@ -164,33 +162,36 @@ class NodeCollector(threading.Thread):
             result = e.message
         return result
 
-    def _find_services(self):
-        logging.info('service discovery...')
-        act_services = {}
-        for s in self._config.valid_services:
-            sname = s['name']
-            slookup = s['lookup']
-            logging.info('try to lookup service %s', sname)
-            try:
-                pid = check_output(slookup)
-                if pid and pid.isdigit():
-                    s['pid'] = pid
-                    act_services[sname] = s
-                else:
-                    logging.info('can\'t lookup pid for %s', sname)
-            except BaseException as e:
-                logging.error('look up service %s by %s failed', sname, slookup)
-        return act_services
-
-    def _collect_smetrics(self):
+    def _collect_smetrics(self, loops):
         """Collect services metrics"""
         result = {}
         services = self._find_services()
-        logging.info('collecting services metrics for %s...', ','.join(services.keys()))
-        for sname, s in services.items():
-            pid = s['pid']
-            for sm_name, sm_cmd in self._config.valid_service_metrics.items():
-                print sm_name, sm_cmd
+        if not services:
+            logging.info('no service found, exit service metric collecting')
+
+        for sname, srv in services.items():
+            logging.info('collect service %s(%s) metrics:', sname, srv['pid'])
+
+    def _find_services(self):
+        act_services = {}
+        for s in self._config.valid_services:
+            sname = s['name']
+            slookup = s['lookup_keyword']
+            logging.info('lookup service %s', sname)
+            try:
+                pslist = check_output(['ps', '-ef'])
+                psinfo = [psinfo for psinfo in pslist.split('\n') if slookup in psinfo]
+                logging.debug('find psinfo of %s: %s', sname, psinfo)
+                if len(psinfo) == 1:
+                    pid = [e for e in psinfo[0].split(' ') if e][1]
+                    if pid and pid.isdigit():
+                        s['pid'] = pid
+                        act_services[sname] = s
+                        continue
+                logging.info('cannot lookup pid for %s', sname)
+            except Exception as e:
+                logging.exception('look up service %s by %s failed', sname, slookup)
+        return act_services
 
 
 class NodeAgent:
