@@ -47,8 +47,7 @@
   "service_metrics": {
     "pidstat": {
       "type": "all",
-      "cmd": ["pidstat", "-rtuh", "-p", "${pid}"],
-      "clocks":6
+      "cmd": ["pidstat", "-rtuh", "-p", "${pid}"]
     },
     "jstat-gc": {
       "type": "java",
@@ -61,20 +60,22 @@
       "type": "java",
       "lookup_keyword": "-Dprocess=Reactor",
       "env" : {
-        "java_home": ["/opt/arris/servassure/jdk1.8.0_40/", "/export/home/stargus/jdk1.8.0_40"],
-        "log_home": ["/opt/arris/servassure/log", "/export/home/stargus/log/"]
+        "java_home": "/opt/arris/servassure/jdk1.8.0_40/, /export/home/stargus/jdk1.8.0_40",
+        "log_home": "/opt/arris/servassure/log, /export/home/stargus/log/"
       },
       "log_pattern": ["reactor.*"],
+      "metrics": ["pidstat", "jstat-gc"],
       "clocks": 6
     },{
       "name": "collector",
       "type": "java",
       "lookup_keyword": "-Dprocess=Collector",
       "env" : {
-        "java_home": ["/opt/arris/servassure/jdk1.8.0_40/", "/export/home/stargus/jdk1.8.0_40"],
-        "log_home": ["/opt/arris/servassure/log", "/export/home/stargus/log/"]
+        "java_home": "/opt/arris/servassure/jdk1.8.0_40/, /export/home/stargus/jdk1.8.0_40",
+        "log_home": "/opt/arris/servassure/log, /export/home/stargus/log/"
       },
       "log_pattern": ["collection_manager.log", "snmp_poller.log"],
+      "metrics": ["pidstat", "jstat-gc"],
       "clocks": 6
     }
   ]

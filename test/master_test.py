@@ -515,7 +515,7 @@ class MasterTest(BaseDBTest):
         master = nm.Master()
 
         # test a new agent join
-        regmsg = nm.Msg('1', nm.Msg.A_REG, body='''{}''')
+        regmsg = nm.Msg.create_msg('1', nm.Msg.A_REG, '''{}''')
         regmsg.client_addr = ('127.0.0.1', 1234)
         master.handle_msg(regmsg, None)
         agent = master.find_agent('1')
@@ -530,11 +530,11 @@ class MasterTest(BaseDBTest):
         m = nm.Master()
         ctime = datetime.now()
         body = {'collect_time': ctime}
-        regmsg = nm.Msg('2', nm.Msg.A_REG, body='''{}''')
+        regmsg = nm.Msg.create_msg('2', nm.Msg.A_REG, '''{}''')
         regmsg.client_addr = ('127.0.0.1', 1234)
         m.handle_msg(regmsg, None)
 
-        nmmsg = nm.Msg('2', nm.Msg.A_NODE_METRIC, body=nm.dump_json(body))
+        nmmsg = nm.Msg.create_msg('2', nm.Msg.A_NODE_METRIC, nm.dump_json(body))
         re = m.handle_msg(nmmsg, None)
         self.assertTrue(re)
 
@@ -560,7 +560,7 @@ class MasterTest(BaseDBTest):
                          1  0      0 580284    948 884556    0    0     0     0 1091  404 86 14  0  0  0
                       '''
         }
-        nmmsg = nm.Msg(agent.aid, nm.Msg.A_NODE_METRIC, body=nm.dump_json(msgbody))
+        nmmsg = nm.Msg.create_msg(agent.aid, nm.Msg.A_NODE_METRIC, nm.dump_json(msgbody))
         re = m.handle_msg(nmmsg, None)
         self.assertTrue(re)
 

@@ -86,14 +86,14 @@ class TextTableTest(unittest.TestCase):
 class MonMsgTest(unittest.TestCase):
 
     def test_create(self):
-        m1 = Msg("12345678")
-        self.assertEqual("12345678", m1.agentid)
+        m1 = Msg.create_msg('12345678', Msg.NONE)
+        self.assertEqual('12345678', m1.agentid)
         self.assertEqual(Msg.NONE, m1.msg_type)
         self.assertEqual('', m1.body)
 
     def test_eq(self):
-        m1 = Msg("12345678")
-        m2 = Msg("12345678")
+        m1 = Msg.create_msg('12345678', Msg.NONE)
+        m2 = Msg.create_msg('12345678', Msg.NONE)
         self.assertEqual(m1, m2)
 
         m2.msg_type = Msg.A_HEARTBEAT
@@ -107,17 +107,16 @@ class MonMsgTest(unittest.TestCase):
 
     def test_encode_decode(self):
         msg_body = "12\n\t\n\t34"
-        msg = Msg("12345678", Msg.A_HEARTBEAT, body=msg_body)
+        msg = Msg.create_msg('12345678', Msg.A_HEARTBEAT, msg_body)
         self.assertEqual(Msg.A_HEARTBEAT, msg.msg_type)
 
         header_list, encbody = msg.encode()
-        self.assertEqual(4, len(header_list))
+        self.assertEqual(2, len(header_list))
         self.assertEqual(msg_body, base64.b64decode(encbody))
 
         msg1 = Msg.decode(header_list, encbody)
         self.assertEqual(msg, msg1)
-        self.assertEqual(msg.sendtime, msg1.sendtime)
-        self.assertEqual(True, isinstance(msg.sendtime, datetime))
+        self.assertIsNone(msg1.send_at)
 
 
 if __name__ == '__main__':

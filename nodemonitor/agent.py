@@ -34,7 +34,6 @@ class AgentConfig(object):
         self._node_metrics = config.get('node_metrics', {})
         self._valid_node_metrics = None
         self._service_metrics = config.get('service_metrics', {})
-        self._valid_service_metrics = None
         self._services = config.get('services',[])
         self._valid_services = None
         self._validate()
@@ -46,16 +45,12 @@ class AgentConfig(object):
     def _validate(self):
         checkcmd = 'where' if is_win() else 'which'
         # check node metrics
-        logging.info('check node command by %s', checkcmd)
+        logging.info('check node metric command by %s', checkcmd)
         self._valid_node_metrics = {k: v for k, v in self._node_metrics.items()
                                     if call([checkcmd, v['cmd'][0]]) == 0}
         logging.info('valid node metrics = %s', self._valid_node_metrics)
 
-        # check service metrics
-        logging.info('check service command by %s', checkcmd)
-        self._valid_service_metrics = {k: v for k, v in self._service_metrics.items()
-                                       if call([checkcmd, v['cmd'][0]]) == 0}
-        logging.info('valid service metrics = %s', self._valid_service_metrics)
+        logging.info('service metrics = %s', self._service_metrics)
 
         # check services
         invalid_serivces = [s for s in self._services if 'name' not in s or 'lookup_keyword' not in s]
@@ -78,10 +73,6 @@ class AgentConfig(object):
         return self._service_metrics
 
     @property
-    def valid_service_metrics(self):
-        return self.valid_service_metrics
-
-    @property
     def valid_services(self):
         return self._valid_services
 
@@ -95,6 +86,8 @@ class AgentConfig(object):
 
 
 class NodeCollector(threading.Thread):
+
+    CMD_VAR_PATTERN = re.compile('\${([\w_]+)}')
 
     def __init__(self, agent, config):
         super(NodeCollector, self).__init__(target=self._collect, name='NodeCollector')
@@ -115,8 +108,8 @@ class NodeCollector(threading.Thread):
                     self._prod_heartbeat()
                 self._collect_nmetrics(loops)
                 self._collect_smetrics(loops)
-            except BaseException as e:
-                logging.exception('error during collect metrics, wait to next round. %s', e)
+            except Exception as e:
+                logging.exception('error during collect metrics, wait for next round.')
             finally:
                 loops = loops + 1
             time2 = datetime.now()
@@ -126,26 +119,20 @@ class NodeCollector(threading.Thread):
     def _prod_heartbeat(self):
         logging.info('produce heartbeat...')
         body = {'datetime': datetime.now()}
-        hb_msg = Msg(self._agentid, Msg.A_HEARTBEAT, body=dump_json(body))
+        hb_msg = Msg.create_msg(self._agentid, Msg.A_HEARTBEAT, dump_json(body))
         self._agent.add_msg(hb_msg)
 
-    def _collect_nmetrics(self, loops):
-        """
-        Collect node metrics
-        :param loops: current loops
-        """
-        logging.info('try to collecting node metrics, loops=%d', loops)
-        nmetrics_result = {}
-        for k, v in self._config.valid_node_metrics.items():
-            if loops % v.get('clocks', 6) == 0:
-                nmetrics_result[k] = self._get_cmd_result(v['cmd'])
-        if nmetrics_result:
-            nmetrics_result['collect_time'] = datetime.now()
-            nm_msg = Msg(self._agentid, Msg.A_NODE_METRIC, body=dump_json(nmetrics_result))
-            self._agent.add_msg(nm_msg)
-            logging.info('%d node metrics collected', len(nmetrics_result) - 1)
-        else:
-            logging.info('no metric collected ')
+    def _translate_cmd(self, cmd, context={}):
+        logging.debug('translate cmd=%s by context=%s', cmd, context)
+        newcmd = []
+        for c in cmd:
+            m = self.CMD_VAR_PATTERN.search(c)
+            if m:
+                var = m.group(1)
+                value = context.get(var, None)
+                c = c.replace('${%s}' % var, value) if value is not None else c
+            newcmd.append(c)
+        return newcmd
 
     def _get_cmd_result(self, cmd):
         """
@@ -162,22 +149,69 @@ class NodeCollector(threading.Thread):
             result = e.message
         return result
 
+    def _collect_nmetrics(self, loops):
+        """
+        Collect node metrics
+        :param loops: current loops
+        """
+        logging.info('try to collecting node metrics, loops=%d', loops)
+        nmetrics_result = {}
+        for k, v in self._config.valid_node_metrics.items():
+            if loops % v.get('clocks', 6) == 0:
+                nmetrics_result[k] = self._get_cmd_result(v['cmd'])
+        if nmetrics_result:
+            nmetrics_result['collect_time'] = datetime.now()
+            nm_msg = Msg.create_msg(self._agentid, Msg.A_NODE_METRIC, dump_json(nmetrics_result))
+            self._agent.add_msg(nm_msg)
+            logging.info('%d node metrics collected', len(nmetrics_result) - 1)
+        else:
+            logging.info('no metric collected ')
+
     def _collect_smetrics(self, loops):
         """Collect services metrics"""
         result = {}
         services = self._find_services()
-        if not services:
-            logging.info('no service found, exit service metric collecting')
+        logging.info('try to collect services metrics: %s, loops=%s.', ','.join(services.keys()), loops)
+        for name, service in services.items():
+            clocks = service['clocks']
+            if loops % clocks == 0:
+                result[name] = self._collect_service(service)
+        if result:
+            # send message
+            result['collect_time'] = datetime.now()
+            msg = Msg.create_msg(self._agentid, Msg.A_SERVICE_METRIC, dump_json(result))
+            self._agent.add_msg(msg)
+            logging.info('%d service collected.', len(result))
+        else:
+            logging.info('no service metric collected, loops=%s.', loops)
 
-        for sname, srv in services.items():
-            logging.info('collect service %s(%s) metrics:', sname, srv['pid'])
+    def _collect_service(self, service):
+        logging.debug('collect service : %s', service)
+        name = service['name']
+        metric_names = service['metrics']
+        clocks = service['clocks']
+        pid = service['pid']
+        env = service.get('env', {})
+        env['pid'] = pid
+        logging.info('collecting for service %s(%s): metrics=%s, clocks=%s.',
+                     name, pid, metric_names, clocks)
+        service_result = {'info': service}
+        for mname in metric_names:
+            try:
+                metric = self._config.service_metrics[mname]
+                cmd = self._translate_cmd(metric['cmd'], env)
+                service_result[mname] = self._get_cmd_result(cmd)
+            except Exception as e:
+                logging.exception('collect metrcis %s for service %s failed.', mname, name)
+                service_result[mname] = e.message()
+        return service_result
 
     def _find_services(self):
         act_services = {}
         for s in self._config.valid_services:
             sname = s['name']
             slookup = s['lookup_keyword']
-            logging.info('lookup service %s', sname)
+            logging.info('lookup pid for service: %s', sname)
             try:
                 pslist = check_output(['ps', '-ef'])
                 psinfo = [psinfo for psinfo in pslist.split('\n') if slookup in psinfo]
@@ -188,7 +222,7 @@ class NodeCollector(threading.Thread):
                         s['pid'] = pid
                         act_services[sname] = s
                         continue
-                logging.info('cannot lookup pid for %s', sname)
+                logging.warn('cannot lookup pid for %s', sname)
             except Exception as e:
                 logging.exception('look up service %s by %s failed', sname, slookup)
         return act_services
@@ -196,6 +230,7 @@ class NodeCollector(threading.Thread):
 
 class NodeAgent:
     """Agent will running the node as and keep send stats data to Master via TCP connection."""
+    SEND_BUF = 128*1024
 
     def __init__(self, master_host='localhost', master_port=7890, configfile="./agent.json"):
 
@@ -239,10 +274,13 @@ class NodeAgent:
             try:
                 sock = socket.create_connection(self._master_addr, 5)
                 sock.setblocking(False)
+                sendbuf =  sock.getsockopt(socket.SOL_SOCKET, socket.SO_SNDBUF)
+                logging.info('default send buffer is %s, will change to %s.', sendbuf, self.SEND_BUF)
+                sock.setsockopt(socket.SOL_SOCKET, socket.SO_SNDBUF, 1024*128)
                 break
             except socket.error as e:
                 sleeptime = min(_MAX_BACKOFF_SECOND, tried ** 2)
-                logging.warn('Cannot connect %s(tried=%d) due to %s, will retry after %d seconds...',
+                logging.exception('Cannot connect %s(tried=%d) due to %s, will retry after %d seconds...',
                              self._master_addr, tried, e, sleeptime)
                 self._retry.wait(sleeptime)
         logging.info('connect to master %s succed.', self._master_addr)
@@ -283,7 +321,7 @@ class NodeAgent:
         """Produce a agent reg message after connected"""
         logging.info('do registration...')
         osname = os.name
-        reg_msg = Msg(agentid=self._agentid, mtype=Msg.A_REG, body=dump_json(osname))
+        reg_msg = Msg.create_msg(self._agentid, Msg.A_REG, dump_json(osname))
         self.add_msg(reg_msg)
 
     def _loop(self):
@@ -323,11 +361,24 @@ class NodeAgent:
             headers, body = msg.encode()
             headers.append(body)
             data = '\n'.join(headers)
-            datalen = len(data)
-            sock.send('MSG:%d\n' % datalen)
-            size = sock.send(data)
-            logging.info('send msg type=%s, datalen=%d, size=%d, to=%s',
-                          msg.msg_type, datalen, size, self._master_addr)
+            datasize = len(data)
+            self._send_data(sock, 'MSG:%d\n' % datasize)
+            times = self._send_data(sock, data)
+            logging.info('send msg type=%s, datasize=%d, times=%d to=%s',
+                          msg.msg_type, datasize, times, self._master_addr)
+
+    def _send_data(self, sock, data):
+        times = 0
+        while data:
+            try:
+                sent = sock.send(data)
+                data = data[sent:]
+            except socket.error as e:
+                logging.exception('send data failed by times = %d', times)
+                continue
+            finally:
+                times += 1
+        return times
 
     def _do_error(self, sock):
         logging.info('error happens for %s', sock)

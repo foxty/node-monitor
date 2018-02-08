@@ -132,6 +132,16 @@ def push_to_nodes(nodelist):
     return nodelist
 
 
+def stop_agents(nodes):
+    for node in nodes:
+        host, user, password = node
+        try:
+            with NodeConnector(host, user, password) as nc:
+                nc.stop_agent()
+        except Exception as e:
+            logging.exception('error while stop agnet on %s', host)
+
+
 def usage():
     pass
 
@@ -139,7 +149,7 @@ def usage():
 if __name__ == '__main__':
 
     try:
-        opts, args = getopt.getopt(sys.argv[1:], "hpm", ['help', 'push', 'master'])
+        opts, args = getopt.getopt(sys.argv[1:], "hpm", ['help', 'push', 'master', 'stop-agents'])
     except getopt.GetoptError as e:
         print('Wrong usage', e)
         sys.exit(2)
@@ -165,6 +175,14 @@ if __name__ == '__main__':
             master_proc.join()
             masterui_proc.join()
             logging.info('master exited.')
+        elif opt == '--stop-agents':
+            if not len(args):
+                print('invalid node list provided')
+                break
+            with open(args[0], 'r') as f:
+                nodelist = [[ele.strip() for ele in l.strip().split(',')]
+                            for l in f.readlines() if l and not l.strip().startswith('#')]
+            stop_agents(nodelist)
         elif opt in ['-h', '--help']:
             logging.info('print help')
         else:

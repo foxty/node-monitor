@@ -48,22 +48,26 @@ class Msg(object):
     """A msg object present msg exchange between agent and master,
     a set of builtin encoder & decoder method provided to trans msg over TCP stream.
     """
+
+    # Message Types
     NONE = 'NONE'
-    # management msg
     A_REG = 'A_REG'
     A_HEARTBEAT = 'A_HEARTBEAT'
     A_STOP = 'A_STOP'
     M_ACT = 'A_ACT'
-    # metrics
     A_NODE_METRIC = 'A_NODE_METRIC'
     A_SERVICE_METRIC = 'A_SERVICE_METRIC'
 
-    def __init__(self, agentid, mtype=NONE, sendtime=datetime.now(), headers=None, body=""):
-        self._headers = {
-            'AgentID': agentid,
-            'MessageType': mtype,
-            'SendTime': sendtime.strftime(DATETIME_FMT),
-        }
+    # Headers definition
+    H_AID = 'AgentID'
+    H_MSGTYPE = 'MessageType'
+    H_COLLECT_AT = 'CollectAt'
+    H_SEND_AT = 'SendAt'
+
+    REQ_HEADERS = [H_AID, H_MSGTYPE, H_COLLECT_AT, H_SEND_AT]
+
+    def __init__(self, headers=None, body=""):
+        self._headers = {}
         if headers:
             self._headers.update(headers)
         self._body = body
@@ -74,15 +78,27 @@ class Msg(object):
 
     @property
     def msg_type(self):
-        return self._headers['MessageType']
+        return self._headers[self.H_MSGTYPE]
 
     @msg_type.setter
     def msg_type(self, value):
-        self._headers['MessageType'] = value
+        self._headers[self.H_MSGTYPE] = value
 
     @property
-    def sendtime(self):
-        return datetime.strptime(self._headers['SendTime'], DATETIME_FMT)
+    def collect_at(self):
+        return self._headers[self.H_COLLECT_AT] if self.H_COLLECT_AT in self._headers else None
+
+    @collect_at.setter
+    def collect_at(self, dt):
+        self._headers[self.H_COLLECT_AT] = dt.strftime(DATETIME_FMT)
+
+    @property
+    def send_at(self):
+        return self._headers[self.H_SEND_AT] if self.H_SEND_AT in self._headers else None
+
+    @send_at.setter
+    def send_at(self, dt):
+        self._headers[self.H_SEND_AT] = dt.strftime(DATETIME_FMT)
 
     @property
     def body(self):
@@ -91,16 +107,14 @@ class Msg(object):
     @body.setter
     def body(self, value):
         self._body = value
-        self._headers['BodyLength'] = len(self._body)
 
     def encode(self):
         """encode msg to list of headers and body content.
         e.g:
-        [MSG:A_REG, AgentID:xxxxxxx, SendTime:YYYYMMDD HH:mm:ss, BodyLength:12345], <body>
+        [MSG:A_REG, AgentID:xxxxxxx, SendTime:YYYYMMDD HH:mm:ss], <body>
         """
         head = map(lambda x: '%s:%s' % x, self._headers.items())
         encbody = base64.b64encode(self._body)
-        head.append('BodyLength:%d' % len(encbody))
         return head, encbody
 
     def __eq__(self, other):
@@ -116,9 +130,13 @@ class Msg(object):
 
     @classmethod
     def decode(cls, header_list=[], body=''):
-        headers = {h[:h.index(':')] : h[h.index(':') + 1:] for h in header_list}
+        headers = {h[:h.index(':')]: h[h.index(':') + 1:] for h in header_list}
         body = base64.b64decode(body)
-        return Msg(None, headers=headers, body=body)
+        return Msg(headers=headers, body=body)
+
+    @classmethod
+    def create_msg(cls, aid, msgtype, body=''):
+        return Msg(headers={Msg.H_AID: aid, Msg.H_MSGTYPE: msgtype}, body=body)
 
 
 class OSType(object):

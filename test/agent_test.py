@@ -7,7 +7,7 @@ Created on 2017-12-22
 """
 
 from unittest import TestCase
-from agent import AgentConfig
+from agent import AgentConfig, NodeCollector
 
 
 class AgentConfigTest(TestCase):
@@ -24,7 +24,7 @@ class AgentConfigTest(TestCase):
 
     def test_node_metrics(self):
         metrics = self.CONFIG.node_metrics
-        self.assertEqual(5, len(metrics))
+        self.assertEqual(10, len(metrics))
         w = metrics['w']
         self.assertEqual(['w'], w['cmd'])
         self.assertEqual(6, w['clocks'])
@@ -32,12 +32,30 @@ class AgentConfigTest(TestCase):
         self.assertEqual(['free', '-m'], free['cmd'])
         self.assertEqual(6, free['clocks'])
         df = metrics['df']
-        self.assertEqual(['df', '-h'], df['cmd'])
+        self.assertEqual(['df', '-kP'], df['cmd'])
         self.assertEqual(60, df['clocks'])
 
     def test_service_metrics(self):
         metrics = self.CONFIG.service_metrics
-        self.assertEqual(1, len(metrics))
+        self.assertEqual(2, len(metrics))
         pidstat = metrics['pidstat']
         self.assertEqual(["pidstat", "-rtuh", "-p", "${pid}"], pidstat['cmd'])
-        self.assertEqual(6, pidstat['clocks'])
+
+
+class NodeCollectorTest(TestCase):
+
+    @classmethod
+    def setUpClass(cls):
+
+        class MockAgent(object):
+            def __init__(self):
+                self.agentid = '1'
+
+        cls.COLLECTOR = NodeCollector(MockAgent(), AgentConfig('../nodemonitor/agent.json'))
+
+    def test_trans_cmd(self):
+        cmd = ['test1', '${var1}', 'and${var2}']
+        context = {'var1': '1', 'var2': '2'}
+        newcmd = self.COLLECTOR._translate_cmd(cmd, context)
+        self.assertEqual(['test1', '1', 'and2'], newcmd)
+
