@@ -144,7 +144,7 @@ class NodeCollector(threading.Thread):
         try:
             output = check_output(cmd)
             result = output
-        except BaseException as e:
+        except Exception as e:
             logging.exception('call cmd %s failed', cmd)
             result = e.message
         return result
@@ -160,72 +160,82 @@ class NodeCollector(threading.Thread):
             if loops % v.get('clocks', 6) == 0:
                 nmetrics_result[k] = self._get_cmd_result(v['cmd'])
         if nmetrics_result:
-            nmetrics_result['collect_time'] = datetime.now()
-            nm_msg = Msg.create_msg(self._agentid, Msg.A_NODE_METRIC, dump_json(nmetrics_result))
-            self._agent.add_msg(nm_msg)
+            msg = Msg.create_msg(self._agentid, Msg.A_NODE_METRIC, dump_json(nmetrics_result))
+            msg.collect_at = datetime.now()
+            self._agent.add_msg(msg)
             logging.info('%d node metrics collected', len(nmetrics_result) - 1)
         else:
             logging.info('no metric collected ')
 
     def _collect_smetrics(self, loops):
         """Collect services metrics"""
-        result = {}
-        services = self._find_services()
-        logging.info('try to collect services metrics: %s, loops=%s.', ','.join(services.keys()), loops)
-        for name, service in services.items():
+        services = self._config.valid_services
+        logging.info('try to collect services metrics, loops=%s.', loops)
+        for service in services:
             clocks = service['clocks']
             if loops % clocks == 0:
-                result[name] = self._collect_service(service)
-        if result:
-            # send message
-            result['collect_time'] = datetime.now()
-            msg = Msg.create_msg(self._agentid, Msg.A_SERVICE_METRIC, dump_json(result))
-            self._agent.add_msg(msg)
-            logging.info('%d service collected.', len(result))
-        else:
-            logging.info('no service metric collected, loops=%s.', loops)
+                self._collect_service(service)
 
     def _collect_service(self, service):
+        """
+        Collect defined metrics from service
+        :param service:  service info
+        :return: collected result in dict
+        """
         logging.debug('collect service : %s', service)
+
         name = service['name']
+        lookup = service['lookup_keyword']
+        pid = self._find_service_pid(name, lookup)
+        if not pid:
+            logging.warn('can\'t find pid for %s, exit collection.', name)
+            return
         metric_names = service['metrics']
         clocks = service['clocks']
-        pid = service['pid']
         env = service.get('env', {})
         env['pid'] = pid
         logging.info('collecting for service %s(%s): metrics=%s, clocks=%s.',
                      name, pid, metric_names, clocks)
-        service_result = {'info': service}
+        service_result = {'name': name, 'pid': pid}
+        service_metrics = {}
         for mname in metric_names:
             try:
                 metric = self._config.service_metrics[mname]
                 cmd = self._translate_cmd(metric['cmd'], env)
-                service_result[mname] = self._get_cmd_result(cmd)
+                service_metrics[mname] = self._get_cmd_result(cmd)
             except Exception as e:
-                logging.exception('collect metrcis %s for service %s failed.', mname, name)
-                service_result[mname] = e.message()
+                logging.exception('collect metrics %s for service %s failed.', mname, name)
+        service_result['metrics'] = service_metrics
+        if service_metrics:
+            # send message
+            msg = Msg.create_msg(self._agentid, Msg.A_SERVICE_METRIC, dump_json(service_result))
+            msg.collect_at = datetime.now()
+            self._agent.add_msg(msg)
+            logging.info('%d metrics collected for %s.', len(service_metrics), name)
+        else:
+            logging.info('no metrics collected for %s', name)
         return service_result
 
-    def _find_services(self):
-        act_services = {}
-        for s in self._config.valid_services:
-            sname = s['name']
-            slookup = s['lookup_keyword']
-            logging.info('lookup pid for service: %s', sname)
-            try:
-                pslist = check_output(['ps', '-ef'])
-                psinfo = [psinfo for psinfo in pslist.split('\n') if slookup in psinfo]
-                logging.debug('find psinfo of %s: %s', sname, psinfo)
-                if len(psinfo) == 1:
-                    pid = [e for e in psinfo[0].split(' ') if e][1]
-                    if pid and pid.isdigit():
-                        s['pid'] = pid
-                        act_services[sname] = s
-                        continue
-                logging.warn('cannot lookup pid for %s', sname)
-            except Exception as e:
-                logging.exception('look up service %s by %s failed', sname, slookup)
-        return act_services
+    def _find_service_pid(self, servname, lookup_keyword):
+        """
+        find the pid of service by keyword, via `ps -ef`
+        :param servname:
+        :param lookup_keyword:
+        :return: pid or None if not found
+        """
+        service_pid = None
+        logging.info('lookup pid service=%s, keyworkd=%s', servname, lookup_keyword)
+        try:
+            pslist = check_output(['ps', '-ef'])
+            psinfo = [psinfo for psinfo in pslist.split('\n') if lookup_keyword in psinfo]
+            logging.debug('find psinfo of %s: %s', servname, psinfo)
+            if len(psinfo) == 1:
+                pid = [e for e in psinfo[0].split(' ') if e][1]
+                service_pid = pid if pid and pid.isdigit() else None
+            logging.info('pid of service %s is %s', servname, service_pid)
+        except Exception as e:
+            logging.exception('look up service %s by %s failed', servname, lookup_keyword)
+        return service_pid
 
 
 class NodeAgent:
@@ -358,6 +368,7 @@ class NodeAgent:
             except Q.Empty as e:
                 logging.warn('Try to get msg from empty queue..')
                 return
+            msg.send_at = datetime.now()
             headers, body = msg.encode()
             headers.append(body)
             data = '\n'.join(headers)

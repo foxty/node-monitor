@@ -61,6 +61,7 @@ class Msg(object):
     # Headers definition
     H_AID = 'AgentID'
     H_MSGTYPE = 'MessageType'
+    H_CREATE_AT = 'CreateAt'
     H_COLLECT_AT = 'CollectAt'
     H_SEND_AT = 'SendAt'
 

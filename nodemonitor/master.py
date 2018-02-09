@@ -56,6 +56,12 @@ _DB_SCHEMA = r'''
     CREATE INDEX IF NOT EXISTS idx_ndr_aid ON node_disk_report (aid DESC);
     CREATE INDEX IF NOT EXISTS idx_ndr_collect_at ON node_disk_report (collect_at DESC);
     CREATE INDEX IF NOT EXISTS idx_ndr_recv_at ON node_disk_report (recv_at DESC);
+    
+    CREATE TABLE IF NOT EXISTS service_metric_raw(aid, collect_at timestamp, service_name, service_pid, 
+        category, content, recv_at timestamp);
+    CREATE INDEX IF NOT EXISTS `idx_nsr_aid` ON `service_metric_raw` (`aid` DESC);
+    CREATE INDEX IF NOT EXISTS `idx_nsr_collect_at` ON `service_metric_raw` (collect_at DESC);
+    CREATE INDEX IF NOT EXISTS `idx_nsr_recv_at` ON `service_metric_raw` (recv_at DESC);
     '''
 _RE_SYSREPORT = re.compile('.*?(?P<users>\\d+)\\suser.*'
                            'age: (?P<load1>\\d+\\.\\d+), (?P<load5>\\d+\\.\\d+), (?P<load15>\\d+\\.\\d+).*',
@@ -474,6 +480,12 @@ class NDiskReport(Model, ChronoModel):
               'available', 'used_util', 'mount_point', 'recv_at']
 
 
+class SMetric(Model, ChronoModel):
+    TABLE = 'service_metric_raw'
+    FIELDS = ['aid', 'collect_at', 'service_name', 'service_pid',
+              'category', 'content', 'recv_at']
+
+
 class AgentRequestHandler(SocketServer.StreamRequestHandler):
     """All message are MonMsg and we should decode the msg here"""
 
@@ -570,7 +582,7 @@ class Master(object):
         aid = msg.agentid
         agent = self._agents.get(aid)
         body = load_json(msg.body)
-        collect_time = body.pop('collect_time')
+        collect_time = msg.collect_at
 
         metrics = map(lambda x: NMetric(aid, collect_time, x[0], x[1], datetime.now()), body.items())
         NMetric.save_all(metrics)
@@ -607,6 +619,13 @@ class Master(object):
         return True
 
     def _agent_smetrics(self, msg):
+        aid = msg.agentid
+        collect_at = msg.collect_at
+        agent = self._agents.get(aid)
+        body = load_json(msg.body)
+        smetrics = [SMetric(aid, collect_at, body['name'], body['pid'], mname, mcontent, datetime.now())
+                    for mname, mcontent in body['metrics'].items()]
+        SMetric.save_all(smetrics)
         return True
 
     def _agent_stop(self, msg):

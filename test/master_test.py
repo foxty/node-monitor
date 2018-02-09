@@ -545,7 +545,6 @@ class MasterTest(BaseDBTest):
         m = nm.Master()
         ctime = datetime.now()
         msgbody = {
-            'collect_time': ctime,
             'w': ''' 05:04:07 up 57 days, 10:57,  1 user,  load average: 2.11, 2.54, 2.77
                  USER     TTY      FROM             LOGIN@   IDLE   JCPU   PCPU WHAT
                  root     pts/0    pc-itian.arrs.ar 27Dec17  7.00s  1:14m  0.03s -bash
@@ -561,6 +560,7 @@ class MasterTest(BaseDBTest):
                       '''
         }
         nmmsg = nm.Msg.create_msg(agent.aid, nm.Msg.A_NODE_METRIC, nm.dump_json(msgbody))
+        nmmsg.collect_at = ctime
         re = m.handle_msg(nmmsg, None)
         self.assertTrue(re)
 
@@ -597,6 +597,28 @@ class MasterTest(BaseDBTest):
         self.assertEqual(cpureports[0].used_util, agents[0].last_cpu_util)
         self.assertEqual(sysreports[0].load1, agents[0].last_sys_load1)
         self.assertEqual(sysreports[0].sys_cs, agents[0].last_sys_cs)
+
+    def test_handle_smetrics(self):
+        agent = nm.Agent('2', 'localhost', 'localhost', datetime.now())
+        agent.save()
+
+        m = nm.Master()
+        ctime = datetime.now()
+        msgbody = {'name':'service1', 'pid': '1', 'metrics': {'m1': 'm1 content', 'm2': 'm2 content'}}
+        nmmsg = nm.Msg.create_msg(agent.aid, nm.Msg.A_SERVICE_METRIC, nm.dump_json(msgbody))
+        nmmsg.collect_at = ctime
+        re = m.handle_msg(nmmsg, None)
+        self.assertTrue(re)
+
+        smetrics = nm.SMetric.query(orderby='category ASC')
+        self.assertEqual(2, len(smetrics))
+        sm1, sm2 = smetrics[0], smetrics[1]
+        self.assertEqual('2', sm1.aid)
+        self.assertEqual(ctime, sm1.collect_at)
+        self.assertEqual('service1', sm1.service_name)
+        self.assertEqual('1', sm1.service_pid)
+        self.assertEqual('m1', sm1.category)
+        self.assertEqual('m1 content', sm1.content)
 
 
 if __name__ == '__main__':
