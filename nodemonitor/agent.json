@@ -47,7 +47,7 @@
   "service_metrics": {
     "pidstat": {
       "type": "all",
-      "cmd": ["pidstat", "-rtuh", "-p", "${pid}"]
+      "cmd": ["pidstat", "-tdruh", "-p", "${pid}"]
     },
     "jstat-gc": {
       "type": "java",
@@ -56,6 +56,13 @@
   },
 
   "services": [{
+    "name": "agent",
+    "type": "python",
+    "lookup_keyword": "agent.py",
+    "log_pattern": ["agent.log"],
+    "metrics": ["pidstat"],
+    "clocks": 6
+  },{
       "name": "reactor",
       "type": "java",
       "lookup_keyword": "-Dprocess=Reactor",

@@ -307,6 +307,15 @@ class GlobalFuncTest(unittest.TestCase):
         self.assertEqual(10*1024, mem.free_swap)
         self.assertIsNotNone(mem.recv_at)
 
+    def test_parse_pidstat(self):
+        c = '''Linux 2.6.32-431.el6.x86_64 (cycad) 	02/11/2018 	_x86_64_	(4 CPU)
+
+        #      Time      TGID       TID    %usr %system  %guest    %CPU   CPU  minflt/s  majflt/s     VSZ    RSS   %MEM   kB_rd/s   kB_wr/s kB_ccwr/s  Command
+         1518318452      9591         0    0.13    0.02    0.00    0.15     0      1.47      0.00 8529320 2109020  10.30      0.00      7.17      2.45  java
+         1518318452         0      9591    0.00    0.00    0.00    0.00     0      0.01      0.00 8529320 2109020  10.30      0.00      0.00      0.00  |__java
+         1518318452         0      9621    0.00    0.00    0.00    0.00     2      0.09      0.00 8529320 2109020  10.30      0.00      0.00      0.00  |__java
+         1518318452         0      9624    0.00    0.00    0.00    0.00     3      0.00      0.00 8529320 2109020  10.30      0.00      0.00      0.00  |__java
+         '''
 
 
 class ModelTest(unittest.TestCase):
@@ -328,7 +337,6 @@ class ModelTest(unittest.TestCase):
         with self.assertRaises(nm.InvalidFieldError) as cm:
             ModelTest.ModelA().non_exist_field2 = 1
             self.assertEqual('field a non_exist_field2 not defined.', cm.exception.msg)
-
 
     def test_astuple(self):
         ma = ModelTest.ModelA()
@@ -439,6 +447,17 @@ class MasterDAOTest(BaseDBTest):
         self.assertEqual(55.5, nag.last_mem_util)
         self.assertEqual(1.1, nag.last_sys_load1)
         self.assertEqual(123, nag.last_sys_cs)
+
+    def test_sinfo_chgpid(self):
+        sinfo = nm.SInfo(aid='1', name='serv', pid='123', last_report_at=datetime.now())
+        sinfo.save()
+        self.assertEqual('1', sinfo.aid)
+        self.assertEqual('serv', sinfo.name)
+        sinfo.chgpid('456')
+
+        sinfo1 = sinfo.query_by_aid('1')[0]
+        self.assertEqual(sinfo, sinfo1)
+        self.assertEqual('456', sinfo1.pid)
 
     def test_add_nmemory(self):
         mem = nm.NMemoryReport(aid='12345678', collect_at=datetime.now(),
@@ -599,12 +618,13 @@ class MasterTest(BaseDBTest):
         self.assertEqual(sysreports[0].sys_cs, agents[0].last_sys_cs)
 
     def test_handle_smetrics(self):
-        agent = nm.Agent('2', 'localhost', 'localhost', datetime.now())
+        aid = '2'
+        agent = nm.Agent(aid, 'localhost', 'localhost', datetime.now())
         agent.save()
 
         m = nm.Master()
         ctime = datetime.now()
-        msgbody = {'name':'service1', 'pid': '1', 'metrics': {'m1': 'm1 content', 'm2': 'm2 content'}}
+        msgbody = {'name': 'service1', 'pid': '1', 'metrics': {'m1': 'm1 content', 'm2': 'm2 content'}}
         nmmsg = nm.Msg.create_msg(agent.aid, nm.Msg.A_SERVICE_METRIC, nm.dump_json(msgbody))
         nmmsg.collect_at = ctime
         re = m.handle_msg(nmmsg, None)
@@ -613,12 +633,43 @@ class MasterTest(BaseDBTest):
         smetrics = nm.SMetric.query(orderby='category ASC')
         self.assertEqual(2, len(smetrics))
         sm1, sm2 = smetrics[0], smetrics[1]
-        self.assertEqual('2', sm1.aid)
+        self.assertEqual(aid, sm1.aid)
         self.assertEqual(ctime, sm1.collect_at)
-        self.assertEqual('service1', sm1.service_name)
-        self.assertEqual('1', sm1.service_pid)
+        self.assertEqual('service1', sm1.name)
+        self.assertEqual('1', sm1.pid)
         self.assertEqual('m1', sm1.category)
         self.assertEqual('m1 content', sm1.content)
+
+        sinfos = nm.SInfo.query_by_aid(aid)
+        self.assertEqual(1, len(sinfos))
+        self.assertEqual(nm.SInfo(aid=aid, name='service1', pid='1', last_report_at=ctime), sinfos[0])
+
+    def test_handle_smetrics_pidchg(self):
+        aid = '2'
+        agent = nm.Agent(aid, 'localhost', 'localhost', datetime.now())
+        agent.save()
+
+        m = nm.Master()
+        ctime = datetime.now()
+        msgbody = {'name': 'service1', 'pid': '1', 'metrics': {'m1': 'm1 content', 'm2': 'm2 content'}}
+        nmmsg = nm.Msg.create_msg(agent.aid, nm.Msg.A_SERVICE_METRIC, nm.dump_json(msgbody))
+        nmmsg.collect_at = ctime
+        m.handle_msg(nmmsg, None)
+
+        ctime1 = datetime.now() + timedelta(hours=1)
+        msgbody['pid'] = '2'
+        nmmsg = nm.Msg.create_msg(agent.aid, nm.Msg.A_SERVICE_METRIC, nm.dump_json(msgbody))
+        nmmsg.collect_at = ctime1
+        m.handle_msg(nmmsg, None)
+
+        smetrics = nm.SMetric.query()
+        self.assertEqual(4, len(smetrics))
+
+        sinfos = nm.SInfo.query_by_aid(aid)
+        self.assertEqual(1, len(sinfos))
+        self.assertEqual(nm.SInfo(aid=aid, name='service1', pid='2', last_report_at=ctime1), sinfos[0])
+
+        # sinfohis = nm.SInfoHistory
 
 
 if __name__ == '__main__':

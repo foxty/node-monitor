@@ -160,10 +160,10 @@ class TextTable(object):
     ]
 
     """
-    def __init__(self, content, header_ln=0, vheader=False):
-        self._table = [[ele.strip() for ele in l.strip().split(' ') if ele.strip()]
+    def __init__(self, content, header_ln=0, vheader=False, colsep='\s+'):
+        self._table = [[ele for ele in re.split(colsep, l.strip()) if ele]
                        for l in content.splitlines() if l.strip()]
-        self._size = len(self._table)
+        self._size = len(self._table) - (header_ln + 1)
         self._hheader = self._table[header_ln] if self.size > header_ln else None
         self._tbody = self._table[header_ln + 1:] if self.size > header_ln + 1 else None
         if vheader:

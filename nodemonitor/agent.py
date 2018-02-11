@@ -17,7 +17,7 @@ import socket
 import select
 import Queue as Q
 import threading
-from subprocess import check_output, call
+from subprocess import check_output, call, CalledProcessError
 from common import *
 
 
@@ -144,9 +144,9 @@ class NodeCollector(threading.Thread):
         try:
             output = check_output(cmd)
             result = output
-        except Exception as e:
+        except CalledProcessError as e:
             logging.exception('call cmd %s failed', cmd)
-            result = e.message
+            result = e.output
         return result
 
     def _collect_nmetrics(self, loops):

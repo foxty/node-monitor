@@ -57,11 +57,25 @@ _DB_SCHEMA = r'''
     CREATE INDEX IF NOT EXISTS idx_ndr_collect_at ON node_disk_report (collect_at DESC);
     CREATE INDEX IF NOT EXISTS idx_ndr_recv_at ON node_disk_report (recv_at DESC);
     
-    CREATE TABLE IF NOT EXISTS service_metric_raw(aid, collect_at timestamp, service_name, service_pid, 
+    CREATE TABLE IF NOT EXISTS service_metric_raw(aid, collect_at timestamp, name, pid, 
         category, content, recv_at timestamp);
     CREATE INDEX IF NOT EXISTS `idx_nsr_aid` ON `service_metric_raw` (`aid` DESC);
     CREATE INDEX IF NOT EXISTS `idx_nsr_collect_at` ON `service_metric_raw` (collect_at DESC);
     CREATE INDEX IF NOT EXISTS `idx_nsr_recv_at` ON `service_metric_raw` (recv_at DESC);
+    
+    CREATE TABLE IF NOT EXISTS service_info(aid, name, pid, last_report_at timestamp, status);
+    CREATE INDEX IF NOT EXISTS `idx_si_aid` ON `service_info` (aid);
+    CREATE INDEX IF NOT EXISTS `idx_si_report_at` ON `service_info` (last_report_at DESC);
+    
+    CREATE TABLE IF NOT EXISTS service_info_history(aid, name, pid, change_at timestamp);
+    CREATE INDEX IF NOT EXISTS `idx_ni_aid_sname` ON `service_info_history` (`aid`, name);
+    
+    CREATE TABLE IF NOT EXISTS service_pidstat_reprot(aid, collect_at timestamp, sid, 
+        tid, cpu_us, cpu_sy, cpu_gu, cpu_util, mem_minflt, mem_majflt, mem_vsz, mem_rss, mem_util,
+        disk_rd, disk_wr, disk_ccwr, recv_at timestamp);
+    CREATE INDEX IF NOT EXISTS `idx_spr_aid` ON `service_pidstat_reprot` (`aid` DESC);
+    CREATE INDEX IF NOT EXISTS `idx_spr_collect_at` ON `service_pidstat_reprot` (collect_at DESC);
+    CREATE INDEX IF NOT EXISTS `idx_spr_recv_at` ON `service_pidstat_reprot` (recv_at DESC);
     '''
 _RE_SYSREPORT = re.compile('.*?(?P<users>\\d+)\\suser.*'
                            'age: (?P<load1>\\d+\\.\\d+), (?P<load5>\\d+\\.\\d+), (?P<load15>\\d+\\.\\d+).*',
@@ -162,7 +176,7 @@ def parse_vmstat(aid, collect_time, content):
     :return: (NCPUReport, procs_r, procs_b, sys_in, sys_cs)
     """
     t = TextTable(content, 1)
-    if t.size == 4:
+    if t.size == 2:
         data_rn = -1
         procs_r, procs_b = t.get_int(data_rn,'r'), t.get_int(data_rn,'b')
         sys_in, sys_cs = t.get_int(data_rn,'in'), t.get_int(data_rn,'cs')
@@ -293,6 +307,16 @@ def parse_dstat_dio(aid, collect_time, content):
     pass
 
 
+def parse_pidstat(aid, collect_time ,content):
+    t = TextTable(content, header_ln=2)
+    if t.size > 1:
+        diskreps = [NDiskReport(aid, collect_time, *row, recv_at=datetime.now()) for row in t.get_rows()]
+        return diskreps
+    else:
+        logging.warn('invalid content of `pidstat` : %s', content)
+        return None
+
+
 class InvalidFieldError(Exception): pass
 
 
@@ -318,7 +342,7 @@ class Model(dict):
         if item in self.FIELDS:
             return self.get(item, None)
         else:
-            raise InvalidFieldError('field %s not defined.' % item)
+            raise InvalidFieldError('model field "%s" not defined.' % item)
 
     def __setattr__(self, key, value):
         if key in self.FIELDS:
@@ -349,6 +373,7 @@ class Model(dict):
         """
         logging.debug('saving model %s to db', self)
         cursor.execute(self.isql(), self.as_tuple())
+        return self
 
     @dao
     def set(self, **kwargs):
@@ -367,12 +392,13 @@ class Model(dict):
             # clever
             fields, values = zip(*kwupd)
             setphrase = ','.join(['%s=?' % f for f in fields])
-            wherephrase = ','.join(['%s=?' % pk for pk in self.PK])
+            wherephrase = ' AND '.join(['%s=?' % pk for pk in self.PK])
             pkvalues = tuple([self.get(pk) for pk in self.PK])
             sql = 'UPDATE %s SET %s WHERE %s' % (self.TABLE, setphrase, wherephrase)
             params = values + pkvalues
             logging.debug('%s : %s', sql, params)
             cursor.execute(sql, params)
+            self.update(kwargs)
 
     @classmethod
     def isql(cls):
@@ -482,8 +508,30 @@ class NDiskReport(Model, ChronoModel):
 
 class SMetric(Model, ChronoModel):
     TABLE = 'service_metric_raw'
-    FIELDS = ['aid', 'collect_at', 'service_name', 'service_pid',
+    FIELDS = ['aid', 'collect_at', 'name', 'pid',
               'category', 'content', 'recv_at']
+
+
+class SInfo(Model):
+    TABLE = 'service_info'
+    FIELDS = ['aid', 'name', 'pid', 'last_report_at', 'status']
+    PK = ['aid', 'name']
+
+    def add_history(self):
+        SInfoHistory(self.aid, self.name, self.pid, datetime.now()).save()
+
+    def chgpid(self, newpid):
+        self.set(pid=newpid)
+        self.add_history()
+
+    @classmethod
+    def query_by_aid(cls, aid):
+        return cls.query(where='aid=?', orderby='name', params=[aid])
+
+
+class SInfoHistory(Model):
+    TABLE = 'service_info_history'
+    FIELDS = ['aid', 'name', 'pid', 'change_at']
 
 
 class AgentRequestHandler(SocketServer.StreamRequestHandler):
@@ -621,11 +669,30 @@ class Master(object):
     def _agent_smetrics(self, msg):
         aid = msg.agentid
         collect_at = msg.collect_at
-        agent = self._agents.get(aid)
         body = load_json(msg.body)
-        smetrics = [SMetric(aid, collect_at, body['name'], body['pid'], mname, mcontent, datetime.now())
+        sname = body['name']
+        spid = body['pid']
+        smetrics = [SMetric(aid, collect_at, sname, spid, mname, mcontent, datetime.now())
                     for mname, mcontent in body['metrics'].items()]
         SMetric.save_all(smetrics)
+
+        # calculate node services
+        services = {s.name: s for s in SInfo.query_by_aid(aid)}
+        if sname not in services:
+            # service discovered
+            logging.info('service %s discovered with pid %s', sname, spid)
+            ser = SInfo(aid, sname, spid, collect_at).save()
+            ser.add_history()
+        else:
+            # existing service, check for an update
+            ser = services[sname]
+            ser.set(last_report_at=collect_at)
+            if ser.pid != spid:
+                logging.info('service %s pid chagne detected: %s -> %s', sname, ser.pid, spid)
+                ser.chgpid(spid)
+
+        # update agent status
+        agent = self._agents.get(aid)
         return True
 
     def _agent_stop(self, msg):
