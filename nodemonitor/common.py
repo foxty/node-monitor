@@ -163,9 +163,10 @@ class TextTable(object):
     def __init__(self, content, header_ln=0, vheader=False, colsep='\s+'):
         self._table = [[ele for ele in re.split(colsep, l.strip()) if ele]
                        for l in content.splitlines() if l.strip()]
-        self._size = len(self._table) - (header_ln + 1)
-        self._hheader = self._table[header_ln] if self.size > header_ln else None
-        self._tbody = self._table[header_ln + 1:] if self.size > header_ln + 1 else None
+        tbl_size = len(self._table)
+        self._size = tbl_size - (header_ln + 1)
+        self._hheader = self._table[header_ln] if tbl_size > header_ln else None
+        self._tbody = self._table[header_ln + 1:] if tbl_size > header_ln + 1 else None
         if vheader:
             self._vheader = [row[0] for row in self._table]
 
@@ -180,7 +181,7 @@ class TextTable(object):
         :param default: default value if header not exist
         :return: list of values (in case multi columns has same header name)
         """
-        rowno = rowid if type(rowid) is int else self._vheader.index(rowid)
+        rowno = rowid if type(rowid) is int else self._vheader.index(rowid) - 1
         idxs = []
         start = 0
         while True:
@@ -190,14 +191,14 @@ class TextTable(object):
                 start = idx + 1
             except ValueError as e:
                 break
-        return [conv_func(self._table[rowno][idx]) for idx in idxs]
+        return [conv_func(self._tbody[rowno][idx]) for idx in idxs]
 
     def get(self, rowno, header, default=None, conv_func=str):
         values = self.gets(rowno, header, conv_func=conv_func)
         return values[0] if values else default
 
     def get_row(self, rowno):
-        return tuple(self._table[rowno])
+        return tuple(self._tbody[rowno])
 
     def get_ints(self, rowno, header):
         return self.gets(rowno, header, conv_func=int)

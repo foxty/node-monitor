@@ -311,11 +311,22 @@ class GlobalFuncTest(unittest.TestCase):
         c = '''Linux 2.6.32-431.el6.x86_64 (cycad) 	02/11/2018 	_x86_64_	(4 CPU)
 
         #      Time      TGID       TID    %usr %system  %guest    %CPU   CPU  minflt/s  majflt/s     VSZ    RSS   %MEM   kB_rd/s   kB_wr/s kB_ccwr/s  Command
-         1518318452      9591         0    0.13    0.02    0.00    0.15     0      1.47      0.00 8529320 2109020  10.30      0.00      7.17      2.45  java
+         1518318452      9591         0    0.13    0.02    0.00    0.15     0      1.47      0.00 8529320 2109020  10.30      1.00      7.17      2.45  java
          1518318452         0      9591    0.00    0.00    0.00    0.00     0      0.01      0.00 8529320 2109020  10.30      0.00      0.00      0.00  |__java
          1518318452         0      9621    0.00    0.00    0.00    0.00     2      0.09      0.00 8529320 2109020  10.30      0.00      0.00      0.00  |__java
          1518318452         0      9624    0.00    0.00    0.00    0.00     3      0.00      0.00 8529320 2109020  10.30      0.00      0.00      0.00  |__java
          '''
+        ctime = datetime.now()
+        pidrep = nm.parse_pidstat('1', ctime, 'serv1', c)
+        self.assertIsNotNone(pidrep)
+        self.assertIsNotNone(pidrep.recv_at)
+        del pidrep['recv_at']
+        self.assertEqual(nm.SPidstatReprot('1', ctime, service_name='serv1', tid=0,
+                                           cpu_us=0.13, cpu_sy=0.02, cpu_gu=0.0, cpu_util=0.15,
+                                           mem_minflt=1.47, mem_majflt=0.0, mem_vsz=8529320,
+                                           mem_rss=2109020, mem_util=10.30,
+                                           disk_rd=1.0, disk_wr=7.17, disk_ccwr=2.45),
+                         pidrep)
 
 
 class ModelTest(unittest.TestCase):

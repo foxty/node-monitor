@@ -21,7 +21,11 @@ import sqlite3
 from common import *
 
 
-# Global status for Master
+# ====================
+# const definition
+#====================
+
+
 _MASTER = None
 _MASTER_DB_NAME = 'master.db'
 _DB_SCHEMA = r'''
@@ -70,16 +74,21 @@ _DB_SCHEMA = r'''
     CREATE TABLE IF NOT EXISTS service_info_history(aid, name, pid, change_at timestamp);
     CREATE INDEX IF NOT EXISTS `idx_ni_aid_sname` ON `service_info_history` (`aid`, name);
     
-    CREATE TABLE IF NOT EXISTS service_pidstat_reprot(aid, collect_at timestamp, sid, 
+    CREATE TABLE IF NOT EXISTS service_pidstat_report(aid, collect_at timestamp, service_name, 
         tid, cpu_us, cpu_sy, cpu_gu, cpu_util, mem_minflt, mem_majflt, mem_vsz, mem_rss, mem_util,
         disk_rd, disk_wr, disk_ccwr, recv_at timestamp);
-    CREATE INDEX IF NOT EXISTS `idx_spr_aid` ON `service_pidstat_reprot` (`aid` DESC);
-    CREATE INDEX IF NOT EXISTS `idx_spr_collect_at` ON `service_pidstat_reprot` (collect_at DESC);
-    CREATE INDEX IF NOT EXISTS `idx_spr_recv_at` ON `service_pidstat_reprot` (recv_at DESC);
+    CREATE INDEX IF NOT EXISTS `idx_spr_aid` ON `service_pidstat_report` (`aid` DESC);
+    CREATE INDEX IF NOT EXISTS `idx_spr_collect_at` ON `service_pidstat_report` (collect_at DESC);
+    CREATE INDEX IF NOT EXISTS `idx_spr_recv_at` ON `service_pidstat_report` (recv_at DESC);
     '''
 _RE_SYSREPORT = re.compile('.*?(?P<users>\\d+)\\suser.*'
                            'age: (?P<load1>\\d+\\.\\d+), (?P<load5>\\d+\\.\\d+), (?P<load15>\\d+\\.\\d+).*',
                            re.S)
+
+
+# ====================
+# Global functions
+# ====================
 
 
 def dao(f):
@@ -307,11 +316,20 @@ def parse_dstat_dio(aid, collect_time, content):
     pass
 
 
-def parse_pidstat(aid, collect_time ,content):
-    t = TextTable(content, header_ln=2)
+def parse_pidstat(aid, collect_time, service_name, content):
+    t = TextTable(content, header_ln=1)
     if t.size > 1:
-        diskreps = [NDiskReport(aid, collect_time, *row, recv_at=datetime.now()) for row in t.get_rows()]
-        return diskreps
+        prow = t.get_rows()[0]
+        tid = int(prow[2])
+        cpu_us, cpu_sy, cpu_gu, cpu_util = float(prow[3]), float(prow[4]), float(prow[5]), float(prow[6])
+        mem_minflt, mem_majflt, mem_vsz, mem_rss, mem_util = float(prow[8]), float(prow[9]), \
+                                                             int(prow[10]), int(prow[11]), float(prow[12])
+        disk_rd, disk_wr, disk_ccwr = float(prow[13]), float(prow[14]), float(prow[15])
+        rep = SPidstatReprot(aid, collect_time, service_name, tid, cpu_us, cpu_sy, cpu_gu, cpu_util,
+                             mem_minflt, mem_majflt, mem_vsz, mem_rss, mem_util,
+                             disk_rd, disk_wr, disk_ccwr, recv_at=datetime.now())
+        logging.debug('get pidsat report %s', rep)
+        return rep
     else:
         logging.warn('invalid content of `pidstat` : %s', content)
         return None
@@ -321,6 +339,11 @@ class InvalidFieldError(Exception): pass
 
 
 class NoPKError(Exception): pass
+
+
+# ====================
+# Models
+# ====================
 
 
 class Model(dict):
@@ -517,6 +540,9 @@ class SInfo(Model):
     FIELDS = ['aid', 'name', 'pid', 'last_report_at', 'status']
     PK = ['aid', 'name']
 
+    STATUS_ACT = 'active'
+    STATUS_INACT = 'inactive'
+
     def add_history(self):
         SInfoHistory(self.aid, self.name, self.pid, datetime.now()).save()
 
@@ -532,6 +558,18 @@ class SInfo(Model):
 class SInfoHistory(Model):
     TABLE = 'service_info_history'
     FIELDS = ['aid', 'name', 'pid', 'change_at']
+
+
+class SPidstatReprot(Model, ChronoModel):
+    TABLE = 'service_pidstat_report'
+    FIELDS = ['aid', 'collect_at', 'service_name', 'tid', 'cpu_us', 'cpu_sy', 'cpu_gu', 'cpu_util',
+              'mem_minflt', 'mem_majflt', 'mem_vsz', 'mem_rss', 'mem_util',
+              'disk_rd', 'disk_wr', 'disk_ccwr', 'recv_at']
+
+
+# =================
+# Master
+# =================
 
 
 class AgentRequestHandler(SocketServer.StreamRequestHandler):
@@ -681,19 +719,24 @@ class Master(object):
         if sname not in services:
             # service discovered
             logging.info('service %s discovered with pid %s', sname, spid)
-            ser = SInfo(aid, sname, spid, collect_at).save()
+            ser = SInfo(aid, sname, spid, collect_at, SInfo.STATUS_ACT).save()
             ser.add_history()
         else:
             # existing service, check for an update
             ser = services[sname]
-            ser.set(last_report_at=collect_at)
+            ser.set(last_report_at=collect_at, status=SInfo.STATUS_ACT)
             if ser.pid != spid:
-                logging.info('service %s pid chagne detected: %s -> %s', sname, ser.pid, spid)
+                logging.info('service %s pid change detected: %s -> %s', sname, ser.pid, spid)
                 ser.chgpid(spid)
 
-        # update agent status
-        agent = self._agents.get(aid)
+        self._parse_smetrics(smetrics)
         return True
+
+    def _parse_smetrics(self, metrics):
+        for metric in metrics:
+            if 'pidstat' == metric.category:
+                pidrep = parse_pidstat(metric.aid, metric.collect_at, metric.name, metric.content)
+                pidrep.save() if pidrep else None
 
     def _agent_stop(self, msg):
         return True
