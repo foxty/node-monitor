@@ -11,7 +11,7 @@ import logging
 from datetime import datetime, timedelta
 from flask import Flask, render_template, jsonify
 from common import dump_json
-from master import Agent, NSystemReport, NCPUReport, NMemoryReport, NDiskReport
+from master import Agent, NSystemReport, NCPUReport, NMemoryReport, NDiskReport, SInfo
 logging.basicConfig(level=logging.INFO)
 
 
@@ -43,7 +43,7 @@ def index():
 @_APP.route('/api/dashboard/summary')
 def dashboard_summary():
     summary = {'agent_count': Agent.count(),
-               'service_count': 0,
+               'service_count': SInfo.count(),
                'alarm_count': 0,
                'sample_count': 0}
     return dump_json(summary)
