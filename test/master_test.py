@@ -653,7 +653,8 @@ class MasterTest(BaseDBTest):
 
         sinfos = nm.SInfo.query_by_aid(aid)
         self.assertEqual(1, len(sinfos))
-        self.assertEqual(nm.SInfo(aid=aid, name='service1', pid='1', last_report_at=ctime), sinfos[0])
+        self.assertEqual(nm.SInfo(aid=aid, name='service1', pid='1', last_report_at=ctime, status=nm.SInfo.STATUS_ACT),
+                         sinfos[0])
 
     def test_handle_smetrics_pidchg(self):
         aid = '2'
@@ -678,9 +679,16 @@ class MasterTest(BaseDBTest):
 
         sinfos = nm.SInfo.query_by_aid(aid)
         self.assertEqual(1, len(sinfos))
-        self.assertEqual(nm.SInfo(aid=aid, name='service1', pid='2', last_report_at=ctime1), sinfos[0])
+        self.assertEqual(nm.SInfo(aid=aid, name='service1', pid='2', last_report_at=ctime1, status=nm.SInfo.STATUS_ACT),
+                         sinfos[0])
 
-        # sinfohis = nm.SInfoHistory
+        sinfohis = nm.SInfoHistory.query()
+        self.assertEqual(2, len(sinfohis))
+        self.assertEqual(aid, sinfohis[0].aid)
+        self.assertEqual(aid, sinfohis[1].aid)
+        self.assertEqual('service1', sinfohis[0].name)
+        self.assertEqual('1', sinfohis[0].pid)
+        self.assertEqual('2', sinfohis[1].pid)
 
 
 if __name__ == '__main__':
