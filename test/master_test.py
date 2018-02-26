@@ -332,7 +332,7 @@ class GlobalFuncTest(unittest.TestCase):
 class ModelTest(unittest.TestCase):
 
     class ModelA(nm.Model):
-        FIELDS = ['a1', 'a2', 'a3']
+        _FIELDS = ['id', 'a1', 'a2', 'a3']
 
     def test_model(self):
         m = ModelTest.ModelA()
@@ -352,11 +352,11 @@ class ModelTest(unittest.TestCase):
     def test_astuple(self):
         ma = ModelTest.ModelA()
         t = ma.as_tuple()
-        self.assertEqual((None, None, None), t)
+        self.assertEqual((None, None, None, None), t)
 
-        ma = ModelTest.ModelA(1,2,3)
+        ma = ModelTest.ModelA(1, 2, 3, 4)
         t = ma.as_tuple()
-        self.assertEqual((1,2,3), t)
+        self.assertEqual((1,2,3,4), t)
 
     def test_nonexsit_fields(self):
         ma = ModelTest.ModelA()
@@ -364,23 +364,23 @@ class ModelTest(unittest.TestCase):
         self.assertIsNone(ma.a1)
 
     def test_init_fromtuple(self):
-        t = (1,2,3)
+        t = (1, 1, 2, 3)
         ma = ModelTest.ModelA(*t)
-        self.assertEqual(3, len(ma))
+        self.assertEqual(4, len(ma))
         self.assertEqual(1, ma.a1)
         self.assertEqual(2, ma.a2)
         self.assertEqual(3, ma.a3)
 
     def test_init_with_seq_params(self):
-        ma = ModelTest.ModelA(1, 'a2', 3.3)
-        self.assertEqual(3, len(ma))
-        self.assertEqual(1, ma.a1)
+        ma = ModelTest.ModelA(1, 2, 'a2', 3.3)
+        self.assertEqual(4, len(ma))
+        self.assertEqual(2, ma.a1)
         self.assertEqual('a2', ma.a2)
         self.assertEqual(3.3, ma.a3)
 
-        ma = ModelTest.ModelA(1, 'a2')
-        self.assertEqual(2, len(ma))
-        self.assertEqual(1, ma.a1)
+        ma = ModelTest.ModelA(1, 2, 'a2')
+        self.assertEqual(3, len(ma))
+        self.assertEqual(2, ma.a1)
         self.assertEqual('a2', ma.a2)
         self.assertEqual(None, ma.a3)
 
@@ -398,9 +398,9 @@ class ModelTest(unittest.TestCase):
         self.assertEqual(3.3, ma.a3)
 
     def test_init_with_mix_params(self):
-        ma = ModelTest.ModelA(1, 2, a2='a2', a3=3.3)
-        self.assertEqual(3, len(ma))
-        self.assertEqual(1, ma.a1)
+        ma = ModelTest.ModelA(1, 2, 3, a2='a2', a3=3.3)
+        self.assertEqual(4, len(ma))
+        self.assertEqual(2, ma.a1)
         self.assertEqual('a2', ma.a2)
         self.assertEqual(3.3, ma.a3)
 
@@ -421,20 +421,28 @@ class MasterDAOTest(BaseDBTest):
     def test_agent_query(self):
         ag1 = nm.Agent('1', 'agent1', '127.0.0.1', datetime.now())
         ag1.save()
-        ag2 = nm.Agent('2', 'agent2', '127.0.0.1', datetime.now())
+        ag2 = nm.Agent('2', 'agent2', '127.0.0.2', datetime.now())
         ag2.save()
+        ag3 = nm.Agent('3', 'agent3', '127.0.0.3', datetime.now())
+        ag3.save()
 
         agents = nm.Agent.query()
-        self.assertEqual(2, len(agents))
+        self.assertEqual(3, len(agents))
 
         agents = nm.Agent.query(where='aid=?', params=['1'])
         self.assertEqual(1, len(agents))
         self.assertEqual(ag1, agents[0])
 
         agents = nm.Agent.query(orderby='aid ASC')
-        self.assertEqual(2, len(agents))
+        self.assertEqual(3, len(agents))
         self.assertEqual(ag1, agents[0])
         self.assertEqual(ag2, agents[1])
+        self.assertEqual(ag3, agents[2])
+
+        agents = nm.Agent.query(orderby='aid ASC', offset=1, limit=2)
+        self.assertEqual(2, len(agents))
+        self.assertEqual(ag2, agents[0])
+        self.assertEqual(ag3, agents[1])
 
     def test_agent_count(self):
         ag1 = nm.Agent('1', 'agent1', '127.0.0.1', datetime.now())

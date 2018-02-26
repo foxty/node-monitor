@@ -72,7 +72,7 @@ _DB_SCHEMA = r'''
     CREATE INDEX IF NOT EXISTS `idx_si_report_at` ON `service_info` (last_report_at DESC);
     
     CREATE TABLE IF NOT EXISTS service_info_history(aid, name, pid, change_at timestamp);
-    CREATE INDEX IF NOT EXISTS `idx_ni_aid_sname` ON `service_info_history` (`aid`, name);
+    CREATE INDEX IF NOT EXISTS `idx_sih_aid_sname` ON `service_info_history` (`aid`, name);
     
     CREATE TABLE IF NOT EXISTS service_pidstat_report(aid, collect_at timestamp, service_name, 
         tid, cpu_us, cpu_sy, cpu_gu, cpu_util, mem_minflt, mem_majflt, mem_vsz, mem_rss, mem_util,
@@ -80,6 +80,9 @@ _DB_SCHEMA = r'''
     CREATE INDEX IF NOT EXISTS `idx_spr_aid` ON `service_pidstat_report` (`aid` DESC);
     CREATE INDEX IF NOT EXISTS `idx_spr_collect_at` ON `service_pidstat_report` (collect_at DESC);
     CREATE INDEX IF NOT EXISTS `idx_spr_recv_at` ON `service_pidstat_report` (recv_at DESC);
+    
+    CREATE TABLE IF NOT EXISTS agent_alarm(id INTEGER PRIMARY KEY AUTOINCREMENT, 
+        aid, type, state, duration, create_at timestamp);
     '''
 _RE_SYSREPORT = re.compile('.*?(?P<users>\\d+)\\suser.*'
                            'age: (?P<load1>\\d+\\.\\d+), (?P<load5>\\d+\\.\\d+), (?P<load15>\\d+\\.\\d+).*',
@@ -347,35 +350,35 @@ class NoPKError(Exception): pass
 
 
 class Model(dict):
-    TABLE = 'model'
-    FIELDS = []
-    PK = []
-    ISQL = None
+    _TABLE = 'model'
+    _FIELDS = []
+    _PK = ["id"]
+    _ISQL = None
 
     def __init__(self, *args, **kwargs):
         upd = None
         if args:
-            upd = zip(self.FIELDS[:len(args)], args)
+            upd = zip(self._FIELDS[:len(args)], args)
         kwupd = self._check_updates(kwargs)
         upd = kwupd if not upd else upd + kwupd
         if upd:
             self.update({k: v for k, v in upd if v is not None})
 
     def __getattr__(self, item):
-        if item in self.FIELDS:
+        if item in self._FIELDS:
             return self.get(item, None)
         else:
             raise InvalidFieldError('model field "%s" not defined.' % item)
 
     def __setattr__(self, key, value):
-        if key in self.FIELDS:
+        if key in self._FIELDS:
             self[key] = value
         else:
             raise InvalidFieldError('field %s not defined.' % key)
 
     def _check_updates(self, kwargs):
         if kwargs:
-            diff = kwargs.viewkeys() - set(self.FIELDS)
+            diff = kwargs.viewkeys() - set(self._FIELDS)
             if diff:
                 raise InvalidFieldError(','.join(diff))
             else:
@@ -385,7 +388,7 @@ class Model(dict):
         return upd
 
     def as_tuple(self):
-        return tuple(self.get(f, None) for f in self.FIELDS)
+        return tuple(self.get(f, None) for f in self._FIELDS)
 
     @dao
     def save(self, cursor):
@@ -405,9 +408,9 @@ class Model(dict):
         :param kwargs:
         :return:
         """
-        if not self.PK:
-            raise NoPKError(self.TABLE)
-        logging.debug('update model %s with %s', self.TABLE, kwargs)
+        if not self._PK:
+            raise NoPKError(self._TABLE)
+        logging.debug('update model %s with %s', self._TABLE, kwargs)
         cursor = kwargs['cursor']
         del kwargs['cursor']
         kwupd = self._check_updates(kwargs)
@@ -415,9 +418,9 @@ class Model(dict):
             # clever
             fields, values = zip(*kwupd)
             setphrase = ','.join(['%s=?' % f for f in fields])
-            wherephrase = ' AND '.join(['%s=?' % pk for pk in self.PK])
-            pkvalues = tuple([self.get(pk) for pk in self.PK])
-            sql = 'UPDATE %s SET %s WHERE %s' % (self.TABLE, setphrase, wherephrase)
+            wherephrase = ' AND '.join(['%s=?' % pk for pk in self._PK])
+            pkvalues = tuple([self.get(pk) for pk in self._PK])
+            sql = 'UPDATE %s SET %s WHERE %s' % (self._TABLE, setphrase, wherephrase)
             params = values + pkvalues
             logging.debug('%s : %s', sql, params)
             cursor.execute(sql, params)
@@ -425,9 +428,9 @@ class Model(dict):
 
     @classmethod
     def isql(cls):
-        if not cls.ISQL:
-            cls.ISQL = 'INSERT INTO %s (%s) VALUES(%s)' % (cls.TABLE, ','.join(cls.FIELDS), ','.join('?'*len(cls.FIELDS)))
-        return cls.ISQL
+        if not cls._ISQL:
+            cls._ISQL = 'INSERT INTO %s (%s) VALUES(%s)' % (cls._TABLE, ','.join(cls._FIELDS), ','.join('?' * len(cls._FIELDS)))
+        return cls._ISQL
 
     @classmethod
     @dao
@@ -437,17 +440,23 @@ class Model(dict):
 
     @classmethod
     @dao
-    def query(cls, where=None, orderby=None, params=None, cursor=None):
+    def query(cls, where=None, orderby=None, params=None, limit=None, offset=None, cursor=None):
         """
         query model list
         :param where: SQL where clause
         :param orderby: SQL order by clause
         :param params: parameters used in where clause
+        :param limit: limit numbers of query
+        :param offset: offset position of query
+        :param cursor: cursor object of database
         :return: lis to of model
         """
-        sql = 'SELECT %s FROM %s %s %s' % (','.join(cls.FIELDS), cls.TABLE,
-                                           'WHERE %s' % where if where else '',
-                                           'ORDER BY %s' % orderby if orderby else '')
+        sql = 'SELECT %s FROM %s %s %s %s %s' % (','.join(cls._FIELDS),
+                                                 cls._TABLE,
+                                                 'WHERE %s' % where if where else '',
+                                                 'ORDER BY %s' % orderby if orderby else '',
+                                                 'LIMIT %d' % limit if limit is not None else '',
+                                                 'OFFSET %d' % offset if offset is not None else '')
         logging.debug('%s : %s', sql, params)
         cursor.execute(sql, params if params else [])
         result = cursor.fetchall()
@@ -456,7 +465,7 @@ class Model(dict):
     @classmethod
     @dao
     def count(cls, where=None, params=None, cursor=None):
-        cursor.execute('SELECT COUNT(1) FROM %s %s' % (cls.TABLE, 'WHERE '+where if where else ''),
+        cursor.execute('SELECT COUNT(1) FROM %s %s' % (cls._TABLE, 'WHERE ' + where if where else ''),
                        params if params else ())
         r = cursor.fetchone()
         return r[0] if r else 0
@@ -474,10 +483,10 @@ class ChronoModel(object):
 
 
 class Agent(Model):
-    TABLE = 'agent'
-    FIELDS = ['aid', 'name', 'host', 'create_at', 'last_msg_at',
+    _TABLE = 'agent'
+    _FIELDS = ['aid', 'name', 'host', 'create_at', 'last_msg_at',
               'last_cpu_util', 'last_mem_util', 'last_sys_load1', 'last_sys_cs']
-    PK = ['aid']
+    _PK = ['aid']
 
     @classmethod
     def get_by_id(cls, aid):
@@ -490,13 +499,13 @@ class Agent(Model):
 
 
 class NMetric(Model, ChronoModel):
-    TABLE = 'node_metric_raw'
-    FIELDS = ['aid', 'collect_at', 'category', 'content', 'recv_at']
+    _TABLE = 'node_metric_raw'
+    _FIELDS = ['aid', 'collect_at', 'category', 'content', 'recv_at']
 
 
 class NMemoryReport(Model, ChronoModel):
-    TABLE = 'node_memory_report'
-    FIELDS = ['aid', 'collect_at', 'total_mem', 'used_mem', 'free_mem',
+    _TABLE = 'node_memory_report'
+    _FIELDS = ['aid', 'collect_at', 'total_mem', 'used_mem', 'free_mem',
               'cache_mem', 'total_swap', 'used_swap', 'free_swap', 'recv_at']
 
     @property
@@ -509,8 +518,8 @@ class NMemoryReport(Model, ChronoModel):
 
 
 class NCPUReport(Model, ChronoModel):
-    TABLE = 'node_cpu_report'
-    FIELDS = ['aid', 'collect_at', 'us', 'sy', 'id', 'wa', 'st', 'recv_at']
+    _TABLE = 'node_cpu_report'
+    _FIELDS = ['aid', 'collect_at', 'us', 'sy', 'id', 'wa', 'st', 'recv_at']
 
     @property
     def used_util(self):
@@ -518,27 +527,27 @@ class NCPUReport(Model, ChronoModel):
 
 
 class NSystemReport(Model, ChronoModel):
-    TABLE = 'node_system_report'
-    FIELDS = ['aid', 'collect_at', 'uptime', 'users', 'load1', 'load5',
+    _TABLE = 'node_system_report'
+    _FIELDS = ['aid', 'collect_at', 'uptime', 'users', 'load1', 'load5',
               'load15', 'procs_r', 'procs_b', 'sys_in', 'sys_cs', 'recv_at']
 
 
 class NDiskReport(Model, ChronoModel):
-    TABLE = 'node_disk_report'
-    FIELDS = ['aid', 'collect_at', 'fs', 'size', 'used',
+    _TABLE = 'node_disk_report'
+    _FIELDS = ['aid', 'collect_at', 'fs', 'size', 'used',
               'available', 'used_util', 'mount_point', 'recv_at']
 
 
 class SMetric(Model, ChronoModel):
-    TABLE = 'service_metric_raw'
-    FIELDS = ['aid', 'collect_at', 'name', 'pid',
+    _TABLE = 'service_metric_raw'
+    _FIELDS = ['aid', 'collect_at', 'name', 'pid',
               'category', 'content', 'recv_at']
 
 
 class SInfo(Model):
-    TABLE = 'service_info'
-    FIELDS = ['aid', 'name', 'pid', 'last_report_at', 'status']
-    PK = ['aid', 'name']
+    _TABLE = 'service_info'
+    _FIELDS = ['aid', 'name', 'pid', 'last_report_at', 'status']
+    _PK = ['aid', 'name']
 
     STATUS_ACT = 'active'
     STATUS_INACT = 'inactive'
@@ -556,20 +565,53 @@ class SInfo(Model):
 
 
 class SInfoHistory(Model):
-    TABLE = 'service_info_history'
-    FIELDS = ['aid', 'name', 'pid', 'change_at']
+    _TABLE = 'service_info_history'
+    _FIELDS = ['aid', 'name', 'pid', 'change_at']
 
 
 class SPidstatReprot(Model, ChronoModel):
-    TABLE = 'service_pidstat_report'
-    FIELDS = ['aid', 'collect_at', 'service_name', 'tid', 'cpu_us', 'cpu_sy', 'cpu_gu', 'cpu_util',
+    _TABLE = 'service_pidstat_report'
+    _FIELDS = ['aid', 'collect_at', 'service_name', 'tid', 'cpu_us', 'cpu_sy', 'cpu_gu', 'cpu_util',
               'mem_minflt', 'mem_majflt', 'mem_vsz', 'mem_rss', 'mem_util',
               'disk_rd', 'disk_wr', 'disk_ccwr', 'recv_at']
+
+    @classmethod
+    def lst_report_by_aid(cls, aid):
+        return cls.query(where='aid=?', orderby='collect_at DESC', params=[aid], limit=1)
+
+
+class Alarm(Model):
+    _TABLE = ""
+    _FIELDS = [""]
 
 
 # =================
 # Master
 # =================
+
+
+class AlarmEngine(object):
+    """manage alarms life cycle for agent & service
+    Alarms:
+        Node Alarm
+            (CPU UTIL HIGH, CPU UTIL EXTREMELY HIGH)
+            (DISK UTIL HIGH, DISK UTIL EXTREMELY HIGH)
+            (LOAD1 HIGH, LOAD1 EXTREMELY HIGH)
+            (LOAD5 HIGH, LOAD5 EXTREMELY HIGH)
+            (LOAD15 HIGH, LOAD15 EXTREMELY HIGH)
+            (SYS CS HIGH, SYS CS EXTREMELY HIGH)
+            (MEMORY UTIL HIGH, MEMORY EXTREMELY HIGH)
+        Service Alarm
+            (CPU UTIL HIGH, CPU UTIL EXTREMELY HIGH)
+            (MEMORY UTIL HIGH, MEMORY EXTREMELY HIGH)
+    """
+
+    def __init__(self, q):
+        self._agent_status = {}
+        self._live_alarms = []
+
+    def process(self, report):
+        pass
 
 
 class AgentRequestHandler(SocketServer.StreamRequestHandler):

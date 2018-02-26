@@ -293,17 +293,17 @@ const Dashboard = {
 
 const Nodes = {
 		template: `<div><div class="page-header"><h1>Node List</h1></div>
-		    <table class="table" v-if="agents">
+		    <table class="table table-bordered" v-if="agents">
 		        <thead>
                     <tr>
                         <th>Name</th>
                         <th>Host</th>
-                        <th>Service(s)</th>
                         <th>CPU Util(%)</th>
                         <th>Mem Util(%)</th>
                         <th>Load(1m)</th>
                         <th>CS</th>
                         <th>Reports</th>
+                        <th>Service(s)</th>
                         <th>Last Recv Time</th>
                     </tr>
                 </thead>
@@ -311,21 +311,25 @@ const Nodes = {
                     <tr v-for="a in agents">
                         <td>{{a.name}}</td>
                         <td>{{a.host}}</td>
-                        <td>N/A</td>
                         <td>{{a.last_cpu_util}}</td>
                         <td>{{a.last_mem_util}}</td>
                         <td>{{a.last_sys_load1}}</td>
                         <td>{{a.last_sys_cs}}</td>
                         <td>
                             <router-link :to="{name: 'nodeStatus', params: {aid:a.aid}}">
-                                Reports <span class="glyphicon glyphicon-stats" aria-hidden="true"></span>
+                                <span class="glyphicon glyphicon-stats" aria-hidden="true"></span> Reports
+                            </router-link>
+                        </td>
+                        <td>
+                            <router-link :to="{name: 'nodeServices', params: {aid:a.aid}}">
+                            <span class="glyphicon glyphicon-tasks" aria-hidden="true"></span> Services
                             </router-link>
                         </td>
                         <td>{{a.last_msg_at}}</td>
                     </tr>
                 </tbody>
            </table>
-           <div v-if="!agents" class="well">no agents</div>
+           <div v-if="!agents" class="alert alert-warning">no agents</div>
        </div>`,
 		data: function() {
 		    return {
@@ -544,7 +548,61 @@ const NodeStatus = {
 	}
 
 const NodeServices = {
-    template: `Agent Services`
+    props: ['aid'],
+
+    template: `<div><div class="page-header"><h1>Node Services(s)</h1></div>
+        <table class="table table-bordered" v-if="services">
+            <thead>
+                <tr>
+                    <th>Name</th>
+                    <th>Status</th>
+                    <th>PID</th>
+                    <th>CPU Util(%)</th>
+                    <th>Mem Util(%)</th>
+                    <th>Reports</th>
+                    <th>Last Report Time</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr v-for="s in services">
+                    <td>{{s.name}}</td>
+                    <td>
+                        <span class="label" :class="{'label-success': s.status=='active', 'label-default': s.status=='inactive'}">{{s.status}}</span>
+                    </td>
+                    <td>{{s.pid}}</td>
+                    <td>{{services_status_map[s.name] ? services_status_map[s.name].cpu_util : '-'}}</td>
+                    <td>{{services_status_map[s.name] ? services_status_map[s.name].mem_util : '-'}}</td>
+                    <td><span class="glyphicon glyphicon-stats" aria-hidden="true"></span> Reports</td>
+                    <td>{{s.last_report_at}}</td>
+                </tr>
+            </tbody>
+        </table>
+        <div v-if="!services" class="alert alert-warning">no servie discovered.</div>
+    </div>`,
+
+    data: function() {
+        return {
+            services: null,
+            services_status_map: {}
+        }
+    },
+
+    created: function() {
+        this.loadServices();
+    },
+
+    methods: {
+        loadServices: function() {
+            var self = this;
+            var aid = self.aid
+            Ajax.get(`/api/agents/${aid}/services`, function(data) {
+                self.services = data.services;
+                self.services_status_map = data.services_status_map;
+                console.debug('get services by aid ' + aid)
+                console.debug(data)
+            })
+        }
+    }
 }
 
 const Alarms = {
@@ -562,7 +620,6 @@ const Alarms = {
 
 		}
 	}
-
 
 const Settings = {
 		template: `<div>

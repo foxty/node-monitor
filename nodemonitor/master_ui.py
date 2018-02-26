@@ -11,7 +11,7 @@ import logging
 from datetime import datetime, timedelta
 from flask import Flask, render_template, jsonify
 from common import dump_json
-from master import Agent, NSystemReport, NCPUReport, NMemoryReport, NDiskReport, SInfo
+from master import Agent, NSystemReport, NCPUReport, NMemoryReport, NDiskReport, SInfo, SPidstatReprot
 logging.basicConfig(level=logging.INFO)
 
 
@@ -89,6 +89,13 @@ def get_agent_memreports(aid, date_range='last_hour'):
 def get_agent_diskreports(aid, date_range='last_hour'):
     reports = NDiskReport.query_by_rtime(aid, *calc_daterange(date_range))
     return dump_json(reports)
+
+
+@_APP.route('/api/agents/<string:aid>/services')
+def get_agent_services(aid):
+    services = SInfo.query_by_aid(aid)
+    status_map = { report.service_name: report for report in SPidstatReprot.lst_report_by_aid(aid)}
+    return dump_json({'services': services, 'services_status_map': status_map})
 
 
 def ui_main(host='0.0.0.0', port=8080, debug=False):
