@@ -293,7 +293,7 @@ const Dashboard = {
 
 const Nodes = {
 		template: `<div><div class="page-header"><h1>Node List</h1></div>
-		    <table class="table table-bordered" v-if="agents">
+		    <table class="table table-bordered" v-if="agents && agents.length > 0">
 		        <thead>
                     <tr>
                         <th>Name</th>
@@ -329,7 +329,7 @@ const Nodes = {
                     </tr>
                 </tbody>
            </table>
-           <div v-if="!agents" class="alert alert-warning">no agents</div>
+           <div v-if="!agents || agents.length == 0" class="alert alert-warning">no agents</div>
        </div>`,
 		data: function() {
 		    return {
@@ -551,7 +551,7 @@ const NodeServices = {
     props: ['aid'],
 
     template: `<div><div class="page-header"><h1>Node Services(s)</h1></div>
-        <table class="table table-bordered" v-if="services">
+        <table class="table table-bordered" v-if="services && services.length > 0">
             <thead>
                 <tr>
                     <th>Name</th>
@@ -577,7 +577,7 @@ const NodeServices = {
                 </tr>
             </tbody>
         </table>
-        <div v-if="!services" class="alert alert-warning">no servie discovered.</div>
+        <div v-if="!services || services.length == 0" class="alert alert-warning">no service discovered.</div>
     </div>`,
 
     data: function() {

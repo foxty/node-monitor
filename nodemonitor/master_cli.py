@@ -16,7 +16,7 @@ import logging
 import getopt
 from multiprocessing import Process
 from common import SetupError
-_FILES_TO_COPY = ['common.py', 'agent.py', 'agent.json']
+_FILES_TO_COPY = ['common.py', 'agent.py', 'agent.json', 'nmagent.sh']
 _INSTALL_PY27 = True
 _FILE_OF_PY27 = 'Python-2.7.14.tgz'
 
@@ -24,7 +24,7 @@ _FILE_OF_PY27 = 'Python-2.7.14.tgz'
 class NodeConnector(object):
     """Using ssh connect to node and provide list of operation utils"""
 
-    APP_DIR = 'node_monitor'
+    APP_DIR = 'node-monitor'
 
     def __init__(self, node_host, username, password):
         self.node_host = node_host
@@ -73,17 +73,23 @@ class NodeConnector(object):
                 sftp.put(f, '%s/%s' % (self.APP_DIR, f))
                 logging.info('file %s transferred successfully', f)
 
+    def install_service(self, mhost):
+        logging.info('install agent service for %s', self.node_host)
+        self.ssh.exec_command("sed 's/master_host/%s/' %s/nmagent.sh > /etc/init.d/nmagent" %
+                              (mhost, self.APP_DIR))
+        self.ssh.exec_command('chmod +x /etc/init.d/nmagent')
+        self.ssh.exec_command('chkconfig --add nmagent')
+
     def launch_agent(self, mhost):
         """Launch remote agent via ssh channel"""
         logging.info('start agent on %s, master=%s', self.node_host, mhost)
-        self.ssh.exec_command('cd %s && nohup python ./agent.py %s > agent.log 2>&1 & ' %
-                              (self.APP_DIR, mhost))
+        self.ssh.exec_command('service nmagent start')
         logging.info('agent started on host %s', mhost)
 
     def stop_agent(self):
         """Stop agent in remote node"""
         logging.info('try to stop agent on %s', self.node_host)
-        self.ssh.exec_command("ps -ef|grep agent.py | grep -v grep| awk '{print $2}' | xargs kill -9")
+        self.ssh.exec_command('service nmagent stop')
         logging.info('agent on %s stopped', self.node_host)
 
 
@@ -126,6 +132,7 @@ def push_to_nodes(nodelist):
                     nc.trans_files(_FILES_TO_COPY)
                     logging.info('python27 already installed, skip installation process.')
                 nc.stop_agent()
+                nc.install_service(mhost)
                 nc.launch_agent(mhost)
         except Exception as e:
             logging.exception('error while push to %s', host)
@@ -149,16 +156,13 @@ def usage():
 if __name__ == '__main__':
 
     try:
-        opts, args = getopt.getopt(sys.argv[1:], "hpm", ['help', 'push', 'master', 'stop-agents'])
+        opts, args = getopt.getopt(sys.argv[1:], "hi:p:m", ['help', 'install=', 'push=', 'master', 'stop-agents='])
     except getopt.GetoptError as e:
         print('Wrong usage', e)
         sys.exit(2)
     for opt, v in opts:
-        if opt in ['-p', '--push']:
-            if not len(args):
-                print('invalid node list provided')
-                break
-            with open(args[0], 'r') as f:
+        if opt in ['-p', '--push', '-i', '--install']:
+            with open(v, 'r') as f:
                 nodelist = [[ele.strip() for ele in l.strip().split(',')]
                             for l in f.readlines() if l and not l.strip().startswith('#')]
             push_to_nodes(nodelist)
@@ -176,10 +180,7 @@ if __name__ == '__main__':
             masterui_proc.join()
             logging.info('master exited.')
         elif opt == '--stop-agents':
-            if not len(args):
-                print('invalid node list provided')
-                break
-            with open(args[0], 'r') as f:
+            with open(v, 'r') as f:
                 nodelist = [[ele.strip() for ele in l.strip().split(',')]
                             for l in f.readlines() if l and not l.strip().startswith('#')]
             stop_agents(nodelist)

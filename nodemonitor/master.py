@@ -67,7 +67,7 @@ _DB_SCHEMA = r'''
     CREATE INDEX IF NOT EXISTS `idx_nsr_collect_at` ON `service_metric_raw` (collect_at DESC);
     CREATE INDEX IF NOT EXISTS `idx_nsr_recv_at` ON `service_metric_raw` (recv_at DESC);
     
-    CREATE TABLE IF NOT EXISTS service_info(aid, name, pid, last_report_at timestamp, status);
+    CREATE TABLE IF NOT EXISTS service_info(aid, name, pid, type, last_report_at timestamp, status);
     CREATE INDEX IF NOT EXISTS `idx_si_aid` ON `service_info` (aid);
     CREATE INDEX IF NOT EXISTS `idx_si_report_at` ON `service_info` (last_report_at DESC);
     
@@ -546,7 +546,7 @@ class SMetric(Model, ChronoModel):
 
 class SInfo(Model):
     _TABLE = 'service_info'
-    _FIELDS = ['aid', 'name', 'pid', 'last_report_at', 'status']
+    _FIELDS = ['aid', 'name', 'pid', 'type', 'last_report_at', 'status']
     _PK = ['aid', 'name']
 
     STATUS_ACT = 'active'
@@ -576,8 +576,8 @@ class SPidstatReprot(Model, ChronoModel):
               'disk_rd', 'disk_wr', 'disk_ccwr', 'recv_at']
 
     @classmethod
-    def lst_report_by_aid(cls, aid):
-        return cls.query(where='aid=?', orderby='collect_at DESC', params=[aid], limit=1)
+    def lst_report_by_aid(cls, aid, count):
+        return cls.query(where='aid=?', orderby='collect_at DESC', params=[aid], limit=count)
 
 
 class Alarm(Model):
@@ -752,6 +752,7 @@ class Master(object):
         body = load_json(msg.body)
         sname = body['name']
         spid = body['pid']
+        stype = body.get('type', None)
         smetrics = [SMetric(aid, collect_at, sname, spid, mname, mcontent, datetime.now())
                     for mname, mcontent in body['metrics'].items()]
         SMetric.save_all(smetrics)
@@ -761,7 +762,7 @@ class Master(object):
         if sname not in services:
             # service discovered
             logging.info('service %s discovered with pid %s', sname, spid)
-            ser = SInfo(aid, sname, spid, collect_at, SInfo.STATUS_ACT).save()
+            ser = SInfo(aid, sname, spid, stype, collect_at, SInfo.STATUS_ACT).save()
             ser.add_history()
         else:
             # existing service, check for an update

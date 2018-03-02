@@ -13,6 +13,7 @@ Node Agent
 import os
 import sys
 import logging
+import getopt
 import socket
 import select
 import Queue as Q
@@ -185,6 +186,7 @@ class NodeCollector(threading.Thread):
         logging.debug('collect service : %s', service)
 
         name = service['name']
+        stype = service.get('type', None)
         lookup = service['lookup_keyword']
         pid = self._find_service_pid(name, lookup)
         if not pid:
@@ -196,7 +198,7 @@ class NodeCollector(threading.Thread):
         env['pid'] = pid
         logging.info('collecting for service %s(%s): metrics=%s, clocks=%s.',
                      name, pid, metric_names, clocks)
-        service_result = {'name': name, 'pid': pid}
+        service_result = {'name': name, 'pid': pid, 'type': stype}
         service_metrics = {}
         for mname in metric_names:
             try:
@@ -397,14 +399,18 @@ class NodeAgent:
 
 if __name__ == '__main__':
 
-    # try:
-    #     opts, args = getopt.getopt(sys.argv[:], "hma:", ['help', 'master', 'agent='])
-    # except getopt.GetoptError as e:
-    #     print('Wrong usage')
-    #     sys.exit(2)
-    #
-    # for opt, v in opts:
-    #     if opt in ['-m', '--master']:
-    mhost = sys.argv[1]
-    agent = NodeAgent(mhost)
+    try:
+        opts, args = getopt.getopt(sys.argv[1:], 'p:c:')
+    except getopt.GetoptError as e:
+        print('Wrong usage')
+        sys.exit(2)
+    mhost = args[0] if len(args) == 1 else 'localhost'
+    cfg, port = ('agent.json', 7890)
+    for opt, v in opts:
+        if opt in ['-c', '--config']:
+            cfg = v
+        if opt in ['-p', '--port']:
+            port = v
+
+    agent = NodeAgent(mhost, port, cfg)
     agent.start()

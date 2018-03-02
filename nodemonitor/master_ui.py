@@ -94,7 +94,7 @@ def get_agent_diskreports(aid, date_range='last_hour'):
 @_APP.route('/api/agents/<string:aid>/services')
 def get_agent_services(aid):
     services = SInfo.query_by_aid(aid)
-    status_map = { report.service_name: report for report in SPidstatReprot.lst_report_by_aid(aid)}
+    status_map = {report.service_name: report for report in SPidstatReprot.lst_report_by_aid(aid, len(services))}
     return dump_json({'services': services, 'services_status_map': status_map})
 
 

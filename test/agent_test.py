@@ -60,5 +60,9 @@ class NodeCollectorTest(unittest.TestCase):
         self.assertEqual(['test1', '1', 'and2'], newcmd)
 
 
+class AgentTest(unittest.TestCase):
+    pass
+
+
 if __name__ == '__main__':
     unittest.main()
