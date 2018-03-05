@@ -164,7 +164,7 @@ class NodeCollector(threading.Thread):
             msg = Msg.create_msg(self._agentid, Msg.A_NODE_METRIC, dump_json(nmetrics_result))
             msg.collect_at = datetime.now()
             self._agent.add_msg(msg)
-            logging.info('%d node metrics collected', len(nmetrics_result) - 1)
+            logging.info('%d node metrics collected', len(nmetrics_result))
         else:
             logging.info('no metric collected ')
 
@@ -235,7 +235,7 @@ class NodeCollector(threading.Thread):
                 pid = [e for e in psinfo[0].split(' ') if e][1]
                 service_pid = pid if pid and pid.isdigit() else None
             logging.info('pid of service %s is %s', servname, service_pid)
-        except Exception as e:
+        except Exception:
             logging.exception('look up service %s by %s failed', servname, lookup_keyword)
         return service_pid
 
@@ -276,10 +276,10 @@ class NodeAgent:
             logging.warn('Found exiting socket, now close it.')
             try:
                 self.sock.close()
-            except:
+            except socket.error:
                 pass
 
-        logging.info('connecting to master %s', self._master_addr)
+        logging.info('connecting master %s', self._master_addr)
         tried = 0
         while 1:
             tried = tried + 1
@@ -293,9 +293,9 @@ class NodeAgent:
             except socket.error as e:
                 sleeptime = min(_MAX_BACKOFF_SECOND, tried ** 2)
                 logging.exception('Cannot connect %s(tried=%d) due to %s, will retry after %d seconds...',
-                             self._master_addr, tried, e, sleeptime)
+                                  self._master_addr, tried, e, sleeptime)
                 self._retry.wait(sleeptime)
-        logging.info('connect to master %s succed.', self._master_addr)
+        logging.info('connect master(%s) succed.', self._master_addr)
         self.sock = sock
         # do agent_reg
         self._do_reg()
@@ -322,8 +322,7 @@ class NodeAgent:
                     logging.debug('q is full, msg %s abandoned, qsize=%d.',
                                   oldest_msg, self._queue.qsize())
                 self._queue.put_nowait(msg)
-                logging.info('msg %s added to queue, retry=%d, qsize=%d.',
-                              msg, retry, self._queue.qsize())
+                logging.info('msg %s added to queue, retry=%d, qsize=%d.', msg, retry, self._queue.qsize())
                 break;
             except Q.Full:
                 # Queue is full, retry
@@ -346,9 +345,12 @@ class NodeAgent:
             try:
                 # wait for 5 seconds in each loop to avoid cpu consuming
                 rlist, wlist, elist = select.select(rlist, wlist, wlist, 5)
-                if rlist: self._do_read(rlist[0])
-                if wlist: self._do_write(wlist[0])
-                if elist: self._do_error(elist[0])
+                if rlist:
+                    self._do_read(rlist[0])
+                if wlist:
+                    self._do_write(wlist[0])
+                if elist:
+                    self._do_error(elist[0])
             except socket.error as se:
                 logging.exception(se)
                 self._connect_master()

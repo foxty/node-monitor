@@ -1,0 +1,121 @@
+{
+  "clock_interval": 10,
+  "heartbeat_clocks": 6,
+  "node_metrics": {
+    "dstat-sys": {
+      "cmd": ["dstat", "-lyp", "1", "1"],
+      "clocks": 6
+    },
+    "dstat-cpu": {
+      "cmd": ["dstat", "-c", "1", "1"],
+      "clocks": 6
+    },
+    "dstat-mem": {
+      "cmd": ["dstat", "-msg", "1", "1"],
+      "clocks": 6
+    },
+    "dstat-socket": {
+      "cmd": ["dstat", "--socket", "1", "1"],
+      "clocks": 6
+    },
+    "dstat-dio": {
+      "cmd": ["dstat", "-dr", "1", "1"],
+      "clocks": 6
+    },
+    "w": {
+      "cmd": ["w"],
+      "clocks": 6
+    },
+    "free": {
+      "cmd": ["free", "-m"],
+      "clocks":6
+    },
+    "vmstat": {
+      "cmd": ["vmstat","1", "2"],
+      "clocks": 6
+    },
+    "netstat": {
+      "cmd": ["netstat", "-s"],
+      "clocks": 6
+    },
+    "df": {
+      "cmd": ["df", "-kP"],
+      "clocks":60
+    }
+  },
+
+  "service_metrics": {
+    "pidstat": {
+      "type": "all",
+      "cmd": ["pidstat", "-tdruh", "-p", "${pid}"]
+    },
+    "jstat-gc": {
+      "type": "java",
+      "cmd": ["${java_home}/bin/jstat", "-gc", "${pid}"]
+    }
+  },
+
+  "services": [
+
+    {
+      "name": "agent",
+      "type": "python",
+      "lookup_keyword": "agent.py",
+      "log_pattern": ["agent.log"],
+      "metrics": ["pidstat"],
+      "clocks": 6
+    },
+
+    {
+      "name": "linux-reactor",
+      "type": "java",
+      "lookup_keyword": "-Dreactor.home=/opt",
+      "env" : {
+        "java_home": "/opt/arris/servassure/jdk1.8.0_40/",
+        "log_home": "/opt/arris/servassure/log"
+      },
+      "log_pattern": ["reactor.*"],
+      "metrics": ["pidstat", "jstat-gc"],
+      "clocks": 6
+    },
+
+    {
+      "name": "solaris-reactor",
+      "type": "java",
+      "lookup_keyword": "-Dreactor.home=/export",
+      "env" : {
+        "java_home": "/export/home/stargus/jdk1.8.0_40",
+        "log_home": "/export/home/stargus/log/"
+      },
+      "log_pattern": ["reactor.*"],
+      "metrics": ["pidstat", "jstat-gc"],
+      "clocks": 6
+    },
+
+    {
+      "name": "linux-collector",
+      "type": "java",
+      "lookup_keyword": "-Dprocess=Collector",
+      "env" : {
+        "java_home": "/opt/arris/servassure/jdk1.8.0_40/",
+        "log_home": "/opt/arris/servassure/log"
+      },
+      "log_pattern": ["collection_manager.log", "snmp_poller.log"],
+      "metrics": ["pidstat", "jstat-gc"],
+      "clocks": 6
+    },
+
+    {
+      "name": "solaris-collector",
+      "type": "java",
+      "lookup_keyword": "-Dprocess=Collector",
+      "env" : {
+        "java_home": "/export/home/stargus/jdk1.8.0_40",
+        "log_home": "/export/home/stargus/log/"
+      },
+      "log_pattern": ["collection_manager.log", "snmp_poller.log"],
+      "metrics": ["pidstat", "jstat-gc"],
+      "clocks": 6
+    }
+  ]
+}
