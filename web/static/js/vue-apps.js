@@ -201,161 +201,189 @@ function genChartOption(title, data, cateProp, seriesPropsMapping, graphOptions)
 
 /**Vue Apps**/
 const Dashboard = {
-		template: `<div><div class="page-header"><h1>Dashboard</h1></div>
-            <div class="row" style="padding:15px;">
-                <div class="col-md-3 alert alert-success" style="text-align:center">
-                    <h3>{{summary ? summary.agent_count : 'N/A'}} Nodes</h3></div>
-                <div class="col-md-3 alert alert-danger" style="text-align:center">
-                    <h3>{{summary ? summary.alarm_count : 'N/A'}} Alarms</h3></div>
-                <div class="col-md-3 alert alert-info" style="text-align:center">
-                    <h3>{{summary ? summary.service_count : 'N/A'}} Services</h3></div>
-                <div class="col-md-3 alert alert-info" style="text-align:center">
-                    <h3>{{summary ? summary.sample_count : 'N/A'}} Samples</h3></div>
-            </div>
-            <div class="row">
-                <div class="col-md-4">
-                    <div class="panel panel-default">
-                        <div class="panel-heading">
-                            Worst Nodes (Top 10)
-                        </div>
-                        <div class="panel-body row">
-                            <table class='table'>
-                                <thead>
-                                    <tr>
-                                        <th>Name</th>
-                                        <th>Load1</th>
-                                        <th>CPU%</th>
-                                        <th>Memory%</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    <tr v-for="node in worstNodes" style="padding:5px 0px 5px 10px;">
-                                    <td><router-link :to="{name: 'nodeStatus', params: {aid:node.aid}}">{{node.name}}</router-link></td>
-                                    <td>{{node.last_sys_load1}}</td>
-                                    <td>{{node.last_cpu_util}}</td>
-                                    <td>{{node.last_mem_util}}</td>
-                                    </tr>
-                                </tbody>
-                            </table>
-                        </div>
+    template: `<div><div class="page-header"><h1>Dashboard</h1></div>
+        <div class="row" style="padding:15px;">
+            <div class="col-md-3 alert alert-success" style="text-align:center">
+                <h3>{{summary ? summary.agent_count : 'N/A'}} Nodes</h3></div>
+            <div class="col-md-3 alert alert-danger" style="text-align:center">
+                <h3>{{summary ? summary.alarm_count : 'N/A'}} Alarms</h3></div>
+            <div class="col-md-3 alert alert-info" style="text-align:center">
+                <h3>{{summary ? summary.service_count : 'N/A'}} Services</h3></div>
+            <div class="col-md-3 alert alert-info" style="text-align:center">
+                <h3>{{summary ? summary.sample_count : 'N/A'}} Samples</h3></div>
+        </div>
+        <div class="row">
+            <div class="col-md-4">
+                <div class="panel panel-default">
+                    <div class="panel-heading">
+                        Worst Nodes (Top 10)
                     </div>
-                </div>
-                <div class="col-md-4">
-                    <div class="panel panel-default">
-                        <div class="panel-heading">
-                            Worst Services
-                        </div>
-                        <div class="panel-body row">
-
-                        </div>
-                    </div>
-                </div>
-                <div class="col-md-4">
-                    <div class="panel panel-default">
-                        <div class="panel-heading">
-                            New Alarms
-                        </div>
-                        <div class="panel-body row">
-
-                        </div>
+                    <div class="panel-body row">
+                        <table class='table'>
+                            <thead>
+                                <tr>
+                                    <th>Name</th>
+                                    <th>Load1</th>
+                                    <th>CPU%</th>
+                                    <th>Memory%</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr v-for="node in worstNodes" style="padding:5px 0px 5px 10px;">
+                                <td><router-link :to="{name: 'nodeStatus', params: {aid:node.aid}}">{{node.name}}</router-link></td>
+                                <td>{{node.last_sys_load1}}</td>
+                                <td>{{node.last_cpu_util}}</td>
+                                <td>{{node.last_mem_util}}</td>
+                                </tr>
+                            </tbody>
+                        </table>
                     </div>
                 </div>
             </div>
-		</div>`,
+            <div class="col-md-4">
+                <div class="panel panel-default">
+                    <div class="panel-heading">
+                        Worst Services
+                    </div>
+                    <div class="panel-body row">
 
-		data: function() {
-		    return {
-		        summary: null,
-		        worstNodes: null
-		    };
-		},
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="panel panel-default">
+                    <div class="panel-heading">
+                        New Alarms
+                    </div>
+                    <div class="panel-body row">
 
-		created: function() {
-		    this.loadSummary();
-		    this.loadWorstNodes();
-		},
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>`,
 
-		methods: {
-		    loadSummary: function() {
-		        var self = this;
-		        Ajax.get('/api/dashboard/summary', function(summary) {
-		            self.summary = summary;
-		        })
-		    },
-            loadWorstNodes: function() {
-                var self = this;
-                Ajax.get('/api/agents/by_load1', function(agents) {
-                    self.worstNodes = agents;
-                })
-            }
-		}
-	};
+    data: function() {
+        return {
+            summary: null,
+            worstNodes: null
+        };
+    },
+
+    created: function() {
+        this.loadSummary();
+        this.loadWorstNodes();
+    },
+
+    methods: {
+        loadSummary: function() {
+            var self = this;
+            Ajax.get('/api/dashboard/summary', function(summary) {
+                self.summary = summary;
+            })
+        },
+        loadWorstNodes: function() {
+            var self = this;
+            Ajax.get('/api/agents/by_load1', function(agents) {
+                self.worstNodes = agents;
+            })
+        }
+    }
+};
 
 const Nodes = {
-		template: `<div><div class="page-header"><h1>Node List</h1></div>
-		    <table class="table table-bordered" v-if="agents && agents.length > 0">
-		        <thead>
-                    <tr>
-                        <th>Name</th>
-                        <th>Host</th>
-                        <th>CPU Util(%)</th>
-                        <th>Mem Util(%)</th>
-                        <th>Load(1m)</th>
-                        <th>CS</th>
-                        <th>Reports</th>
-                        <th>Service(s)</th>
-                        <th>Last Recv Time</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    <tr v-for="a in agents">
-                        <td>{{a.name}}</td>
-                        <td>{{a.host}}</td>
-                        <td>{{a.last_cpu_util}}</td>
-                        <td>{{a.last_mem_util}}</td>
-                        <td>{{a.last_sys_load1}}</td>
-                        <td>{{a.last_sys_cs}}</td>
-                        <td>
-                            <router-link :to="{name: 'nodeStatus', params: {aid:a.aid}}">
-                                <span class="glyphicon glyphicon-stats" aria-hidden="true"></span> Reports
-                            </router-link>
-                        </td>
-                        <td>
-                            <router-link :to="{name: 'nodeServices', params: {aid:a.aid}}">
-                            <span class="glyphicon glyphicon-tasks" aria-hidden="true"></span> Services
-                            </router-link>
-                        </td>
-                        <td>{{a.last_msg_at}}</td>
-                    </tr>
-                </tbody>
-           </table>
-           <div v-if="!agents || agents.length == 0" class="alert alert-warning">no agents</div>
-       </div>`,
-		data: function() {
-		    return {
-		        title:'Agent List',
-		        agents: null
-		    }
-		},
 
-		created: function() {
-		    this.loadAgents()
-		},
+    template: `<div><div class="page-header"><h1>Node List</h1></div>
+        <table class="table table-bordered" v-if="agents && agents.length > 0">
+            <thead>
+                <tr>
+                    <th>Name</th>
+                    <th>Host</th>
+                    <th>CPU Util(%)</th>
+                    <th>Mem Util(%)</th>
+                    <th>Load(1m)</th>
+                    <th>CS</th>
+                    <th>Last Recv Time</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr v-for="a in agents">
+                    <td><router-link :to="{name: 'node', params: {aid:a.aid}}">{{a.name}}</router-link></td>
+                    <td>{{a.host}}</td>
+                    <td>{{a.last_cpu_util}}</td>
+                    <td>{{a.last_mem_util}}</td>
+                    <td>{{a.last_sys_load1}}</td>
+                    <td>{{a.last_sys_cs}}</td>
+                    <td>{{a.last_msg_at}}</td>
+                </tr>
+            </tbody>
+       </table>
+       <div v-if="!agents || agents.length == 0" class="alert alert-warning">no agents</div>
+   </div>`,
 
-		methods: {
-            loadAgents: function() {
-                var self = this;
-                Ajax.get('/api/agents', function(data) {
-                    self.agents = data;
-                })
-            }
-		}
-	}
+    data: function() {
+        return {
+            title:'Agent List',
+            agents: null
+        }
+    },
+
+    created: function() {
+        this.loadAgents()
+    },
+
+    methods: {
+        loadAgents: function() {
+            var self = this;
+            Ajax.get('/api/agents', function(data) {
+                self.agents = data;
+            })
+        }
+    }
+}
+
+const Node = {
+    props: ['aid'],
+
+    template: `<div><div class="page-header"><h1>Node {{agent ? agent.host : ''}}({{aid}}) </h1></div>
+        <ul class="nav nav-tabs">
+          <li role="presentation" :class="{'active': $route.name == 'nodeStatus'}">
+            <router-link :to="{name: 'nodeStatus', params: {aid:aid}}">Status</router-link>
+          </li>
+          <li role="presentation" :class="{'active': $route.name == 'nodeServices' || $route.name == 'serviceStatus'}">
+            <router-link :to="{name: 'nodeServices', params: {aid:aid}}">Services</router-link>
+          </li>
+        </ul>
+        <div style="margin-top:10px;"><router-view></router-view></div>
+    </div>`,
+
+    data: function() {
+        return {
+            agent: null
+        }
+    },
+
+    created: function() {
+        this.getAgent();
+        // set default tab
+        if(this.$route.name == 'node') router.push({name: 'nodeStatus'})
+    },
+
+    methods: {
+        getAgent: function() {
+            var self = this;
+            var aid = self.aid;
+            Ajax.get(`/api/agents/${aid}`, function(agent) {
+                self.agent = agent
+            })
+        }
+    }
+}
 
 const NodeStatus = {
         props: ['aid'],
 
-		template: `<div><div class="page-header"><h1>Node {{agent ? agent.host : ''}}({{aid}}) Status</h1></div>
+		template: `<div>
             <div class="panel panel-default">
                 <div class="panel-heading">
                     System
@@ -380,7 +408,7 @@ const NodeStatus = {
                     <button class="btn btn-sm btn-success" @click="loadCpuReports()">Reload</button>
                  </div>
                 <div class="panel-body row">
-                    <chart :options="cpuUtil" style="width:100%;height:300px"></chart>
+                    <chart :options="cpuChart" style="width:100%;height:300px"></chart>
                 </div>
             </div>
 
@@ -393,8 +421,8 @@ const NodeStatus = {
                     <button class="btn btn-sm btn-success" @click="loadMemReports()">Reload</button>
                 </div>
                 <div class="panel-body row">
-                    <div class="col-md-6"><chart :options="memoryUtil" style="width:100%;height:300px"></chart></div>
-                    <div class="col-md-6"><chart :options="swapUtil" style="width:100%;height:300px"></chart></div>
+                    <div class="col-md-6"><chart :options="memoryChart" style="width:100%;height:300px"></chart></div>
+                    <div class="col-md-6"><chart :options="swapChart" style="width:100%;height:300px"></chart></div>
                 </div>
             </div>
 
@@ -407,14 +435,13 @@ const NodeStatus = {
                     <button class="btn btn-sm btn-success" @click="loadDiskReports()">Reload</button>
                 </div>
                 <div class="panel-body row">
-                    <div class="col-md-12"><chart :options="diskUtil" style="width:100%;height:300px"></chart></div>
+                    <div class="col-md-12"><chart :options="diskChart" style="width:100%;height:300px"></chart></div>
                 </div>
             </div>
 		</div>`,
 
 		data: function() {
 		    return {
-		        agent: null,
 		        sysReportsRange: 'last_hour',
 		        sysReports: null,
 		        sysLoad: null,
@@ -422,14 +449,14 @@ const NodeStatus = {
                 sysCs: null,
 		        cpuReportsRange: 'last_hour',
 		        cpuReports: null,
-		        cpuUtil: null,
+		        cpuChart: null,
 		        memReportsRange: 'last_hour',
 		        memReports: null,
-		        memoryUtil: null,
-		        swapUtil: null,
+		        memoryChart: null,
+		        swapChart: null,
 		        diskReportsRange: 'last_hour',
 		        diskReports: null,
-		        diskUtil: null
+		        diskChart: null
 		    }
 		},
 
@@ -461,15 +488,15 @@ const NodeStatus = {
                 this.sysCs =  genChartOption("Sys IN&CS", n, "collect_at", {"IN":"sys_in", "CS":"sys_cs"});
 		    },
 		    cpuReports: function(n, o) {
-                this.cpuUtil = genChartOption("CPU", n, "collect_at",
+                this.cpuChart = genChartOption("CPU", n, "collect_at",
                                 {"User":"us","System":"sy","Idle":"id","Wait":"wa","Stolen":"st"},
                                 {isStack:true, yAxisFmt: "{value}%"});
 		    },
 		    memReports: function(n, o) {
-                this.memoryUtil = genChartOption("Memory", n, "collect_at",
+                this.memoryChart = genChartOption("Memory", n, "collect_at",
                                     {"Used":"used_mem", "Free":"free_mem"},
                                     {isStack:true, yAxisFmt:"{value}M"});
-                this.swapUtil = genChartOption("Swap", n, "collect_at",
+                this.swapChart = genChartOption("Swap", n, "collect_at",
                                    {"Used":"used_swap", "Free":"free_swap"},
                                    {isStack:true, yAxisFmt:"{value}M"});
 		    },
@@ -490,14 +517,13 @@ const NodeStatus = {
                 for(t in reportsMap) {
                     reports[i++] = reportsMap[t]
                 }
-		        this.diskUtil = genChartOption("Disk Util", reports, "collect_at",
+		        this.diskChart = genChartOption("Disk Util", reports, "collect_at",
                                                spMapping,
                                                {yAxisFmt:"{value}%"});
 		    }
 		},
 
 		created: function() {
-		    this.getAgent();
             this.loadSysReports();
             this.loadCpuReports();
             this.loadMemReports();
@@ -505,13 +531,6 @@ const NodeStatus = {
 		},
 
 		methods: {
-            getAgent: function() {
-                var self = this;
-                var aid = self.aid;
-                Ajax.get(`/api/agents/${aid}`, function(agent) {
-                    self.agent = agent
-                })
-            },
             loadSysReports: function() {
                 var self = this;
                 var aid = self.aid;
@@ -550,7 +569,7 @@ const NodeStatus = {
 const NodeServices = {
     props: ['aid'],
 
-    template: `<div><div class="page-header"><h1>Node Services(s)</h1></div>
+    template: `<div>
         <table class="table table-bordered" v-if="services && services.length > 0">
             <thead>
                 <tr>
@@ -565,7 +584,7 @@ const NodeServices = {
             </thead>
             <tbody>
                 <tr v-for="s in services">
-                    <td>{{s.name}}</td>
+                    <td><router-link :to="{name: 'serviceStatus', params: {aid:aid, service_name:s.name}}">{{s.name}}</router-link></td>
                     <td>
                         <span class="label" :class="{'label-success': s.status=='active', 'label-default': s.status=='inactive'}">{{s.status}}</span>
                     </td>
@@ -600,6 +619,67 @@ const NodeServices = {
                 self.services_status_map = data.services_status_map;
                 console.debug('get services by aid ' + aid)
                 console.debug(data)
+            })
+        }
+    }
+}
+
+const ServiceStatus = {
+    props: ['aid', 'service_name'],
+
+    template: `
+    <div class="panel panel-default">
+        <div class="panel-heading">
+           PIDSTAT
+           <button class="btn btn-sm btn-link" @click="pidstatReportRange='last_hour'">Last Hour</button>
+           <button class="btn btn-sm btn-link" @click="pidstatReportRange='last_day'">Last Day</button>
+           <button class="btn btn-sm btn-link" @click="pidstatReportRange='last_week'">Last Week</button>
+           <button class="btn btn-sm btn-success" @click="loadPidstatReports()">Reload</button>
+        </div>
+        <div class="panel-body row">
+           <div><chart :options="cpuChart" style="width:100%;height:300px"></chart></div>
+           <div><chart :options="memoryChart" style="width:100%;height:300px"></chart></div>
+        </div>
+    </div>`,
+
+    data: function() {
+        return {
+            pidstatReportRange: 'last_hour',
+            pidstatReports: null,
+            cpuChart: null,
+            memoryChart: null
+
+        }
+    },
+
+    created: function() {
+        this.loadPidstatReports();
+    },
+
+    watch: {
+        pidstatReportRange: function(o, n) {
+            this.loadPidstatReports();
+        },
+
+        pidstatReports: function(n, o) {
+            this.cpuChart = genChartOption("CPU Utilization", n, "collect_at",
+                                           {"Total":"cpu_util", "SYS":"cpu_sy", "USER":"cpu_us"},
+                                           {isStack:false, yAxisFmt:"{value}%"});
+            this.memoryChart = genChartOption("Memory Utilization", n, "collect_at",
+                                {"Util":"mem_util"},
+                                {isStack:true, yAxisFmt:"{value}%"});
+
+        }
+    },
+
+    methods: {
+        loadPidstatReports: function() {
+            var self = this;
+            var aid = self.aid;
+            var sname = self.service_name
+            var range = self.pidstatReportRange
+            Ajax.get(`/api/agents/${aid}/services/${sname}/report/pidstat/${range}`, function(reports) {
+                self.pidstatReports = reports
             })
         }
     }
@@ -642,9 +722,13 @@ const router = new VueRouter({
         // 动态路径参数 以冒号开头
         {path: '/', redirect: {name: 'dashboard'}},
         {path: '/dashboard', name: 'dashboard', component:  Dashboard},
-        {path: '/nodes', component:  Nodes},
-        {path: '/nodes/:aid/status', name: 'nodeStatus', component: NodeStatus, props: true},
-        {path: '/nodes/:aid/services', name: 'nodeServices', component: NodeServices, props: true},
+        {path: '/nodes', component: Nodes},
+        {path: '/nodes/:aid', name:'node', component: Node, props:true, children: [
+                {path: 'status', name: 'nodeStatus', component: NodeStatus, props: true},
+                {path: 'services', name: 'nodeServices', component: NodeServices, props: true},
+                {path: 'services/:service_name/status', name: 'serviceStatus', component: ServiceStatus, props: true}
+            ]
+        },
         {path: '/alarms', component:  Alarms},
         {path: '/settings', component:  Settings}
       ]

@@ -98,6 +98,12 @@ def get_agent_services(aid):
     return dump_json({'services': services, 'services_status_map': status_map})
 
 
+@_APP.route('/api/agents/<aid>/services/<service_name>/report/pidstat/<any(last_hour,last_day,last_week):date_range>', methods=['GET'])
+def get_service_pidstats(aid, service_name, date_range='last_hour'):
+    reports = SPidstatReprot.query_by_rtime(aid, service_name, *calc_daterange(date_range))
+    return dump_json(reports)
+
+
 def ui_main(host='0.0.0.0', port=8080, debug=False):
     logging.info('starting master ui...')
     _APP.jinja_env.variable_start_string = '{-'

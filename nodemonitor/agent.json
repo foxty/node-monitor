@@ -67,7 +67,7 @@
     },
 
     {
-      "name": "linux-reactor",
+      "name": "SAPM.Reactor@Linux",
       "type": "java",
       "lookup_keyword": "-Dreactor.home=/opt",
       "env" : {
@@ -80,7 +80,7 @@
     },
 
     {
-      "name": "solaris-reactor",
+      "name": "SAPM.Reactor@Solaris",
       "type": "java",
       "lookup_keyword": "-Dreactor.home=/export",
       "env" : {
@@ -93,7 +93,7 @@
     },
 
     {
-      "name": "linux-collector",
+      "name": "SAPM.Collector@Linux",
       "type": "java",
       "lookup_keyword": "-Dprocess=Collector",
       "env" : {
@@ -106,7 +106,7 @@
     },
 
     {
-      "name": "solaris-collector",
+      "name": "SAPM.Collector@Solaris",
       "type": "java",
       "lookup_keyword": "-Dprocess=Collector",
       "env" : {
@@ -114,6 +114,58 @@
         "log_home": "/export/home/stargus/log/"
       },
       "log_pattern": ["collection_manager.log", "snmp_poller.log"],
+      "metrics": ["pidstat", "jstat-gc"],
+      "clocks": 6
+    },
+
+    {
+      "name": "SAPM.Controller@Linux",
+      "type": "java",
+      "lookup_keyword": "/opt/arris/servassure/jboss/bin/run.jar",
+      "env" : {
+        "java_home": "/opt/arris/servassure/jdk1.6.0_30",
+        "log_home": "/opt/arris/servassure/log"
+      },
+      "log_pattern": ["jboss-*.log"],
+      "metrics": ["pidstat", "jstat-gc"],
+      "clocks": 6
+    },
+
+    {
+      "name": "SAPM.Controller@Solaris",
+      "type": "java",
+      "lookup_keyword": "/export/home/stargus/jboss/bin/run.jar",
+      "env" : {
+        "java_home": "/export/home/stargus/jdk1.6.0_30",
+        "log_home": "/export/home/stargus/log/"
+      },
+      "log_pattern": ["jboss_*.log"],
+      "metrics": ["pidstat", "jstat-gc"],
+      "clocks": 6
+    },
+
+    {
+      "name": "SAPM.NodeReceiver@Linux",
+      "type": "java",
+      "lookup_keyword": "/opt/arris/servassure/node-receiver/conf/receiver.properties",
+      "env" : {
+        "java_home": "/opt/arris/servassure/jdk1.6.0_30",
+        "log_home": "/opt/arris/servassure/log"
+      },
+      "log_pattern": ["jboss-*.log"],
+      "metrics": ["pidstat", "jstat-gc"],
+      "clocks": 6
+    },
+
+    {
+      "name": "SAPM.NodeReceiver@Solaris",
+      "type": "java",
+      "lookup_keyword": "/export/home/stargus/node-receiver/conf/receiver.properties",
+      "env" : {
+        "java_home": "/export/home/stargus/jdk1.6.0_30",
+        "log_home": "/export/home/stargus/log/"
+      },
+      "log_pattern": ["jboss_*.log"],
       "metrics": ["pidstat", "jstat-gc"],
       "clocks": 6
     }

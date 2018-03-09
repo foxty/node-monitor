@@ -17,6 +17,7 @@ import getopt
 from multiprocessing import Process
 from common import SetupError
 _FILES_TO_COPY = ['common.py', 'agent.py', 'agent.json', 'nmagent.sh']
+_VALID_PY = ['Python 2.6', 'Python 2.7']
 _INSTALL_PY27 = True
 _FILE_OF_PY27 = 'Python-2.7.14.tgz'
 
@@ -43,19 +44,19 @@ class NodeConnector(object):
         self.ssh.close()
         logging.info('exit node collector from %s', self.node_host)
 
-    def py27_installed(self):
+    def is_py_installed(self):
         ins, ous, ers = self.ssh.exec_command('python -V')
         out_msg = ous.readline()
         err_msg = ers.readline()
         logging.debug('out=%s, err=%s', out_msg, err_msg)
-        return 'Python 2.7' in (out_msg or err_msg)
+        return len([py for py in _VALID_PY if py in (out_msg or err_msg)]) > 0
 
     def install_py(self, filename):
         logging.info('install %s ...', filename)
         ins, outs, errs = self.ssh.exec_command('tar xvfz %s/Python-2.7.14.tgz && cd Python-2.7.14 '
                                                 '&& ./configure && make && make install && python2 -V' %
                                                 self.APP_DIR)
-        if self.py27_installed():
+        if self.is_py_installed():
             logging.info('%s installed success.', filename)
         else:
             logging.error('\n'.join(errs.readlines()))
@@ -122,7 +123,7 @@ def push_to_nodes(nodelist):
         try:
             with NodeConnector(host, user, password) as nc:
                 logging.info('checking node %s', host)
-                need_py27 = _INSTALL_PY27 and not nc.py27_installed()
+                need_py27 = _INSTALL_PY27 and not nc.is_py_installed()
                 if need_py27:
                     if not os.path.exists(_FILE_OF_PY27):
                         download_py()

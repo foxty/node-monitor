@@ -131,7 +131,7 @@ class Msg(object):
 
     @classmethod
     def decode(cls, header_list=[], body=''):
-        headers = {h[:h.index(':')]: h[h.index(':') + 1:] for h in header_list}
+        headers = dict((h[:h.index(':')], h[h.index(':') + 1:]) for h in header_list)
         body = base64.b64decode(body)
         return Msg(headers=headers, body=body)
 
@@ -270,6 +270,6 @@ def load_json(str):
             return v
 
     def obj_hook(dct):
-        return {k: decode_date(v) for k, v in dct.items()}
+        return dict((k, decode_date(v)) for k, v in dct.items())
 
     return json.loads(str, object_hook=obj_hook)

@@ -471,7 +471,7 @@ class Model(dict):
         return r[0] if r else 0
 
 
-class ChronoModel(object):
+class AgentChronoModel(object):
 
     @classmethod
     def query_by_ctime(cls, aid, start, end):
@@ -480,6 +480,17 @@ class ChronoModel(object):
     @classmethod
     def query_by_rtime(cls, aid, start, end):
         return cls.query(where='aid=? AND recv_at >= ? AND recv_at <= ?', params=[aid, start, end])
+
+
+class ServiceChronoModel(object):
+
+    @classmethod
+    def query_by_ctime(cls, aid, service_name, start, end):
+        return cls.query(where='aid=? AND service_name=? AND collect_at >= ? AND collect_at <= ?', params=[aid, service_name, start, end])
+
+    @classmethod
+    def query_by_rtime(cls, aid, service_name, start, end):
+        return cls.query(where='aid=? AND service_name=? AND recv_at >= ? AND recv_at <= ?', params=[aid, service_name, start, end])
 
 
 class Agent(Model):
@@ -498,12 +509,12 @@ class Agent(Model):
         return cls.query(orderby='last_sys_load1 DESC LIMIT ?', params=[count])
 
 
-class NMetric(Model, ChronoModel):
+class NMetric(Model, AgentChronoModel):
     _TABLE = 'node_metric_raw'
     _FIELDS = ['aid', 'collect_at', 'category', 'content', 'recv_at']
 
 
-class NMemoryReport(Model, ChronoModel):
+class NMemoryReport(Model, AgentChronoModel):
     _TABLE = 'node_memory_report'
     _FIELDS = ['aid', 'collect_at', 'total_mem', 'used_mem', 'free_mem',
               'cache_mem', 'total_swap', 'used_swap', 'free_swap', 'recv_at']
@@ -517,7 +528,7 @@ class NMemoryReport(Model, ChronoModel):
         return self.free_mem*100/self.total_mem if self.free_mem and self.total_mem else None
 
 
-class NCPUReport(Model, ChronoModel):
+class NCPUReport(Model, AgentChronoModel):
     _TABLE = 'node_cpu_report'
     _FIELDS = ['aid', 'collect_at', 'us', 'sy', 'id', 'wa', 'st', 'recv_at']
 
@@ -526,19 +537,19 @@ class NCPUReport(Model, ChronoModel):
         return self.us + self.sy if self.us is not None and self.sy is not None else None
 
 
-class NSystemReport(Model, ChronoModel):
+class NSystemReport(Model, AgentChronoModel):
     _TABLE = 'node_system_report'
     _FIELDS = ['aid', 'collect_at', 'uptime', 'users', 'load1', 'load5',
               'load15', 'procs_r', 'procs_b', 'sys_in', 'sys_cs', 'recv_at']
 
 
-class NDiskReport(Model, ChronoModel):
+class NDiskReport(Model, AgentChronoModel):
     _TABLE = 'node_disk_report'
     _FIELDS = ['aid', 'collect_at', 'fs', 'size', 'used',
               'available', 'used_util', 'mount_point', 'recv_at']
 
 
-class SMetric(Model, ChronoModel):
+class SMetric(Model, AgentChronoModel):
     _TABLE = 'service_metric_raw'
     _FIELDS = ['aid', 'collect_at', 'name', 'pid',
               'category', 'content', 'recv_at']
@@ -569,7 +580,7 @@ class SInfoHistory(Model):
     _FIELDS = ['aid', 'name', 'pid', 'change_at']
 
 
-class SPidstatReprot(Model, ChronoModel):
+class SPidstatReprot(Model, ServiceChronoModel):
     _TABLE = 'service_pidstat_report'
     _FIELDS = ['aid', 'collect_at', 'service_name', 'tid', 'cpu_us', 'cpu_sy', 'cpu_gu', 'cpu_util',
               'mem_minflt', 'mem_majflt', 'mem_vsz', 'mem_rss', 'mem_util',
