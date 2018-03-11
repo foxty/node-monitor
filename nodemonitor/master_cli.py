@@ -83,9 +83,10 @@ class NodeConnector(object):
 
     def launch_agent(self, mhost):
         """Launch remote agent via ssh channel"""
-        logging.info('start agent on %s, master=%s', self.node_host, mhost)
-        self.ssh.exec_command('service nmagent start')
-        logging.info('agent started on host %s', mhost)
+        _, stdout, stderr = self.ssh.exec_command('service nmagent start')
+        out = stdout.readlines()
+        err = stderr.readlines()
+        logging.info('starting agent on node %s, out=%s, error=%s', self.node_host, out, err)
 
     def stop_agent(self):
         """Stop agent in remote node"""

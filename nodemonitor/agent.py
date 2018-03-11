@@ -364,8 +364,8 @@ class NodeAgent:
     def _do_reg(self):
         """Produce a agent reg message after connected"""
         logging.info('do registration...')
-        osname = os.name
-        reg_msg = Msg.create_msg(self._agentid, Msg.A_REG, dump_json(osname))
+        reg_data = {'os': os.name, 'hostname': self._hostname}
+        reg_msg = Msg.create_msg(self._agentid, Msg.A_REG, dump_json(reg_data))
         self.add_msg(reg_msg)
 
     def _loop(self):

@@ -702,11 +702,14 @@ class Master(object):
     # Message handlers
     def _agent_reg(self, msg):
         agent = self.find_agent(msg.agentid)
+        body = load_json(msg.body)
+        ahostname = body['hostname']
         if agent:
+            agent.set(name=ahostname)
             logging.info('activate existing agent %s', agent)
             # TODO activation
         else:
-            agent = Agent(msg.agentid, msg.client_addr[0], msg.client_addr[0], datetime.now())
+            agent = Agent(msg.agentid, ahostname, msg.client_addr[0], datetime.now())
             agent.save()
             logging.info('new agent %s registered', agent)
             self._agents[agent.aid] = agent
