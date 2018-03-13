@@ -17,7 +17,7 @@ import getopt
 from multiprocessing import Process
 from common import SetupError
 _FILES_TO_COPY = ['common.py', 'agent.py', 'agent.json', 'nmagent.sh']
-_VALID_PY = ['Python 2.6', 'Python 2.7']
+_VALID_PY = ['Python 2.4', 'Python 2.5', 'Python 2.6', 'Python 2.7']
 _INSTALL_PY27 = True
 _FILE_OF_PY27 = 'Python-2.7.14.tgz'
 
@@ -184,7 +184,7 @@ if __name__ == '__main__':
         elif opt == '--stop-agents':
             with open(v, 'r') as f:
                 nodelist = [[ele.strip() for ele in l.strip().split(',')]
-                            for l in f.readlines() if l and not l.strip().startswith('#')]
+                            for l in f.readlines() if l and not l.strip().startswith('#') and l.strip()]
             stop_agents(nodelist)
         elif opt in ['-h', '--help']:
             logging.info('print help')

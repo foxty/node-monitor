@@ -7,9 +7,7 @@ Created on 2017-12-22
 """
 
 import unittest
-import subprocess
-import json
-from mock import MagicMock, patch
+from mock import MagicMock
 from common import Msg
 from agent import AgentConfig, NodeCollector
 
@@ -18,7 +16,7 @@ class AgentConfigTest(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
-        cls.CONFIG = AgentConfig('agent_test.json')
+        cls.CONFIG = AgentConfig()
 
     def test_clock_interval(self):
         self.assertEqual(10, self.CONFIG.clock_interval)
@@ -59,25 +57,22 @@ class NodeCollectorTest(unittest.TestCase):
             def add_msg(self, msg):
                 self.msg = msg
 
-        class MockAgentConfig(object):
-            def __init__(self, cfgpath):
-                with open(cfgpath) as f:
-                    self.config = json.load(f)
+        class MockAgentConfig(AgentConfig):
 
             @property
             def valid_node_metrics(self):
-                return self.config['node_metrics']
+                return self.CONFIG['node_metrics']
 
             @property
             def valid_services(self):
-                return self.config['services']
+                return self.CONFIG['services']
 
             @property
             def clock_interval(self):
-                return self.config['clock_interval']
+                return self.CONFIG['clock_interval']
 
         cls.AGENT = MockAgent()
-        cls.COLLECTOR = NodeCollector(cls.AGENT, MockAgentConfig('agent_test.json'))
+        cls.COLLECTOR = NodeCollector(cls.AGENT, MockAgentConfig())
         cls.COLLECTOR._get_cmd_result = MagicMock(return_value='cmd content')
 
     def test_trans_cmd(self):
@@ -89,7 +84,7 @@ class NodeCollectorTest(unittest.TestCase):
     def test_prod_heartbeat(self):
         self.COLLECTOR._prod_heartbeat()
         hbmsg = self.AGENT.msg
-        msgbody = json.loads(hbmsg.body)
+        msgbody = hbmsg.body
         self.assertEqual(Msg.A_HEARTBEAT, hbmsg.msg_type)
         self.assertEqual('1', hbmsg.agentid)
         self.assertTrue('datetime' in msgbody)
@@ -100,7 +95,7 @@ class NodeCollectorTest(unittest.TestCase):
 
         self.COLLECTOR._collect_nmetrics(6)
         msg = self.AGENT.msg
-        msgbody = json.loads(msg.body)
+        msgbody = msg.body
         self.assertIsNotNone(msg)
         self.assertEqual('1', msg.agentid)
         self.assertEqual(Msg.A_NODE_METRIC, msg.msg_type)
@@ -111,7 +106,7 @@ class NodeCollectorTest(unittest.TestCase):
 
         self.COLLECTOR._collect_nmetrics(60)
         msg = self.AGENT.msg
-        msgbody = json.loads(msg.body)
+        msgbody = msg.body
         self.assertIsNotNone(msg)
         self.assertEqual('1', msg.agentid)
         self.assertEqual(msg.A_NODE_METRIC, msg.msg_type)

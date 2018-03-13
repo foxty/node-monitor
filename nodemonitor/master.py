@@ -12,13 +12,13 @@ Node monitor master:
 # ==============================
 #   Node Master
 # ==============================
-import os
-import collections
+import logging
 import re
 import socket
 import SocketServer
 import sqlite3
-from common import *
+from datetime import datetime
+from common import Msg, InvalidMsgError, TextTable
 
 
 # ====================
@@ -702,8 +702,7 @@ class Master(object):
     # Message handlers
     def _agent_reg(self, msg):
         agent = self.find_agent(msg.agentid)
-        body = load_json(msg.body)
-        ahostname = body['hostname']
+        ahostname = msg.body['hostname']
         if agent:
             agent.set(name=ahostname)
             logging.info('activate existing agent %s', agent)
@@ -723,7 +722,7 @@ class Master(object):
     def _agent_nmetrics(self, msg):
         aid = msg.agentid
         agent = self._agents.get(aid)
-        body = load_json(msg.body)
+        body = msg.body
         collect_time = msg.collect_at
 
         metrics = map(lambda x: NMetric(aid, collect_time, x[0], x[1], datetime.now()), body.items())
@@ -763,7 +762,7 @@ class Master(object):
     def _agent_smetrics(self, msg):
         aid = msg.agentid
         collect_at = msg.collect_at
-        body = load_json(msg.body)
+        body = msg.body
         sname = body['name']
         spid = body['pid']
         stype = body.get('type', None)

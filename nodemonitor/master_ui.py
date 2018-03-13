@@ -9,7 +9,7 @@ UI for master node
 """
 import logging
 from datetime import datetime, timedelta
-from flask import Flask, render_template, jsonify
+from flask import Flask, render_template
 from common import dump_json
 from master import Agent, NSystemReport, NCPUReport, NMemoryReport, NDiskReport, SInfo, SPidstatReprot
 logging.basicConfig(level=logging.INFO)

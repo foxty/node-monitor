@@ -13,19 +13,23 @@ Common for node monitor
 import sys
 import re
 import logging
+try:
+    import json, json.decoder
+except:
+    pass
+import pickle
 import base64
-import json, json.decoder
 from datetime import datetime, date, time
 from struct import *
 
 logging.basicConfig(level=logging.INFO,
-                    format='%(asctime)s - %(threadName)s:%(levelname)s:%(name)s:%(funcName)s:%(message)s')
-DATETIME_FMT = '%Y-%m-%d %H:%M:%S.%f'
-DATETIME_RE = re.compile('^\\d{4}-\\d{1,2}-\\d{1,2} \\d{2}:\\d{2}:\\d{2}\\.\\d{6}$')
+                    format='%(asctime)s - %(threadName)s:%(levelname)s:%(name)s:%(module)s-%(lineno)d:%(message)s')
+DATETIME_FMT = '%Y-%m-%d %H:%M:%S'
+DATETIME_RE = re.compile('^\\d{4}-\\d{1,2}-\\d{1,2} \\d{2}:\\d{2}:\\d{2}$')
 DATE_FMT = '%Y-%m-%d'
 DATE_RE = re.compile('^\\d{4}-\\d{1,2}-\\d{1,2}$')
-TIME_FMT = '%H:%M:%S.%f'
-TIME_RE = re.compile('^\\d{2}:\\d{2}:\\d{2}\\.\\d{6}$')
+TIME_FMT = '%H:%M:%S'
+TIME_RE = re.compile('^\\d{2}:\\d{2}:\\d{2}$')
 
 
 class ConfigError(Exception):
@@ -65,7 +69,8 @@ class Msg(object):
     H_COLLECT_AT = 'CollectAt'
     H_SEND_AT = 'SendAt'
 
-    REQ_HEADERS = [H_AID, H_MSGTYPE, H_COLLECT_AT, H_SEND_AT]
+    SUPPORT_HEADERS = [H_AID, H_MSGTYPE, H_COLLECT_AT, H_SEND_AT]
+    SUPPORT_TYPES = [A_REG, A_HEARTBEAT, A_STOP, M_ACT, A_NODE_METRIC, A_SERVICE_METRIC]
 
     def __init__(self, headers=None, body=""):
         self._headers = {}
@@ -73,41 +78,35 @@ class Msg(object):
             self._headers.update(headers)
         self._body = body
 
+    def set_header(self, header, value):
+        if header not in self.SUPPORT_HEADERS:
+            raise InvalidMsgError('header %s not supported.' % header)
+        if header in [self.H_COLLECT_AT, self.H_SEND_AT]:
+            value = value.strftime(DATETIME_FMT)
+        self._headers[header] = value
+
     @property
     def agentid(self):
-        return self._headers['AgentID']
+        return self._headers[self.H_AID]
 
     @property
     def msg_type(self):
         return self._headers[self.H_MSGTYPE]
 
-    @msg_type.setter
-    def msg_type(self, value):
-        self._headers[self.H_MSGTYPE] = value
-
     @property
     def collect_at(self):
-        return self._headers[self.H_COLLECT_AT] if self.H_COLLECT_AT in self._headers else None
-
-    @collect_at.setter
-    def collect_at(self, dt):
-        self._headers[self.H_COLLECT_AT] = dt.strftime(DATETIME_FMT)
+        return self._headers.get(self.H_COLLECT_AT, None)
 
     @property
     def send_at(self):
-        return self._headers[self.H_SEND_AT] if self.H_SEND_AT in self._headers else None
-
-    @send_at.setter
-    def send_at(self, dt):
-        self._headers[self.H_SEND_AT] = dt.strftime(DATETIME_FMT)
+        return self._headers.get(self.H_SEND_AT, None)
 
     @property
     def body(self):
         return self._body
 
-    @body.setter
-    def body(self, value):
-        self._body = value
+    def set_body(self, body):
+        self._body = body
 
     def encode(self):
         """encode msg to list of headers and body content.
@@ -115,7 +114,7 @@ class Msg(object):
         [MSG:A_REG, AgentID:xxxxxxx, SendTime:YYYYMMDD HH:mm:ss], <body>
         """
         head = map(lambda x: '%s:%s' % x, self._headers.items())
-        encbody = base64.b64encode(self._body)
+        encbody = base64.b64encode(pickle.dumps(self._body, protocol=pickle.HIGHEST_PROTOCOL))
         return head, encbody
 
     def __eq__(self, other):
@@ -132,7 +131,7 @@ class Msg(object):
     @classmethod
     def decode(cls, header_list=[], body=''):
         headers = dict((h[:h.index(':')], h[h.index(':') + 1:]) for h in header_list)
-        body = base64.b64decode(body)
+        body = pickle.loads(base64.b64decode(body))
         return Msg(headers=headers, body=body)
 
     @classmethod
@@ -165,8 +164,10 @@ class TextTable(object):
                        for l in content.splitlines() if l.strip()]
         tbl_size = len(self._table)
         self._size = tbl_size - (header_ln + 1)
-        self._hheader = self._table[header_ln] if tbl_size > header_ln else None
-        self._tbody = self._table[header_ln + 1:] if tbl_size > header_ln + 1 else None
+        if tbl_size > header_ln:
+            self._hheader = self._table[header_ln]
+        if tbl_size > header_ln + 1:
+            self._tbody = self._table[header_ln + 1:]
         if vheader:
             self._vheader = [row[0] for row in self._table]
 
@@ -181,7 +182,10 @@ class TextTable(object):
         :param default: default value if header not exist
         :return: list of values (in case multi columns has same header name)
         """
-        rowno = rowid if type(rowid) is int else self._vheader.index(rowid) - 1
+        if type(rowid) is int:
+            rowno = rowid
+        else:
+            rowno = self._vheader.index(rowid) - 1
         idxs = []
         start = 0
         while True:
@@ -189,13 +193,16 @@ class TextTable(object):
                 idx = self._hheader.index(header, start)
                 idxs.append(idx)
                 start = idx + 1
-            except ValueError as e:
+            except ValueError:
                 break
         return [conv_func(self._tbody[rowno][idx]) for idx in idxs]
 
     def get(self, rowno, header, default=None, conv_func=str):
         values = self.gets(rowno, header, conv_func=conv_func)
-        return values[0] if values else default
+        if values:
+            return values[0]
+        else:
+            return default
 
     def get_row(self, rowno):
         return tuple(self._tbody[rowno])

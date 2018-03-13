@@ -16,13 +16,32 @@ import logging
 import getopt
 import socket
 import select
+import re
 import Queue as Q
 import threading
-from subprocess import Popen, PIPE, call, CalledProcessError
-from common import *
+from datetime import datetime
+from subprocess import Popen, PIPE, call
+from common import Msg, InvalidMsgError, is_win, is_sunos, ostype, OSType
 
 
 _MAX_BACKOFF_SECOND = 60  # in agent retry policy
+
+
+class CalledProcessError(Exception):
+    """This exception is raised when a process run by check_call() or
+    check_output() returns a non-zero exit status.
+
+    Attributes:
+      cmd, returncode, output
+    """
+    def __init__(self, returncode, cmd, output=None):
+        self.returncode = returncode
+        self.cmd = cmd
+        self.output = output
+
+
+    def __str__(self):
+        return "Command '%s' returned non-zero exit status %d" % (self.cmd, self.returncode)
 
 
 def check_output(*popenargs, **kwargs):
@@ -58,13 +77,194 @@ def check_output(*popenargs, **kwargs):
     return output
 
 
+def is_valid_exist(cmd):
+    checkcmd = 'which'
+    if is_win():
+        checkcmd = 'where'
+    if is_sunos():
+        checkcmd = 'type'
+    logging.info('check "%s" by "%s"', cmd, checkcmd)
+    return call([checkcmd, cmd]) == 0
+
+
 class AgentConfig(object):
 
-    def __init__(self, cfgpath):
-        if not os.path.exists(cfgpath) or not os.path.isfile(cfgpath):
-            raise ConfigError('%s not found'%cfgpath)
-        with open(cfgpath) as f:
-            config = json.load(f)
+    CONFIG = {
+        "clock_interval": 10,
+        "heartbeat_clocks": 6,
+        "node_metrics": {
+            "dstat-sys": {
+                "cmd": ["dstat", "-lyp", "1", "1"],
+                "clocks": 6
+            },
+            "dstat-cpu": {
+                "cmd": ["dstat", "-c", "1", "1"],
+                "clocks": 6
+            },
+            "dstat-mem": {
+                "cmd": ["dstat", "-msg", "1", "1"],
+                "clocks": 6
+            },
+            "dstat-socket": {
+                "cmd": ["dstat", "--socket", "1", "1"],
+                "clocks": 6
+            },
+            "dstat-dio": {
+                "cmd": ["dstat", "-dr", "1", "1"],
+                "clocks": 6
+            },
+            "w": {
+                "cmd": ["w"],
+                "clocks": 6
+            },
+            "free": {
+                "cmd": ["free", "-m"],
+                "clocks":6
+            },
+            "vmstat": {
+                "cmd": ["vmstat","1", "2"],
+                "clocks": 6
+            },
+            "netstat": {
+                "cmd": ["netstat", "-s"],
+                "clocks": 6
+            },
+            "df": {
+                "cmd": ["df", "-kP"],
+                "clocks":60
+            }
+        },
+
+        "service_metrics": {
+            "pidstat": {
+                "type": "all",
+                "cmd": ["pidstat", "-tdruh", "-p", "${pid}"]
+            },
+            "jstat-gc": {
+                "type": "java",
+                "cmd": ["${java_home}/bin/jstat", "-gc", "${pid}"]
+            }
+        },
+
+        "services": [
+
+            {
+                "name": "agent",
+                "type": "python",
+                "lookup_keyword": "agent.py",
+                "log_pattern": ["agent.log"],
+                "metrics": ["pidstat"],
+                "clocks": 6
+            },
+
+            {
+                "name": "SAPM.Reactor@Linux",
+                "type": "java",
+                "lookup_keyword": "-Dreactor.home=/opt",
+                "env" : {
+                    "java_home": "/opt/arris/servassure/jdk1.8.0_40/",
+                    "log_home": "/opt/arris/servassure/log"
+                },
+                "log_pattern": ["reactor.*"],
+                "metrics": ["pidstat", "jstat-gc"],
+                "clocks": 6
+            },
+
+            {
+                "name": "SAPM.Reactor@Solaris",
+                "type": "java",
+                "lookup_keyword": "-Dreactor.home=/export",
+                "env" : {
+                    "java_home": "/export/home/stargus/jdk1.8.0_40",
+                    "log_home": "/export/home/stargus/log/"
+                },
+                "log_pattern": ["reactor.*"],
+                "metrics": ["pidstat", "jstat-gc"],
+                "clocks": 6
+            },
+
+            {
+                "name": "SAPM.Collector@Linux",
+                "type": "java",
+                "lookup_keyword": "/opt/arris/servassure/jdk1.8.0_40/bin/java -Dprocess=Collector",
+                "env" : {
+                    "java_home": "/opt/arris/servassure/jdk1.8.0_40/",
+                    "log_home": "/opt/arris/servassure/log"
+                },
+                "log_pattern": ["collection_manager.log", "snmp_poller.log"],
+                "metrics": ["pidstat", "jstat-gc"],
+                "clocks": 6
+            },
+
+            {
+                "name": "SAPM.Collector@Solaris",
+                "type": "java",
+                "lookup_keyword": "/export/home/stargus/jdk1.8.0_40/bin/java -Dprocess=Collector",
+                "env" : {
+                    "java_home": "/export/home/stargus/jdk1.8.0_40",
+                    "log_home": "/export/home/stargus/log/"
+                },
+                "log_pattern": ["collection_manager.log", "snmp_poller.log"],
+                "metrics": ["pidstat", "jstat-gc"],
+                "clocks": 6
+            },
+
+            {
+                "name": "SAPM.Controller@Linux",
+                "type": "java",
+                "lookup_keyword": "/opt/arris/servassure/jboss/bin/run.jar",
+                "env" : {
+                    "java_home": "/opt/arris/servassure/jdk1.6.0_30",
+                    "log_home": "/opt/arris/servassure/log"
+                },
+                "log_pattern": ["jboss-*.log"],
+                "metrics": ["pidstat", "jstat-gc"],
+                "clocks": 6
+            },
+
+            {
+                "name": "SAPM.Controller@Solaris",
+                "type": "java",
+                "lookup_keyword": "/export/home/stargus/jboss/bin/run.jar",
+                "env" : {
+                    "java_home": "/export/home/stargus/jdk1.6.0_30",
+                    "log_home": "/export/home/stargus/log/"
+                },
+                "log_pattern": ["jboss_*.log"],
+                "metrics": ["pidstat", "jstat-gc"],
+                "clocks": 6
+            },
+
+            {
+                "name": "SAPM.NodeReceiver@Linux",
+                "type": "java",
+                "lookup_keyword": "/opt/arris/servassure/node-receiver/conf/receiver.properties",
+                "env" : {
+                    "java_home": "/opt/arris/servassure/jdk1.6.0_30",
+                    "log_home": "/opt/arris/servassure/log"
+                },
+                "log_pattern": ["jboss-*.log"],
+                "metrics": ["pidstat", "jstat-gc"],
+                "clocks": 6
+            },
+
+            {
+                "name": "SAPM.NodeReceiver@Solaris",
+                "type": "java",
+                "lookup_keyword": "/export/home/stargus/node-receiver/conf/receiver.properties",
+                "env" : {
+                    "java_home": "/export/home/stargus/jdk1.6.0_30",
+                    "log_home": "/export/home/stargus/log/"
+                },
+                "log_pattern": ["jboss_*.log"],
+                "metrics": ["pidstat", "jstat-gc"],
+                "clocks": 6
+            }
+        ]
+    }
+
+    def __init__(self):
+        config = self.CONFIG
         self._node_metrics = config.get('node_metrics', {})
         self._valid_node_metrics = None
         self._service_metrics = config.get('service_metrics', {})
@@ -77,19 +277,18 @@ class AgentConfig(object):
         self._hb_clocks = config.get('heartbeat_clocks', 60)
 
     def _validate(self):
-        checkcmd = 'where' if is_win() else 'which'
         # check node metrics
-        logging.info('check node metric command by %s', checkcmd)
+        logging.info('check node metric commands')
         self._valid_node_metrics = dict((k, v) for k, v in self._node_metrics.items()
-                                        if call([checkcmd, v['cmd'][0]]) == 0)
+                                        if is_valid_exist(v['cmd'][0]))
         logging.info('valid node metrics = %s', self._valid_node_metrics)
-
-        logging.info('service metrics = %s', self._service_metrics)
 
         # check services
         invalid_serivces = [s for s in self._services if 'name' not in s or 'lookup_keyword' not in s]
-        self._valid_services = [s for s in self._services if s not in invalid_serivces] \
-            if invalid_serivces else self._services
+        if invalid_serivces:
+            self._valid_services = [s for s in self._services if s not in invalid_serivces]
+        else:
+             self._valid_services = self._services
         logging.info('valid service=%s, invalid services=%s',
                      map(lambda x: x['name'], self._valid_services),
                      map(lambda x: x['name'], invalid_serivces))
@@ -138,22 +337,23 @@ class NodeCollector(threading.Thread):
             self._delay.wait(interval)
             time1 = datetime.now()
             try:
-                if loops % self._config.hb_clocks == 0:
-                    self._prod_heartbeat()
-                self._collect_nmetrics(loops)
-                self._collect_smetrics(loops)
-            except Exception as e:
-                logging.exception('error during collect metrics, wait for next round.')
+                try:
+                    if loops % self._config.hb_clocks == 0:
+                        self._prod_heartbeat()
+                    self._collect_nmetrics(loops)
+                    self._collect_smetrics(loops)
+                except Exception:
+                    logging.exception('error during collect metrics, wait for next round.')
             finally:
                 loops = loops + 1
-            time2 = datetime.now()
-            time_used = (time2 - time1).seconds
-            interval = self._config.clock_interval - time_used
+                time2 = datetime.now()
+                time_used = (time2 - time1).seconds
+                interval = self._config.clock_interval - time_used
 
     def _prod_heartbeat(self):
         logging.info('produce heartbeat...')
         body = {'datetime': datetime.now()}
-        hb_msg = Msg.create_msg(self._agentid, Msg.A_HEARTBEAT, dump_json(body))
+        hb_msg = Msg.create_msg(self._agentid, Msg.A_HEARTBEAT, body)
         self._agent.add_msg(hb_msg)
 
     def _translate_cmd(self, cmd, context={}):
@@ -164,7 +364,8 @@ class NodeCollector(threading.Thread):
             if m:
                 var = m.group(1)
                 value = context.get(var, None)
-                c = c.replace('${%s}' % var, value) if value is not None else c
+                if value is not None:
+                    c = c.replace('${%s}' % var, value)
             newcmd.append(c)
         return newcmd
 
@@ -178,9 +379,9 @@ class NodeCollector(threading.Thread):
         try:
             output = check_output(cmd)
             result = output
-        except CalledProcessError as e:
+        except Exception:
             logging.exception('call cmd %s failed', cmd)
-            result = e.output
+            result = 'call cmd %s failed.' % cmd
         return result
 
     def _collect_nmetrics(self, loops):
@@ -194,8 +395,8 @@ class NodeCollector(threading.Thread):
             if loops % v.get('clocks', 6) == 0:
                 nmetrics_result[k] = self._get_cmd_result(v['cmd'])
         if nmetrics_result:
-            msg = Msg.create_msg(self._agentid, Msg.A_NODE_METRIC, dump_json(nmetrics_result))
-            msg.collect_at = datetime.now()
+            msg = Msg.create_msg(self._agentid, Msg.A_NODE_METRIC, nmetrics_result)
+            msg.set_header(msg.H_COLLECT_AT, datetime.now())
             self._agent.add_msg(msg)
             logging.info('%d node metrics collected', len(nmetrics_result))
         else:
@@ -237,14 +438,17 @@ class NodeCollector(threading.Thread):
             try:
                 metric = self._config.service_metrics[mname]
                 cmd = self._translate_cmd(metric['cmd'], env)
+                if not is_valid_exist(cmd[0]):
+                    logging.debug('cmd %s is not a valid command', cmd[0])
+                    continue
                 service_metrics[mname] = self._get_cmd_result(cmd)
-            except Exception as e:
+            except Exception:
                 logging.exception('collect metrics %s for service %s failed: cmd=%s', mname, name, cmd)
         service_result['metrics'] = service_metrics
         if service_metrics:
             # send message
-            msg = Msg.create_msg(self._agentid, Msg.A_SERVICE_METRIC, dump_json(service_result))
-            msg.collect_at = datetime.now()
+            msg = Msg.create_msg(self._agentid, Msg.A_SERVICE_METRIC, service_result)
+            msg.set_header(Msg.H_COLLECT_AT, datetime.now())
             self._agent.add_msg(msg)
             logging.info('%d metrics collected for %s.', len(service_metrics), name)
         else:
@@ -266,7 +470,10 @@ class NodeCollector(threading.Thread):
             logging.debug('find psinfo of %s: %s', servname, psinfo)
             if len(psinfo) == 1:
                 pid = [e for e in psinfo[0].split(' ') if e][1]
-                service_pid = pid if pid and pid.isdigit() else None
+                if pid and pid.isdigit():
+                    service_pid = pid
+                else:
+                    service_pid = None
             logging.info('pid of service %s is %s', servname, service_pid)
         except Exception:
             logging.exception('look up service %s by %s failed', servname, lookup_keyword)
@@ -277,32 +484,37 @@ class NodeAgent:
     """Agent will running the node as and keep send stats data to Master via TCP connection."""
     SEND_BUF = 128*1024
 
-    def __init__(self, master_host='localhost', master_port=7890, configfile="./agent.json"):
-
-        if not os.path.isfile(configfile):
-            raise ConfigError('agent can not find any config file in %s', configfile)
-
+    def __init__(self, master_host='localhost', master_port=7890):
+        logging.info('init agent...')
         self._hostname = socket.gethostname()
         self._agentid = self._gen_agentid()
         self._master_addr = (master_host, master_port)
         self._started = False
         self._queue = Q.Queue(maxsize=16)
         self._retry = threading.Event()
-        self._config = AgentConfig(configfile)
+        self._config = AgentConfig()
         self._stat_collector = NodeCollector(self, self._config)
-        logging.info('agent init with id=%s, master=%s, config=%s, hostname=%s',
-                     self._agentid, self._master_addr, configfile, self._hostname)
+        logging.info('agent init with id=%s, master=%s, hostname=%s',
+                     self._agentid, self._master_addr, self._hostname)
 
     @property
     def agentid(self):
         return self._agentid
 
     def _gen_agentid(self):
+        aid = None
         if ostype() == OSType.WIN:
-            return self._hostname[0:8] if len(self._hostname) >= 8 else self._hostname.ljust(8, 'x')
+            if len(self._hostname) >= 8:
+                aid = self._hostname[0:8]
+            else:
+                aid = self._hostname.ljust(8, 'x')
         else:
             hostid = check_output(['hostid'])
-            return hostid[0:8] if len(hostid) >= 8 else hostid.ljust(8, 'x')
+            if len(hostid) >= 8:
+                aid = hostid[0:8]
+            else:
+                aid = hostid.ljust(8, 'x')
+        return aid
 
     def _connect_master(self):
         if getattr(self, 'sock', None):
@@ -317,16 +529,17 @@ class NodeAgent:
         while 1:
             tried = tried + 1
             try:
-                sock = socket.create_connection(self._master_addr, 5)
+                sock = socket.socket()
+                sock.connect(self._master_addr)
                 sock.setblocking(False)
                 sendbuf =  sock.getsockopt(socket.SOL_SOCKET, socket.SO_SNDBUF)
                 logging.info('default send buffer is %s, will change to %s.', sendbuf, self.SEND_BUF)
                 sock.setsockopt(socket.SOL_SOCKET, socket.SO_SNDBUF, 1024*128)
                 break
-            except socket.error as e:
+            except socket.error:
                 sleeptime = min(_MAX_BACKOFF_SECOND, tried ** 2)
-                logging.exception('Cannot connect %s(tried=%d) due to %s, will retry after %d seconds...',
-                                  self._master_addr, tried, e, sleeptime)
+                logging.exception('Cannot connect %s(tried=%d), retry after %d seconds...',
+                                  self._master_addr, tried, sleeptime)
                 self._retry.wait(sleeptime)
         logging.info('connect master(%s) succed.', self._master_addr)
         self.sock = sock
@@ -365,7 +578,7 @@ class NodeAgent:
         """Produce a agent reg message after connected"""
         logging.info('do registration...')
         reg_data = {'os': os.name, 'hostname': self._hostname}
-        reg_msg = Msg.create_msg(self._agentid, Msg.A_REG, dump_json(reg_data))
+        reg_msg = Msg.create_msg(self._agentid, Msg.A_REG, reg_data)
         self.add_msg(reg_msg)
 
     def _loop(self):
@@ -384,11 +597,11 @@ class NodeAgent:
                     self._do_write(wlist[0])
                 if elist:
                     self._do_error(elist[0])
-            except socket.error as se:
-                logging.exception(se)
+            except socket.error:
+                logging.exception('error in loop.')
                 self._connect_master()
-            except InvalidMsgError as ime:
-                logging.error(ime)
+            except InvalidMsgError:
+                logging.error('invalid message received.')
                 self.stop()
 
     def _do_read(self, sock):
@@ -402,10 +615,10 @@ class NodeAgent:
         while not self._queue.empty():
             try:
                 msg = self._queue.get_nowait()
-            except Q.Empty as e:
+            except Q.Empty:
                 logging.warn('Try to get msg from empty queue..')
                 return
-            msg.send_at = datetime.now()
+            msg.set_header(msg.H_SEND_AT, datetime.now())
             headers, body = msg.encode()
             headers.append(body)
             data = '\n'.join(headers)
@@ -419,11 +632,12 @@ class NodeAgent:
         times = 0
         while data:
             try:
-                sent = sock.send(data)
-                data = data[sent:]
-            except socket.error as e:
-                logging.exception('send data failed by times = %d', times)
-                continue
+                try:
+                    sent = sock.send(data)
+                    data = data[sent:]
+                except socket.error:
+                    logging.exception('send data failed by times = %d', times)
+                    continue
             finally:
                 times += 1
         return times
@@ -435,17 +649,17 @@ class NodeAgent:
 if __name__ == '__main__':
 
     try:
-        opts, args = getopt.getopt(sys.argv[1:], 'p:c:')
-    except getopt.GetoptError as e:
+        opts, args = getopt.getopt(sys.argv[1:], 'p:')
+    except getopt.GetoptError:
         print('Wrong usage')
         sys.exit(2)
-    mhost = args[0] if len(args) == 1 else 'localhost'
-    cfg, port = ('agent.json', 7890)
+    mhost = 'localhost'
+    if len(args) == 1:
+        mhost = args[0]
+    port = 7890
     for opt, v in opts:
-        if opt in ['-c', '--config']:
-            cfg = v
         if opt in ['-p', '--port']:
             port = v
 
-    agent = NodeAgent(mhost, port, cfg)
+    agent = NodeAgent(mhost, port)
     agent.start()

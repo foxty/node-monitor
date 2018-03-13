@@ -5,8 +5,8 @@
 Created on 2017-12-22
 @author: foxty
 """
-from collections import namedtuple
 import unittest
+import pickle
 from common import *
 
 
@@ -15,7 +15,7 @@ class CommonTest(unittest.TestCase):
     def test_dumpjson_date(self):
         dt = datetime(2018, 1, 8, 17, 26, 26, 999)
         json_dt = dump_json(dt)
-        self.assertEqual('"2018-01-08 17:26:26.000999"', json_dt)
+        self.assertEqual('"2018-01-08 17:26:26"', json_dt)
 
         d = dt.date()
         json_d = dump_json(d)
@@ -23,14 +23,15 @@ class CommonTest(unittest.TestCase):
 
         t = dt.time()
         json_t = dump_json(t)
-        self.assertEqual('"17:26:26.000999"', json_t)
+        self.assertEqual('"17:26:26"', json_t)
 
     def test_loadjson_date(self):
-        json_dt = '{"date":"2018-01-08 17:26:26.000999", ' \
-                  '"entry1":{"start_dt":"2018-01-08 17:26:27.999000", "d":"2018-01-01", "t":"01:01:01:100"}}'
+        json_dt = '{"date":"2018-01-08 17:26:26", ' \
+                  '"entry1":{"start_dt":"2018-01-08 17:26:27", "d":"2018-01-01", "t":"01:01:01"}}'
         dt = load_json(json_dt)
-        self.assertEqual('2018-01-08 17:26:26.000999', dt['date'].strftime(DATETIME_FMT))
+        self.assertEqual('2018-01-08 17:26:26', dt['date'].strftime(DATETIME_FMT))
         self.assertEqual('2018-01-01', dt['entry1']['d'].strftime(DATE_FMT))
+        self.assertEqual('01:01:01', dt['entry1']['t'].strftime(TIME_FMT))
 
 
 class TextTableTest(unittest.TestCase):
@@ -101,13 +102,13 @@ class MonMsgTest(unittest.TestCase):
     def test_collectat(self):
         now  = datetime.now()
         m = Msg.create_msg('1', Msg.A_SERVICE_METRIC)
-        m.collect_at = now
+        m.set_header(m.H_COLLECT_AT, now)
         self.assertEqual(now.strftime(DATETIME_FMT), m.collect_at)
 
     def test_sendat(self):
         now  = datetime.now()
         m = Msg.create_msg('1', Msg.A_SERVICE_METRIC)
-        m.send_at = now
+        m.set_header(m.H_SEND_AT, now)
         self.assertEqual(now.strftime(DATETIME_FMT), m.send_at)
 
     def test_eq(self):
@@ -115,13 +116,13 @@ class MonMsgTest(unittest.TestCase):
         m2 = Msg.create_msg('12345678', Msg.NONE)
         self.assertEqual(m1, m2)
 
-        m2.msg_type = Msg.A_HEARTBEAT
+        m2.set_header(Msg.H_MSGTYPE, Msg.A_HEARTBEAT)
         self.assertNotEqual(m1, m2)
 
-        m1.msg_type = Msg.A_HEARTBEAT
+        m1.set_header(Msg.H_MSGTYPE, Msg.A_HEARTBEAT)
         self.assertEqual(m1, m2)
 
-        m1.body = "123"
+        m1.set_body("123")
         self.assertNotEqual(m1, m2)
 
     def test_encode_decode(self):
@@ -131,7 +132,7 @@ class MonMsgTest(unittest.TestCase):
 
         header_list, encbody = msg.encode()
         self.assertEqual(2, len(header_list))
-        self.assertEqual(msg_body, base64.b64decode(encbody))
+        self.assertEqual(msg_body, pickle.loads(base64.b64decode(encbody)))
 
         msg1 = Msg.decode(header_list, encbody)
         self.assertEqual(msg, msg1)

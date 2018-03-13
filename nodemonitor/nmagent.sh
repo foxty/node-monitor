@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 #
 # chkconfig: 2345  80 50
 # description: node monitor agent service
@@ -6,31 +6,52 @@
 # processname: agent.py
 #
 PATH=${PATH}:/usr/local/bin:/usr/local/sbin
-nmhome=/root/node-monitor
+nmhome=~/node-monitor
 pname=agent.py
 ret=0
 
-start() {
-    result=$( ps -ef | grep ${pname} | grep -v grep | wc -l )
-    if [ $result -gt 0 ] ; then
-        echo "${pname} is running, now stop it..."
-        stop
-    fi
-    echo "starting ${pname}"
-    python ${nmhome}/agent.py -c ${nmhome}/agent.json master_host > ${nmhome}/agent.log 2>&1 &
-    ret=$?
-    echo "[success]"
-}
 
-stop() {
-    echo "stopping ${pname}"
-    pids=$(ps -ef | grep ${pname} | grep -v grep | awk '{print $2}')
-    kill -9 ${pids}
+start() {
+    pid=`ps -ef | grep ${pname} | grep -v grep | awk '{print $2}'`
+    if [ -n "${pid}" ] ; then
+        echo "${pname} is running with ${pid}..."
+        return -1
+    fi
+    echo -n "starting ${pname}"
+    python ${nmhome}/agent.py master_host > ${nmhome}/agent.log 2>&1 &
     ret=$?
     if [ $ret -eq 0 ] ; then
         echo "[success]"
     else
         echo "[failed]"
+    fi
+    return $ret
+}
+
+status() {
+    pid=`ps -ef | grep ${pname} | grep -v grep | awk '{print $2}'`
+    if [ -n "${pid}" ] ; then
+        echo "${pname} is running with pid ${pid}..."
+        ret=0
+    else
+        echo "${pname} stopped"
+        ret=1
+    fi
+}
+
+stop() {
+    pid=`ps -ef | grep ${pname} | grep -v grep | awk '{print $2}' | xargs`
+    if [ -n "${pid}" ] ; then
+        echo -n "stopping ${pname}"
+        kill -9 ${pid}
+        ret=$?
+        if [ $ret -eq 0 ] ; then
+            echo "[success]"
+        else
+            echo "[failed]"
+        fi
+    else
+        echo "${pname} is not running."
     fi
 }
 
@@ -39,18 +60,6 @@ restart() {
     stop
     sleep 3
     start
-}
-
-status() {
-    local result
-    result=$( ps -ef | grep ${pname} | grep -v grep | wc -l )
-    if [ $result -gt 0 ] ; then
-        echo "${pname} is running..."
-        ret=0
-    else
-        echo "${pname} stopped"
-        ret=1
-    fi
 }
 
 # See how we were called.

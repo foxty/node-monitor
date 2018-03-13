@@ -553,13 +553,13 @@ class MasterTest(BaseDBTest):
         master = nm.Master()
 
         # test a new agent join
-        regmsg = nm.Msg.create_msg('1', nm.Msg.A_REG, '''{}''')
+        regmsg = nm.Msg.create_msg('1', nm.Msg.A_REG, {'hostname': 'test-host'})
         regmsg.client_addr = ('127.0.0.1', 1234)
         master.handle_msg(regmsg, None)
         agent = master.find_agent('1')
         self.assertEqual('1', agent.aid)
         self.assertEqual('127.0.0.1', agent.host)
-        self.assertEqual('127.0.0.1', agent.name)
+        self.assertEqual('test-host', agent.name)
 
     def test_handle_hearbeat(self):
         pass
@@ -568,11 +568,11 @@ class MasterTest(BaseDBTest):
         m = nm.Master()
         ctime = datetime.now()
         body = {'collect_time': ctime}
-        regmsg = nm.Msg.create_msg('2', nm.Msg.A_REG, '''{}''')
+        regmsg = nm.Msg.create_msg('2', nm.Msg.A_REG, {'hostname': 'test-host'})
         regmsg.client_addr = ('127.0.0.1', 1234)
         m.handle_msg(regmsg, None)
 
-        nmmsg = nm.Msg.create_msg('2', nm.Msg.A_NODE_METRIC, nm.dump_json(body))
+        nmmsg = nm.Msg.create_msg('2', nm.Msg.A_NODE_METRIC, body)
         re = m.handle_msg(nmmsg, None)
         self.assertTrue(re)
 
@@ -597,8 +597,8 @@ class MasterTest(BaseDBTest):
                          1  0      0 580284    948 884556    0    0     0     0 1091  404 86 14  0  0  0
                       '''
         }
-        nmmsg = nm.Msg.create_msg(agent.aid, nm.Msg.A_NODE_METRIC, nm.dump_json(msgbody))
-        nmmsg.collect_at = ctime
+        nmmsg = nm.Msg.create_msg(agent.aid, nm.Msg.A_NODE_METRIC, msgbody)
+        nmmsg.set_header(nmmsg.H_COLLECT_AT, ctime)
         re = m.handle_msg(nmmsg, None)
         self.assertTrue(re)
 
@@ -644,8 +644,8 @@ class MasterTest(BaseDBTest):
         m = nm.Master()
         ctime = datetime.now()
         msgbody = {'name': 'service1', 'pid': '1', 'metrics': {'m1': 'm1 content', 'm2': 'm2 content'}}
-        nmmsg = nm.Msg.create_msg(agent.aid, nm.Msg.A_SERVICE_METRIC, nm.dump_json(msgbody))
-        nmmsg.collect_at = ctime
+        nmmsg = nm.Msg.create_msg(agent.aid, nm.Msg.A_SERVICE_METRIC, msgbody)
+        nmmsg.set_header(nm.Msg.H_COLLECT_AT, ctime)
         re = m.handle_msg(nmmsg, None)
         self.assertTrue(re)
 
@@ -672,14 +672,14 @@ class MasterTest(BaseDBTest):
         m = nm.Master()
         ctime = datetime.now()
         msgbody = {'name': 'service1', 'pid': '1', 'metrics': {'m1': 'm1 content', 'm2': 'm2 content'}}
-        nmmsg = nm.Msg.create_msg(agent.aid, nm.Msg.A_SERVICE_METRIC, nm.dump_json(msgbody))
-        nmmsg.collect_at = ctime
+        nmmsg = nm.Msg.create_msg(agent.aid, nm.Msg.A_SERVICE_METRIC, msgbody)
+        nmmsg.set_header(nm.Msg.H_COLLECT_AT, ctime)
         m.handle_msg(nmmsg, None)
 
         ctime1 = datetime.now() + timedelta(hours=1)
         msgbody['pid'] = '2'
-        nmmsg = nm.Msg.create_msg(agent.aid, nm.Msg.A_SERVICE_METRIC, nm.dump_json(msgbody))
-        nmmsg.collect_at = ctime1
+        nmmsg = nm.Msg.create_msg(agent.aid, nm.Msg.A_SERVICE_METRIC, msgbody)
+        nmmsg.set_header(nm.Msg.H_COLLECT_AT, ctime1)
         m.handle_msg(nmmsg, None)
 
         smetrics = nm.SMetric.query()
