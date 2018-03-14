@@ -190,6 +190,15 @@ class GlobalFuncTest(unittest.TestCase):
         self.assertEqual(mount, dr.mount_point)
         self.assertIsNotNone(dr.recv_at)
 
+    def test_parse_invalid_df(self):
+        content = '''
+        df: unknown option: P
+        Usage: df [-F FSType] [-abeghklntVvZ] [-o FSType-specific_options] [directory | block_device | resource]
+        '''
+        ctime = datetime.now()
+        drs = nm.parse_df('1', collect_time=ctime, content=content)
+        self.assertIsNone(drs)
+
     def test_parse_df_linux(self):
         content = '''
         Filesystem          1K-blocks    Used Available Use% Mounted on

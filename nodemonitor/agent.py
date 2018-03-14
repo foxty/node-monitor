@@ -130,8 +130,8 @@ class AgentConfig(object):
                 "clocks": 6
             },
             "df": {
-                "cmd": ["df", "-kP"],
-                "clocks":60
+                "cmd": ["df", "-k"],
+                "clocks": 60
             }
         },
 

@@ -216,8 +216,8 @@ def parse_df(aid, collect_time, content):
         diskreps = [NDiskReport(aid, collect_time, *row, recv_at=datetime.now()) for row in t.get_rows()]
         return diskreps
     else:
-        logging.warn('invalid content of `vmstat` : %s', content)
-        return None, None, None, None, None
+        logging.warn('invalid content of `df` : %s', content)
+        return None
 
 
 def parse_netstat(aid, collect_time, content):
