@@ -423,6 +423,13 @@ class SInfoTest(BaseDBTest):
         self.assertFalse(sinfo.chkstatus(99))
         self.assertEqual(nm.SInfo.STATUS_INACT, sinfo.status)
 
+    def test_chkstatus_invaliddate(self):
+        d = datetime.now() + timedelta(seconds=100)
+        sinfo = nm.SInfo(last_report_at=d, status=nm.SInfo.STATUS_INACT)
+        self.assertTrue(sinfo.chkstatus(200))
+        self.assertTrue(sinfo.chkstatus(99))
+        self.assertEqual(nm.SInfo.STATUS_ACT, sinfo.status)
+
 
 class MasterDAOTest(BaseDBTest):
 

@@ -99,16 +99,11 @@ ENV/
 # mypy
 .mypy_cache/
 
-# idea
+# self defined rules
 .idea
 *.iml
-
-# python install pkc
 Python*.tgz
-
-# db files
 *.db
-
-# bower components
 /web/static/lib
 nodes.txt
+out

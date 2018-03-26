@@ -573,8 +573,9 @@ class SInfo(Model):
     def chkstatus(self, threshold_secs):
         active = False
         if self.last_report_at:
-            dt = datetime.now() - self.last_report_at
-            active = dt.seconds <= threshold_secs
+            now = datetime.now()
+            dt = now - self.last_report_at
+            active = dt.seconds <= threshold_secs or self.last_report_at >= now
         self.set(status=self.STATUS_ACT if active else self.STATUS_INACT)
         return active
 
@@ -625,7 +626,7 @@ class AlarmEngine(object):
             (MEMORY UTIL HIGH, MEMORY EXTREMELY HIGH)
     """
 
-    def __init__(self, q):
+    def __init__(self):
         self._agent_status = {}
         self._live_alarms = []
 
