@@ -15,7 +15,7 @@ start() {
     pid=`ps -ef | grep ${pname} | grep -v grep | awk '{print $2}'`
     if [ -n "${pid}" ] ; then
         echo "${pname} is running with ${pid}..."
-        return -1
+        return 127
     fi
     echo -n "starting ${pname}"
     python ${nmhome}/agent.py master_host > ${nmhome}/agent.log 2>&1 &

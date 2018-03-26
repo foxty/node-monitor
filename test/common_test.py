@@ -100,16 +100,16 @@ class MonMsgTest(unittest.TestCase):
         self.assertEqual('', m1.body)
 
     def test_collectat(self):
-        now  = datetime.now()
+        now = datetime.now()
         m = Msg.create_msg('1', Msg.A_SERVICE_METRIC)
         m.set_header(m.H_COLLECT_AT, now)
-        self.assertEqual(now.strftime(DATETIME_FMT), m.collect_at)
+        self.assertEqual(now.replace(microsecond=0), m.collect_at)
 
     def test_sendat(self):
         now  = datetime.now()
         m = Msg.create_msg('1', Msg.A_SERVICE_METRIC)
         m.set_header(m.H_SEND_AT, now)
-        self.assertEqual(now.strftime(DATETIME_FMT), m.send_at)
+        self.assertEqual(now.replace(microsecond=0), m.send_at)
 
     def test_eq(self):
         m1 = Msg.create_msg('12345678', Msg.NONE)

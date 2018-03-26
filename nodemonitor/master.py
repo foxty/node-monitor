@@ -570,6 +570,14 @@ class SInfo(Model):
         self.set(pid=newpid)
         self.add_history()
 
+    def chkstatus(self, threshold_secs):
+        active = False
+        if self.last_report_at:
+            dt = datetime.now() - self.last_report_at
+            active = dt.seconds <= threshold_secs
+        self.set(status=self.STATUS_ACT if active else self.STATUS_INACT)
+        return active
+
     @classmethod
     def query_by_aid(cls, aid):
         return cls.query(where='aid=?', orderby='name', params=[aid])
@@ -622,6 +630,12 @@ class AlarmEngine(object):
         self._live_alarms = []
 
     def process(self, report):
+        pass
+
+    def start(self):
+        pass
+
+    def stop(self):
         pass
 
 
@@ -684,6 +698,8 @@ class Master(object):
         self._server = None
         self._init_handlers()
         self._load_agents()
+        self._alarm_engine = AlarmEngine()
+        self._alarm_engine.start()
         logging.info('master init on addr=%s', self._addr)
 
     def _init_handlers(self):
@@ -779,11 +795,18 @@ class Master(object):
             ser.add_history()
         else:
             # existing service, check for an update
+            logging.info('refreshing service %s', sname)
             ser = services[sname]
             ser.set(last_report_at=collect_at, status=SInfo.STATUS_ACT)
             if ser.pid != spid:
                 logging.info('service %s pid change detected: %s -> %s', sname, ser.pid, spid)
                 ser.chgpid(spid)
+
+        # set service to inactive if no status update for 5 minutes
+        for sname, service in services.items():
+            active = service.chkstatus(300)  # 300 seconds
+            if not active:
+                logging.info('service [%s] turn to inactive.', sname)
 
         self._parse_smetrics(smetrics)
         return True
@@ -793,6 +816,8 @@ class Master(object):
             if 'pidstat' == metric.category:
                 pidrep = parse_pidstat(metric.aid, metric.collect_at, metric.name, metric.content)
                 pidrep.save() if pidrep else None
+            if 'jstat-gc' == 'metric.catetory':
+                pass
 
     def _agent_stop(self, msg):
         return True

@@ -414,6 +414,16 @@ class ModelTest(unittest.TestCase):
         self.assertEqual(3.3, ma.a3)
 
 
+class SInfoTest(BaseDBTest):
+
+    def test_chkstatus(self):
+        d1 = datetime.now() - timedelta(seconds=100)
+        sinfo = nm.SInfo(last_report_at=d1, status=nm.SInfo.STATUS_INACT)
+        self.assertTrue(sinfo.chkstatus(200))
+        self.assertFalse(sinfo.chkstatus(99))
+        self.assertEqual(nm.SInfo.STATUS_INACT, sinfo.status)
+
+
 class MasterDAOTest(BaseDBTest):
 
     def test_add_agent(self):
@@ -617,7 +627,7 @@ class MasterTest(BaseDBTest):
         self.assertEqual(1, len(memreports))
         self.assertIsNotNone(memreports[0].recv_at)
         del memreports[0]['recv_at']
-        self.assertEqual(nm.NMemoryReport(aid=agent.aid, collect_at=ctime,
+        self.assertEqual(nm.NMemoryReport(aid=agent.aid, collect_at=ctime.replace(microsecond=0),
                                           total_mem=1839, used_mem=408, free_mem=566, cache_mem=None,
                                           total_swap=2047, used_swap=0, free_swap=2047),
                          memreports[0])
@@ -626,14 +636,14 @@ class MasterTest(BaseDBTest):
         self.assertEqual(1, len(cpureports))
         self.assertIsNotNone(cpureports[0].recv_at)
         del cpureports[0]['recv_at']
-        self.assertEqual(nm.NCPUReport(aid=agent.aid, collect_at=ctime, us=86, sy=14, id=0, wa=0, st=0),
+        self.assertEqual(nm.NCPUReport(aid=agent.aid, collect_at=ctime.replace(microsecond=0), us=86, sy=14, id=0, wa=0, st=0),
                          cpureports[0])
 
         sysreports = nm.NSystemReport.query_by_ctime(agent.aid, start, end)
         self.assertEqual(1, len(sysreports))
         self.assertIsNotNone(sysreports[0].recv_at)
         del sysreports[0]['recv_at']
-        self.assertEqual(nm.NSystemReport(aid=agent.aid, collect_at=ctime,
+        self.assertEqual(nm.NSystemReport(aid=agent.aid, collect_at=ctime.replace(microsecond=0),
                                           uptime=0, users=1, load1=2.11, load5=2.54, load15=2.77,
                                           procs_r=1, procs_b=0, sys_in=1091, sys_cs=404),
                          sysreports[0])
@@ -662,7 +672,7 @@ class MasterTest(BaseDBTest):
         self.assertEqual(2, len(smetrics))
         sm1, sm2 = smetrics[0], smetrics[1]
         self.assertEqual(aid, sm1.aid)
-        self.assertEqual(ctime, sm1.collect_at)
+        self.assertEqual(ctime.replace(microsecond=0), sm1.collect_at)
         self.assertEqual('service1', sm1.name)
         self.assertEqual('1', sm1.pid)
         self.assertEqual('m1', sm1.category)
@@ -670,7 +680,7 @@ class MasterTest(BaseDBTest):
 
         sinfos = nm.SInfo.query_by_aid(aid)
         self.assertEqual(1, len(sinfos))
-        self.assertEqual(nm.SInfo(aid=aid, name='service1', pid='1', last_report_at=ctime, status=nm.SInfo.STATUS_ACT),
+        self.assertEqual(nm.SInfo(aid=aid, name='service1', pid='1', last_report_at=ctime.replace(microsecond=0), status=nm.SInfo.STATUS_ACT),
                          sinfos[0])
 
     def test_handle_smetrics_pidchg(self):
@@ -696,7 +706,8 @@ class MasterTest(BaseDBTest):
 
         sinfos = nm.SInfo.query_by_aid(aid)
         self.assertEqual(1, len(sinfos))
-        self.assertEqual(nm.SInfo(aid=aid, name='service1', pid='2', last_report_at=ctime1, status=nm.SInfo.STATUS_ACT),
+        self.assertEqual(nm.SInfo(aid=aid, name='service1', pid='2',
+                                  last_report_at=ctime1.replace(microsecond=0), status=nm.SInfo.STATUS_INACT),
                          sinfos[0])
 
         sinfohis = nm.SInfoHistory.query()

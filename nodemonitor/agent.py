@@ -424,13 +424,13 @@ class NodeCollector(threading.Thread):
         lookup = service['lookup_keyword']
         pid = self._find_service_pid(name, lookup)
         if not pid:
-            logging.warn('can\'t find pid for %s, exit collection.', name)
+            logging.warn('can\'t find pid for [%s].', name)
             return
         metric_names = service['metrics']
         clocks = service['clocks']
         env = service.get('env', {})
         env['pid'] = pid
-        logging.info('collecting for service %s(%s): metrics=%s, clocks=%s.',
+        logging.info('collecting for service [%s(%s)]: metrics=%s, clocks=%s.',
                      name, pid, metric_names, clocks)
         service_result = {'name': name, 'pid': pid, 'type': stype}
         service_metrics = {}
@@ -445,14 +445,11 @@ class NodeCollector(threading.Thread):
             except Exception:
                 logging.exception('collect metrics %s for service %s failed: cmd=%s', mname, name, cmd)
         service_result['metrics'] = service_metrics
-        if service_metrics:
-            # send message
-            msg = Msg.create_msg(self._agentid, Msg.A_SERVICE_METRIC, service_result)
-            msg.set_header(Msg.H_COLLECT_AT, datetime.now())
-            self._agent.add_msg(msg)
-            logging.info('%d metrics collected for %s.', len(service_metrics), name)
-        else:
-            logging.info('no metrics collected for %s', name)
+        # send message
+        msg = Msg.create_msg(self._agentid, Msg.A_SERVICE_METRIC, service_result)
+        msg.set_header(Msg.H_COLLECT_AT, datetime.now())
+        self._agent.add_msg(msg)
+        logging.info('%d metrics collected for %s.', len(service_metrics), name)
         return service_result
 
     def _find_service_pid(self, servname, lookup_keyword):

@@ -91,8 +91,8 @@ class NodeConnector(object):
     def stop_agent(self):
         """Stop agent in remote node"""
         logging.info('try to stop agent on %s', self.node_host)
-        self.ssh.exec_command('service nmagent stop')
-        logging.info('agent on %s stopped', self.node_host)
+        _, stdout, stderr = self.ssh.exec_command('service nmagent stop')
+        logging.info('agent on %s stopped, out=%s, error=%s', self.node_host, stdout.readlines(), stderr.readlines())
 
 
 def download_py():

@@ -34,7 +34,7 @@ class AgentConfigTest(unittest.TestCase):
         self.assertEqual(['free', '-m'], free['cmd'])
         self.assertEqual(6, free['clocks'])
         df = metrics['df']
-        self.assertEqual(['df', '-kP'], df['cmd'])
+        self.assertEqual(['df', '-k'], df['cmd'])
         self.assertEqual(60, df['clocks'])
 
     def test_service_metrics(self):

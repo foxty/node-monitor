@@ -95,11 +95,19 @@ class Msg(object):
 
     @property
     def collect_at(self):
-        return self._headers.get(self.H_COLLECT_AT, None)
+        cat = self._headers.get(self.H_COLLECT_AT, None)
+        if cat:
+            return datetime.strptime(cat, DATETIME_FMT)
+        else:
+            return None
 
     @property
     def send_at(self):
-        return self._headers.get(self.H_SEND_AT, None)
+        sat = self._headers.get(self.H_SEND_AT, None)
+        if sat:
+            return datetime.strptime(sat, DATETIME_FMT)
+        else:
+            return None
 
     @property
     def body(self):

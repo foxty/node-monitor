@@ -167,6 +167,7 @@ function genChartOption(title, data, cateProp, seriesPropsMapping, graphOptions)
 
     return {
         title: {text: title},
+        animation: false,
         tooltip: {
             trigger: 'axis'
         },
@@ -345,7 +346,7 @@ const Nodes = {
 const Node = {
     props: ['aid'],
 
-    template: `<div><div class="page-header"><h1>Node {{agent ? agent.host : ''}}({{aid}}) </h1></div>
+    template: `<div><div class="page-header"><h1>Node: {{agent ? agent.name : ''}} ({{aid}}) </h1></div>
         <ul class="nav nav-tabs">
           <li role="presentation" :class="{'active': $route.name == 'nodeStatus'}">
             <router-link :to="{name: 'nodeStatus', params: {aid:aid}}">Status</router-link>
@@ -578,7 +579,6 @@ const NodeServices = {
                     <th>PID</th>
                     <th>CPU Util(%)</th>
                     <th>Mem Util(%)</th>
-                    <th>Reports</th>
                     <th>Last Report Time</th>
                 </tr>
             </thead>
@@ -591,7 +591,6 @@ const NodeServices = {
                     <td>{{s.pid}}</td>
                     <td>{{services_status_map[s.name] ? services_status_map[s.name].cpu_util : '-'}}</td>
                     <td>{{services_status_map[s.name] ? services_status_map[s.name].mem_util : '-'}}</td>
-                    <td><span class="glyphicon glyphicon-stats" aria-hidden="true"></span> Reports</td>
                     <td>{{s.last_report_at}}</td>
                 </tr>
             </tbody>
@@ -628,17 +627,20 @@ const ServiceStatus = {
     props: ['aid', 'service_name'],
 
     template: `
-    <div class="panel panel-default">
-        <div class="panel-heading">
-           PIDSTAT
-           <button class="btn btn-sm btn-link" @click="pidstatReportRange='last_hour'">Last Hour</button>
-           <button class="btn btn-sm btn-link" @click="pidstatReportRange='last_day'">Last Day</button>
-           <button class="btn btn-sm btn-link" @click="pidstatReportRange='last_week'">Last Week</button>
-           <button class="btn btn-sm btn-success" @click="loadPidstatReports()">Reload</button>
-        </div>
-        <div class="panel-body row">
-           <div><chart :options="cpuChart" style="width:100%;height:300px"></chart></div>
-           <div><chart :options="memoryChart" style="width:100%;height:300px"></chart></div>
+    <div>
+        <h2>{{service_name}}</h2>
+        <div class="panel panel-default">
+            <div class="panel-heading">
+               {{service_name}} - PIDSTAT
+               <button class="btn btn-sm btn-link" @click="pidstatReportRange='last_hour'">Last Hour</button>
+               <button class="btn btn-sm btn-link" @click="pidstatReportRange='last_day'">Last Day</button>
+               <button class="btn btn-sm btn-link" @click="pidstatReportRange='last_week'">Last Week</button>
+               <button class="btn btn-sm btn-success" @click="loadPidstatReports()">Reload</button>
+            </div>
+            <div class="panel-body row">
+               <div><chart :options="cpuChart" style="width:100%;height:300px"></chart></div>
+               <div><chart :options="memoryChart" style="width:100%;height:300px"></chart></div>
+            </div>
         </div>
     </div>`,
 
