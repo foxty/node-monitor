@@ -12,6 +12,7 @@ import sys
 import socket
 import master as nm
 from datetime import datetime, timedelta
+from uuid import uuid4
 
 nm._MASTER_DB_NAME = 'test.db'
 
@@ -330,7 +331,7 @@ class GlobalFuncTest(unittest.TestCase):
         self.assertIsNotNone(pidrep)
         self.assertIsNotNone(pidrep.recv_at)
         del pidrep['recv_at']
-        self.assertEqual(nm.SPidstatReprot('1', ctime, service_name='serv1', tid=0,
+        self.assertEqual(nm.SPidstatReport('1', service_id='serv1', collect_at=ctime, tid=0,
                                            cpu_us=0.13, cpu_sy=0.02, cpu_gu=0.0, cpu_util=0.15,
                                            mem_minflt=1.47, mem_majflt=0.0, mem_vsz=8529320,
                                            mem_rss=2109020, mem_util=10.30,
@@ -416,6 +417,19 @@ class ModelTest(unittest.TestCase):
 
 class SInfoTest(BaseDBTest):
 
+    def test_basic(self):
+        id0 = uuid4().hex
+        id1 = uuid4().hex
+        sinfo = nm.SInfo(id=id0, name='service a')
+        sinfo.save()
+        sinfo.id = id1
+        sinfo.name = 'service b'
+        sinfo.save()
+        infos = nm.SInfo.query(orderby='name ASC')
+        self.assertEqual(2, len(infos))
+        self.assertEqual(id0, infos[0].id)
+        self.assertEqual(id1, infos[1].id)
+
     def test_chkstatus(self):
         d1 = datetime.now() - timedelta(seconds=100)
         sinfo = nm.SInfo(last_report_at=d1, status=nm.SInfo.STATUS_INACT)
@@ -429,6 +443,40 @@ class SInfoTest(BaseDBTest):
         self.assertTrue(sinfo.chkstatus(200))
         self.assertTrue(sinfo.chkstatus(99))
         self.assertEqual(nm.SInfo.STATUS_ACT, sinfo.status)
+
+
+class SPidstatReportTest(BaseDBTest):
+
+    def test_base(self):
+        ctime = datetime.now()
+        id = uuid4().hex
+        r = nm.SPidstatReport(aid='1', service_id=id, collect_at=ctime)
+        r.save()
+        self.assertEqual('1', r.aid)
+        self.assertEqual(id, r.service_id)
+        self.assertEqual(ctime, r.collect_at)
+
+    def test_chrono(self):
+        sid = uuid4().hex
+        now = datetime.now()
+        prev_hour = now - timedelta(hours=1)
+        next_hour = now + timedelta(hours=1)
+        r1 = nm.SPidstatReport(aid='1', service_id=sid, collect_at=prev_hour, tid=1, cpu_us=10, recv_at=next_hour)
+        r1.save()
+        r2 = nm.SPidstatReport(aid='1', service_id=sid, collect_at=now, tid=1, cpu_us=20, recv_at=now)
+        r2.save()
+        r3 = nm.SPidstatReport(aid='1', service_id=sid, collect_at=next_hour, tid=1, cpu_us=30, recv_at=prev_hour)
+        r3.save()
+
+        l1 = nm.SPidstatReport.query_by_ctime(sid, now - timedelta(hours=1.5), now)
+        self.assertEqual(2, len(l1))
+        self.assertEqual(prev_hour, l1[0].collect_at)
+        self.assertEqual(now, l1[1].collect_at)
+
+        l1 = nm.SPidstatReport.query_by_rtime(sid, now - timedelta(hours=1.5), now)
+        self.assertEqual(2, len(l1))
+        self.assertEqual(now, l1[0].collect_at)
+        self.assertEqual(next_hour, l1[1].collect_at)
 
 
 class MasterDAOTest(BaseDBTest):
@@ -494,7 +542,8 @@ class MasterDAOTest(BaseDBTest):
         self.assertEqual(123, nag.last_sys_cs)
 
     def test_sinfo_chgpid(self):
-        sinfo = nm.SInfo(aid='1', name='serv', pid='123', last_report_at=datetime.now())
+        id = uuid4().hex
+        sinfo = nm.SInfo(id=id, aid='1', name='serv', pid='123', last_report_at=datetime.now())
         sinfo.save()
         self.assertEqual('1', sinfo.aid)
         self.assertEqual('serv', sinfo.name)
@@ -685,10 +734,12 @@ class MasterTest(BaseDBTest):
         self.assertEqual('m1', sm1.category)
         self.assertEqual('m1 content', sm1.content)
 
-        sinfos = nm.SInfo.query_by_aid(aid)
-        self.assertEqual(1, len(sinfos))
-        self.assertEqual(nm.SInfo(aid=aid, name='service1', pid='1', last_report_at=ctime.replace(microsecond=0), status=nm.SInfo.STATUS_ACT),
-                         sinfos[0])
+        sinfo = nm.SInfo.query_by_aid(aid)[0]
+        self.assertEqual(aid, sinfo.aid)
+        self.assertEqual('service1', sinfo.name)
+        self.assertEqual('1', sinfo.pid)
+        self.assertEqual(ctime.replace(microsecond=0), sinfo.last_report_at)
+        self.assertEqual(nm.SInfo.STATUS_ACT, sinfo.status)
 
     def test_handle_smetrics_pidchg(self):
         aid = '2'
@@ -711,17 +762,15 @@ class MasterTest(BaseDBTest):
         smetrics = nm.SMetric.query()
         self.assertEqual(4, len(smetrics))
 
-        sinfos = nm.SInfo.query_by_aid(aid)
-        self.assertEqual(1, len(sinfos))
-        self.assertEqual(nm.SInfo(aid=aid, name='service1', pid='2',
-                                  last_report_at=ctime1.replace(microsecond=0), status=nm.SInfo.STATUS_INACT),
-                         sinfos[0])
+        sinfo = nm.SInfo.query_by_aid(aid)[0]
+        self.assertEqual(aid, sinfo.aid)
+        self.assertEqual('service1', sinfo.name)
+        self.assertEqual('2', sinfo.pid)
+        self.assertEqual(ctime1.replace(microsecond=0), sinfo.last_report_at)
+        self.assertEqual(nm.SInfo.STATUS_ACT, sinfo.status)
 
         sinfohis = nm.SInfoHistory.query()
         self.assertEqual(2, len(sinfohis))
-        self.assertEqual(aid, sinfohis[0].aid)
-        self.assertEqual(aid, sinfohis[1].aid)
-        self.assertEqual('service1', sinfohis[0].name)
         self.assertEqual('1', sinfohis[0].pid)
         self.assertEqual('2', sinfohis[1].pid)
 

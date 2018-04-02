@@ -584,13 +584,13 @@ const NodeServices = {
             </thead>
             <tbody>
                 <tr v-for="s in services">
-                    <td><router-link :to="{name: 'serviceStatus', params: {aid:aid, service_name:s.name}}">{{s.name}}</router-link></td>
+                    <td><router-link :to="{name: 'serviceStatus', params: {aid:aid, service_id:s.id}}">{{s.name}}</router-link></td>
                     <td>
                         <span class="label" :class="{'label-success': s.status=='active', 'label-default': s.status=='inactive'}">{{s.status}}</span>
                     </td>
                     <td>{{s.pid}}</td>
-                    <td>{{services_status_map[s.name] ? services_status_map[s.name].cpu_util : '-'}}</td>
-                    <td>{{services_status_map[s.name] ? services_status_map[s.name].mem_util : '-'}}</td>
+                    <td>{{services_status_map[s.id] ? services_status_map[s.id].cpu_util : '-'}}</td>
+                    <td>{{services_status_map[s.id] ? services_status_map[s.id].mem_util : '-'}}</td>
                     <td>{{s.last_report_at}}</td>
                 </tr>
             </tbody>
@@ -624,14 +624,14 @@ const NodeServices = {
 }
 
 const ServiceStatus = {
-    props: ['aid', 'service_name'],
+    props: ['aid', 'service_id'],
 
     template: `
     <div>
-        <h2>{{service_name}}</h2>
+        <h2>Service Status</h2>
         <div class="panel panel-default">
             <div class="panel-heading">
-               {{service_name}} - PIDSTAT
+               PIDSTAT
                <button class="btn btn-sm btn-link" @click="pidstatReportRange='last_hour'">Last Hour</button>
                <button class="btn btn-sm btn-link" @click="pidstatReportRange='last_day'">Last Day</button>
                <button class="btn btn-sm btn-link" @click="pidstatReportRange='last_week'">Last Week</button>
@@ -678,9 +678,9 @@ const ServiceStatus = {
         loadPidstatReports: function() {
             var self = this;
             var aid = self.aid;
-            var sname = self.service_name
+            var sid = self.service_id
             var range = self.pidstatReportRange
-            Ajax.get(`/api/agents/${aid}/services/${sname}/report/pidstat/${range}`, function(reports) {
+            Ajax.get(`/api/agents/${aid}/services/${sid}/report/pidstat/${range}`, function(reports) {
                 self.pidstatReports = reports
             })
         }
@@ -728,7 +728,7 @@ const router = new VueRouter({
         {path: '/nodes/:aid', name:'node', component: Node, props:true, children: [
                 {path: 'status', name: 'nodeStatus', component: NodeStatus, props: true},
                 {path: 'services', name: 'nodeServices', component: NodeServices, props: true},
-                {path: 'services/:service_name/status', name: 'serviceStatus', component: ServiceStatus, props: true}
+                {path: 'services/:service_id/status', name: 'serviceStatus', component: ServiceStatus, props: true}
             ]
         },
         {path: '/alarms', component:  Alarms},

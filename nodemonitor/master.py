@@ -18,6 +18,7 @@ import socket
 import SocketServer
 import sqlite3
 from datetime import datetime
+from uuid import uuid4
 from common import Msg, InvalidMsgError, TextTable
 
 
@@ -67,22 +68,20 @@ _DB_SCHEMA = r'''
     CREATE INDEX IF NOT EXISTS `idx_nsr_collect_at` ON `service_metric_raw` (collect_at DESC);
     CREATE INDEX IF NOT EXISTS `idx_nsr_recv_at` ON `service_metric_raw` (recv_at DESC);
     
-    CREATE TABLE IF NOT EXISTS service_info(aid, name, pid, type, last_report_at timestamp, status);
-    CREATE INDEX IF NOT EXISTS `idx_si_aid` ON `service_info` (aid);
-    CREATE INDEX IF NOT EXISTS `idx_si_report_at` ON `service_info` (last_report_at DESC);
+    CREATE TABLE IF NOT EXISTS service(id PRIMARY KEY NOT NULL, aid, name, pid, type, last_report_at timestamp, status);
+    CREATE INDEX IF NOT EXISTS `idx_si_aid` ON `service` (aid);
+    CREATE INDEX IF NOT EXISTS `idx_si_report_at` ON `service` (last_report_at DESC);
     
-    CREATE TABLE IF NOT EXISTS service_info_history(aid, name, pid, change_at timestamp);
-    CREATE INDEX IF NOT EXISTS `idx_sih_aid_sname` ON `service_info_history` (`aid`, name);
+    CREATE TABLE IF NOT EXISTS service_history(service_id, pid, change_at timestamp);
     
-    CREATE TABLE IF NOT EXISTS service_pidstat_report(aid, collect_at timestamp, service_name, 
+    CREATE TABLE IF NOT EXISTS service_pidstat_report(aid, service_id, collect_at timestamp, 
         tid, cpu_us, cpu_sy, cpu_gu, cpu_util, mem_minflt, mem_majflt, mem_vsz, mem_rss, mem_util,
         disk_rd, disk_wr, disk_ccwr, recv_at timestamp);
     CREATE INDEX IF NOT EXISTS `idx_spr_aid` ON `service_pidstat_report` (`aid` DESC);
     CREATE INDEX IF NOT EXISTS `idx_spr_collect_at` ON `service_pidstat_report` (collect_at DESC);
     CREATE INDEX IF NOT EXISTS `idx_spr_recv_at` ON `service_pidstat_report` (recv_at DESC);
     
-    CREATE TABLE IF NOT EXISTS agent_alarm(id INTEGER PRIMARY KEY AUTOINCREMENT, 
-        aid, type, state, duration, create_at timestamp);
+    CREATE TABLE IF NOT EXISTS alarm(id PRIMARY KEY, entity_id, entity_type, type, state, duration, create_at timestamp);
     '''
 _RE_SYSREPORT = re.compile('.*?(?P<users>\\d+)\\suser.*'
                            'age: (?P<load1>\\d+\\.\\d+), (?P<load5>\\d+\\.\\d+), (?P<load15>\\d+\\.\\d+).*',
@@ -319,7 +318,7 @@ def parse_dstat_dio(aid, collect_time, content):
     pass
 
 
-def parse_pidstat(aid, collect_time, service_name, content):
+def parse_pidstat(aid, collect_time, service_id, content):
     t = TextTable(content, header_ln=1)
     if t.size > 1:
         prow = t.get_rows()[0]
@@ -328,9 +327,10 @@ def parse_pidstat(aid, collect_time, service_name, content):
         mem_minflt, mem_majflt, mem_vsz, mem_rss, mem_util = float(prow[8]), float(prow[9]), \
                                                              int(prow[10]), int(prow[11]), float(prow[12])
         disk_rd, disk_wr, disk_ccwr = float(prow[13]), float(prow[14]), float(prow[15])
-        rep = SPidstatReprot(aid, collect_time, service_name, tid, cpu_us, cpu_sy, cpu_gu, cpu_util,
-                             mem_minflt, mem_majflt, mem_vsz, mem_rss, mem_util,
-                             disk_rd, disk_wr, disk_ccwr, recv_at=datetime.now())
+        rep = SPidstatReport(aid=aid, service_id=service_id, collect_at=collect_time, tid=tid,
+                             cpu_us=cpu_us, cpu_sy=cpu_sy, cpu_gu=cpu_gu, cpu_util=cpu_util,
+                             mem_minflt=mem_minflt, mem_majflt=mem_majflt, mem_vsz=mem_vsz, mem_rss=mem_rss, mem_util=mem_util,
+                             disk_rd=disk_rd, disk_wr=disk_wr, disk_ccwr=disk_ccwr, recv_at=datetime.now())
         logging.debug('get pidsat report %s', rep)
         return rep
     else:
@@ -352,7 +352,7 @@ class NoPKError(Exception): pass
 class Model(dict):
     _TABLE = 'model'
     _FIELDS = []
-    _PK = ["id"]
+    _PK = ["_id"]
     _ISQL = None
 
     def __init__(self, *args, **kwargs):
@@ -398,7 +398,7 @@ class Model(dict):
         :return:
         """
         logging.debug('saving model %s to db', self)
-        cursor.execute(self.isql(), self.as_tuple())
+        r = cursor.execute(self.isql(), self.as_tuple())
         return self
 
     @dao
@@ -485,12 +485,12 @@ class AgentChronoModel(object):
 class ServiceChronoModel(object):
 
     @classmethod
-    def query_by_ctime(cls, aid, service_name, start, end):
-        return cls.query(where='aid=? AND service_name=? AND collect_at >= ? AND collect_at <= ?', params=[aid, service_name, start, end])
+    def query_by_ctime(cls, sid, start, end):
+        return cls.query(where='service_id=? AND collect_at >= ? AND collect_at <= ?', orderby='collect_at ASC', params=[sid, start, end])
 
     @classmethod
-    def query_by_rtime(cls, aid, service_name, start, end):
-        return cls.query(where='aid=? AND service_name=? AND recv_at >= ? AND recv_at <= ?', params=[aid, service_name, start, end])
+    def query_by_rtime(cls, sid, start, end):
+        return cls.query(where='service_id=? AND recv_at >= ? AND recv_at <= ?', orderby='collect_at ASC',params=[sid, start, end])
 
 
 class Agent(Model):
@@ -556,15 +556,15 @@ class SMetric(Model, AgentChronoModel):
 
 
 class SInfo(Model):
-    _TABLE = 'service_info'
-    _FIELDS = ['aid', 'name', 'pid', 'type', 'last_report_at', 'status']
-    _PK = ['aid', 'name']
+    _TABLE = 'service'
+    _FIELDS = ['id', 'aid', 'name', 'pid', 'type', 'last_report_at', 'status']
+    _PK = ['id']
 
     STATUS_ACT = 'active'
     STATUS_INACT = 'inactive'
 
     def add_history(self):
-        SInfoHistory(self.aid, self.name, self.pid, datetime.now()).save()
+        SInfoHistory(service_id=self.id, pid=self.pid, change_at=datetime.now()).save()
 
     def chgpid(self, newpid):
         self.set(pid=newpid)
@@ -585,13 +585,13 @@ class SInfo(Model):
 
 
 class SInfoHistory(Model):
-    _TABLE = 'service_info_history'
-    _FIELDS = ['aid', 'name', 'pid', 'change_at']
+    _TABLE = 'service_history'
+    _FIELDS = ['service_id', 'pid', 'change_at']
 
 
-class SPidstatReprot(Model, ServiceChronoModel):
+class SPidstatReport(Model, ServiceChronoModel):
     _TABLE = 'service_pidstat_report'
-    _FIELDS = ['aid', 'collect_at', 'service_name', 'tid', 'cpu_us', 'cpu_sy', 'cpu_gu', 'cpu_util',
+    _FIELDS = ['aid', 'service_id', 'collect_at', 'tid', 'cpu_us', 'cpu_sy', 'cpu_gu', 'cpu_util',
               'mem_minflt', 'mem_majflt', 'mem_vsz', 'mem_rss', 'mem_util',
               'disk_rd', 'disk_wr', 'disk_ccwr', 'recv_at']
 
@@ -631,6 +631,11 @@ class AlarmEngine(object):
         self._live_alarms = []
 
     def process(self, report):
+        """
+        process event and reports
+        :param report:
+        :return:
+        """
         pass
 
     def start(self):
@@ -792,7 +797,8 @@ class Master(object):
         if sname not in services:
             # service discovered
             logging.info('service %s discovered with pid %s', sname, spid)
-            ser = SInfo(aid, sname, spid, stype, collect_at, SInfo.STATUS_ACT).save()
+            ser = SInfo(id=uuid4().hex, aid=aid, name=sname, pid=spid, type=stype,
+                        last_report_at=collect_at, status=SInfo.STATUS_ACT).save()
             ser.add_history()
         else:
             # existing service, check for an update
@@ -809,13 +815,13 @@ class Master(object):
             if not active:
                 logging.info('service [%s] turn to inactive.', sname)
 
-        self._parse_smetrics(smetrics)
+        self._parse_smetrics(smetrics, ser)
         return True
 
-    def _parse_smetrics(self, metrics):
+    def _parse_smetrics(self, metrics, service):
         for metric in metrics:
             if 'pidstat' == metric.category:
-                pidrep = parse_pidstat(metric.aid, metric.collect_at, metric.name, metric.content)
+                pidrep = parse_pidstat(metric.aid, metric.collect_at, service.id, metric.content)
                 pidrep.save() if pidrep else None
             if 'jstat-gc' == 'metric.catetory':
                 pass

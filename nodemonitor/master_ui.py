@@ -11,7 +11,7 @@ import logging
 from datetime import datetime, timedelta
 from flask import Flask, render_template
 from common import dump_json
-from master import Agent, NSystemReport, NCPUReport, NMemoryReport, NDiskReport, SInfo, SPidstatReprot
+from master import Agent, NSystemReport, NCPUReport, NMemoryReport, NDiskReport, SInfo, SPidstatReport
 logging.basicConfig(level=logging.INFO)
 
 
@@ -94,13 +94,13 @@ def get_agent_diskreports(aid, date_range='last_hour'):
 @_APP.route('/api/agents/<string:aid>/services')
 def get_agent_services(aid):
     services = SInfo.query_by_aid(aid)
-    status_map = {report.service_name: report for report in SPidstatReprot.lst_report_by_aid(aid, len(services))}
+    status_map = {report.service_id: report for report in SPidstatReport.lst_report_by_aid(aid, len(services))}
     return dump_json({'services': services, 'services_status_map': status_map})
 
 
-@_APP.route('/api/agents/<aid>/services/<service_name>/report/pidstat/<any(last_hour,last_day,last_week):date_range>', methods=['GET'])
-def get_service_pidstats(aid, service_name, date_range='last_hour'):
-    reports = SPidstatReprot.query_by_rtime(aid, service_name, *calc_daterange(date_range))
+@_APP.route('/api/agents/<aid>/services/<service_id>/report/pidstat/<any(last_hour,last_day,last_week):date_range>', methods=['GET'])
+def get_service_pidstats(aid, service_id, date_range='last_hour'):
+    reports = SPidstatReport.query_by_rtime(service_id, *calc_daterange(date_range))
     return dump_json(reports)
 
 
