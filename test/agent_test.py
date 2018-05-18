@@ -76,10 +76,10 @@ class NodeCollectorTest(unittest.TestCase):
         cls.COLLECTOR._get_cmd_result = MagicMock(return_value='cmd content')
 
     def test_trans_cmd(self):
-        cmd = ['test1', '${var1}', 'and${var2}']
-        context = {'var1': '1', 'var2': '2'}
+        cmd = ['test1', '${var1}', 'and${var2}-${var3}']
+        context = {'var1': '1', 'var2': '2', 'var3':'3'}
         newcmd = self.COLLECTOR._translate_cmd(cmd, context)
-        self.assertEqual(['test1', '1', 'and2'], newcmd)
+        self.assertEqual(['test1', '1', 'and2-3'], newcmd)
 
     def test_prod_heartbeat(self):
         self.COLLECTOR._prod_heartbeat()

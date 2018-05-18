@@ -148,9 +148,9 @@ class Msg(object):
 
 
 class OSType(object):
-    WIN = 1
-    LINUX = 2
-    SUNOS = 3
+    WIN = 'WIN'
+    LINUX = 'LINUX'
+    SUNOS = 'SUNOS'
 
 
 class TextTable(object):
@@ -179,15 +179,25 @@ class TextTable(object):
         if vheader:
             self._vheader = [row[0] for row in self._table]
 
+    def __getitem__(self, item):
+        return TextTableRow(self, item)
+
     @property
     def size(self):
         return self._size
+
+    @property
+    def has_body(self):
+        return self._size >= 1
+
+    def get_rows(self):
+        return [TextTableRow(self, rowno) for rowno, content in enumerate(self._tbody)]
 
     def gets(self, rowid, header, conv_func=str):
         """get values for header_name in row #rowno,
         :param rowid: row number or row name
         :param header: header name
-        :param default: default value if header not exist
+        :param conv_func: conversion function
         :return: list of values (in case multi columns has same header name)
         """
         if type(rowid) is int:
@@ -195,14 +205,17 @@ class TextTable(object):
         else:
             rowno = self._vheader.index(rowid) - 1
         idxs = []
-        start = 0
-        while True:
-            try:
-                idx = self._hheader.index(header, start)
-                idxs.append(idx)
-                start = idx + 1
-            except ValueError:
-                break
+        if type(header) is int:
+            idxs.append(header)
+        else:
+            start = 0
+            while True:
+                try:
+                    idx = self._hheader.index(header, start)
+                    idxs.append(idx)
+                    start = idx + 1
+                except ValueError:
+                    break
         return [conv_func(self._tbody[rowno][idx]) for idx in idxs]
 
     def get(self, rowno, header, default=None, conv_func=str):
@@ -211,9 +224,6 @@ class TextTable(object):
             return values[0]
         else:
             return default
-
-    def get_row(self, rowno):
-        return tuple(self._tbody[rowno])
 
     def get_ints(self, rowno, header):
         return self.gets(rowno, header, conv_func=int)
@@ -227,8 +237,44 @@ class TextTable(object):
     def get_float(self, rowno, header, default=None):
         return self.get(rowno, header, default, conv_func=float)
 
-    def get_rows(self):
-        return [tuple(content) for content in self._tbody]
+
+class TextTableRow(object):
+
+    def __init__(self, tbl, rowno):
+        """
+        :param tbl: parent TextTable
+        :param rowno: start from 0
+        """
+        self._parent = tbl
+        self._row_index = rowno
+
+    def as_tuple(self):
+        return tuple(self._parent._tbody[self._row_index])
+
+    def __getitem__(self, item):
+        return self.get(item)
+
+    def gets(self, header, conv_func=str):
+        return self._parent.gets(self._row_index, header, conv_func=conv_func);
+
+    def get(self, header, default=None, conv_func=str):
+        values = self._parent.gets(self._row_index, header, conv_func=conv_func)
+        if values:
+            return values[0]
+        else:
+            return default
+
+    def get_ints(self, header):
+        return self._parent.get_ints(self._row_index, header)
+
+    def get_int(self, header, default=None):
+        return self._parent.get_int(self._row_index, header, default)
+
+    def get_floats(self, header):
+        return self._parent.get_floats(self._row_index, header)
+
+    def get_float(self, header, default=None):
+        return self._parent.get_float(self._row_index, header, default)
 
 
 def ostype():

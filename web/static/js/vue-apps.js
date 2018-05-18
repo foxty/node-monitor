@@ -575,6 +575,7 @@ const NodeServices = {
             <thead>
                 <tr>
                     <th>Name</th>
+                    <th>Type</th>
                     <th>Status</th>
                     <th>PID</th>
                     <th>CPU Util(%)</th>
@@ -585,6 +586,7 @@ const NodeServices = {
             <tbody>
                 <tr v-for="s in services">
                     <td><router-link :to="{name: 'serviceStatus', params: {aid:aid, service_id:s.id}}">{{s.name}}</router-link></td>
+                    <td>{{s.type}}</td>
                     <td>
                         <span class="label" :class="{'label-success': s.status=='active', 'label-default': s.status=='inactive'}">{{s.status}}</span>
                     </td>
@@ -628,7 +630,6 @@ const ServiceStatus = {
 
     template: `
     <div>
-        <h2>Service Status</h2>
         <div class="panel panel-default">
             <div class="panel-heading">
                PIDSTAT
@@ -638,8 +639,28 @@ const ServiceStatus = {
                <button class="btn btn-sm btn-success" @click="loadPidstatReports()">Reload</button>
             </div>
             <div class="panel-body row">
-               <div><chart :options="cpuChart" style="width:100%;height:300px"></chart></div>
-               <div><chart :options="memoryChart" style="width:100%;height:300px"></chart></div>
+                <div v-if="pidstatReports && pidstatReports.length > 0">
+                    <div><chart :options="cpuChart" style="width:100%;height:300px"></chart></div>
+                    <div><chart :options="memoryChart" style="width:100%;height:300px"></chart></div>
+                </div>
+                <div v-else class="no_data">No data of pidstat!</div>
+            </div>
+        </div>
+        
+        <div class="panel panel-default">
+            <div class="panel-heading">
+               Java Stat
+               <button class="btn btn-sm btn-link" @click="jstatgcReportRange='last_hour'">Last Hour</button>
+               <button class="btn btn-sm btn-link" @click="jstatgcReportRange='last_day'">Last Day</button>
+               <button class="btn btn-sm btn-link" @click="jstatgcReportRange='last_week'">Last Week</button>
+               <button class="btn btn-sm btn-success" @click="loadJstatgcReports()">Reload</button>
+            </div>
+            <div class="panel-body row">
+                <div v-if="jstatgcReports && jstatgcReports.length > 0">
+                    <div><chart :options="jmemoryChart" style="width:100%;height:300px"></chart></div>
+                    <div><chart :options="jgcChart" style="width:100%;height:300px"></chart></div>
+                </div>
+                <div v-else class="no_data">No data of jstat-gc!</div>
             </div>
         </div>
     </div>`,
@@ -649,13 +670,19 @@ const ServiceStatus = {
             pidstatReportRange: 'last_hour',
             pidstatReports: null,
             cpuChart: null,
-            memoryChart: null
+            memoryChart: null,
 
+            jstatgcReportRange: 'last_hour',
+            jstatgcReports: null,
+            jmemoryChart:null,
+            jgcChart:null
         }
     },
 
+
     created: function() {
         this.loadPidstatReports();
+        this.loadJstatgcReports();
     },
 
     watch: {
@@ -671,6 +698,23 @@ const ServiceStatus = {
                                 {"Util":"mem_util"},
                                 {isStack:true, yAxisFmt:"{value}%"});
 
+        },
+
+        jstatgcReportRange: function(o, n) {
+            this.loadJstatgcReports();
+        },
+
+        jstatgcReports: function(n, o) {
+            this.jgcChart = genChartOption("CPU Utilization", n, "collect_at",
+                {"Total":"cpu_util", "SYS":"cpu_sy", "USER":"cpu_us"},
+                {isStack:false, yAxisFmt:"{value}%"});
+            this.jmemoryChart = genChartOption("Memory Utilization", n, "collect_at",
+                {"S0U":"s0u", "S1U":"s1u", "EU":"eu", "OU":"ou"},
+                {isStack:true, yAxisFmt: function (v, index) {
+                        return Math.round(v/1024) + 'MB'
+                    }
+                });
+
         }
     },
 
@@ -682,6 +726,16 @@ const ServiceStatus = {
             var range = self.pidstatReportRange
             Ajax.get(`/api/agents/${aid}/services/${sid}/report/pidstat/${range}`, function(reports) {
                 self.pidstatReports = reports
+            })
+        },
+
+        loadJstatgcReports: function() {
+            var self = this;
+            var aid = self.aid;
+            var sid = self.service_id
+            var range = self.jstatgcReportRange
+            Ajax.get(`/api/agents/${aid}/services/${sid}/report/jstatgc/${range}`, function(reports) {
+                self.jstatgcReports = reports
             })
         }
     }

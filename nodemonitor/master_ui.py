@@ -11,7 +11,8 @@ import logging
 from datetime import datetime, timedelta
 from flask import Flask, render_template
 from common import dump_json
-from master import Agent, NSystemReport, NCPUReport, NMemoryReport, NDiskReport, SInfo, SPidstatReport
+from master import Agent, NSystemReport, NCPUReport, NMemoryReport, NDiskReport, \
+    SInfo, SPidstatReport, SJstatGCReport
 logging.basicConfig(level=logging.INFO)
 
 
@@ -101,6 +102,12 @@ def get_agent_services(aid):
 @_APP.route('/api/agents/<aid>/services/<service_id>/report/pidstat/<any(last_hour,last_day,last_week):date_range>', methods=['GET'])
 def get_service_pidstats(aid, service_id, date_range='last_hour'):
     reports = SPidstatReport.query_by_rtime(service_id, *calc_daterange(date_range))
+    return dump_json(reports)
+
+
+@_APP.route('/api/agents/<aid>/services/<service_id>/report/jstatgc/<any(last_hour,last_day,last_week):date_range>', methods=['GET'])
+def get_service_jstatgc(aid, service_id, date_range='last_hour'):
+    reports = SJstatGCReport.query_by_rtime(service_id, *calc_daterange(date_range))
     return dump_json(reports)
 
 

@@ -338,6 +338,23 @@ class GlobalFuncTest(unittest.TestCase):
                                            disk_rd=1.0, disk_wr=7.17, disk_ccwr=2.45),
                          pidrep)
 
+    def test_parse_jstatgc(self):
+        c = '''
+        Timestamp   S0C    S1C      S0U    S1U      EC       EU        OC         OU       MC       MU     CCSC   CCSU      YGC   YGCT    FGC    FGCT     GCT
+        13939.4  	0.0    30720.0  0.0    30720.0  342016.0 243712.0 4345856.0   776192.2  66896.0 65355.5 8060.0 7777.3    119   40.678   2      2.100   40.678
+'''
+        ctime = datetime.now()
+        statgc_rep = nm.parse_jstatgc('1', ctime, 'serv1', c)
+        self.assertIsNotNone(statgc_rep)
+        self.assertIsNotNone(statgc_rep.recv_at)
+        del statgc_rep['recv_at']
+        self.assertEqual(nm.SJstatGCReport('1', service_id='serv1', collect_at=ctime, ts=13939.4,
+                                           s0c=0.0, s1c=30720.0, s0u=0.0, s1u=30720.0,
+                                           ec=342016.0, eu=243712.0, oc=4345856.0, ou=776192.2,
+                                           mc=66896.0, mu=65355.5, ccsc=8060.0, ccsu=7777.3,
+                                           ygc=119, ygct=40.678, fgc=2, fgct=2.1, gct=40.678),
+                         statgc_rep)
+
 
 class ModelTest(unittest.TestCase):
 

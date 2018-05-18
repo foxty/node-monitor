@@ -46,49 +46,62 @@ class TextTableTest(unittest.TestCase):
     def test_creation(self):
         t = TextTable(self._TABLE)
 
+        self.assertTrue(t.has_body)
         self.assertEqual(3, t.size)
         self.assertEqual(8, len(t._hheader))
         self.assertEqual('Abcdefgg', ''.join(t._hheader))
         rows = t.get_rows()
         self.assertEqual(3, len(rows))
-        self.assertEqual(('a1', 'b1', 'c1', 'd1', 'e1', 'f1', 'g1', 'g2'), rows[0])
-        self.assertEqual(('1', '2', '3', '4', '5', '6', '7', '77'), rows[1])
-        self.assertEqual(('1.1', '2.2', '3.3', '4.4', '5.5', '6.6', '7.7', '77.77'), rows[2])
+        self.assertEqual(('a1', 'b1', 'c1', 'd1', 'e1', 'f1', 'g1', 'g2'), rows[0].as_tuple())
+        self.assertEqual(('1', '2', '3', '4', '5', '6', '7', '77'), rows[1].as_tuple())
+        self.assertEqual(('1.1', '2.2', '3.3', '4.4', '5.5', '6.6', '7.7', '77.77'), rows[2].as_tuple())
 
         t = TextTable(self._TABLE, 1)
+        self.assertTrue(t.has_body)
         self.assertEqual(2, t.size)
         self.assertEqual(8, len(t._hheader))
-        self.assertEqual(('1', '2', '3', '4', '5', '6', '7', '77'), t.get_rows()[0])
+        self.assertEqual(('1', '2', '3', '4', '5', '6', '7', '77'), t.get_rows()[0].as_tuple())
         self.assertEqual('a1b1c1d1e1f1g1g2', ''.join(t._hheader))
 
         t = TextTable(self._TABLE, 2)
+        self.assertTrue(t.has_body)
         self.assertEqual(1, t.size)
         self.assertEqual(8, len(t._hheader))
-        self.assertEqual(('1.1', '2.2', '3.3', '4.4', '5.5', '6.6', '7.7', '77.77'), t.get_rows()[0])
+        self.assertEqual(('1.1', '2.2', '3.3', '4.4', '5.5', '6.6', '7.7', '77.77'), t.get_rows()[0].as_tuple())
         self.assertEqual('123456777', ''.join(t._hheader))
 
     def test_gets(self):
         t = TextTable(self._TABLE)
+        r0 = t[0]
         self.assertEqual('a1', t.get(0, 'A'))
+        self.assertEqual('a1a1a1', r0['A'] + r0[0] + r0.get('A'))
         self.assertEqual('b1', t.get(0, 'b'))
         self.assertEqual('g1', t.get(0, 'g'))
         self.assertEqual(['g1', 'g2'], t.gets(0, 'g'))
         self.assertIsNone(t.get(0, 'non-exist'))
         self.assertEqual('aa', t.get(0, 'non-exist', 'aa'))
 
+        r1 = t[1]
         self.assertEqual(1, t.get_int(1, 'A'))
+        self.assertEqual('1', r1['A'])
+        self.assertEqual(1, r1.get_int('A'))
         self.assertEqual(2, t.get_int(1, 'b'))
         self.assertEqual(7, t.get_int(1, 'g'))
         self.assertEqual([7, 77], t.get_ints(1, 'g'))
         self.assertIsNone(t.get(1, 'non-exist'))
         self.assertEqual(8, t.get(1, 'non-exist', 8))
 
+        r2 = t[2]
         self.assertEqual(1.1, t.get_float(2, 'A'))
+        self.assertEqual(1.1, r2.get_float('A'))
         self.assertEqual(2.2, t.get_float(2, 'b'))
         self.assertEqual(7.7, t.get_float(2, 'g'))
         self.assertEqual([7.7, 77.77], t.get_floats(2, 'g'))
+        self.assertEqual([7.7, 77.77], r2.get_floats('g'))
         self.assertIsNone(t.get(2, 'non-exist'))
+        self.assertIsNone(r2.get('non-exist'))
         self.assertEqual(8.8, t.get(1, 'non-exist', 8.8))
+        self.assertEqual(8.8, r2.get('non-exist', 8.8))
 
 
 class MonMsgTest(unittest.TestCase):

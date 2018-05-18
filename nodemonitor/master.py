@@ -81,6 +81,12 @@ _DB_SCHEMA = r'''
     CREATE INDEX IF NOT EXISTS `idx_spr_collect_at` ON `service_pidstat_report` (collect_at DESC);
     CREATE INDEX IF NOT EXISTS `idx_spr_recv_at` ON `service_pidstat_report` (recv_at DESC);
     
+    CREATE TABLE IF NOT EXISTS service_jstatgc_report(aid, service_id, collect_at timestamp, 
+        ts, s0c, s1c, s0u, s1u, ec, eu, oc, ou, mc, mu, ccsc, ccsu, ygc, ygct, fgc, fgct, gct, recv_at timestamp);
+    CREATE INDEX IF NOT EXISTS `idx_sjgc_aid` ON `service_jstatgc_report` (`aid` DESC);
+    CREATE INDEX IF NOT EXISTS `idx_sjgc_collect_at` ON `service_jstatgc_report` (collect_at DESC);
+    CREATE INDEX IF NOT EXISTS `idx_sjgc_recv_at` ON `service_jstatgc_report` (recv_at DESC);
+    
     CREATE TABLE IF NOT EXISTS alarm(id PRIMARY KEY, entity_id, entity_type, type, state, duration, create_at timestamp);
     '''
 _RE_SYSREPORT = re.compile('.*?(?P<users>\\d+)\\suser.*'
@@ -212,7 +218,7 @@ def parse_df(aid, collect_time, content):
     """
     t = TextTable(content)
     if t.size > 1:
-        diskreps = [NDiskReport(aid, collect_time, *row, recv_at=datetime.now()) for row in t.get_rows()]
+        diskreps = [NDiskReport(aid, collect_time, *row.as_tuple(), recv_at=datetime.now()) for row in t.get_rows()]
         return diskreps
     else:
         logging.warn('invalid content of `df` : %s', content)
@@ -321,7 +327,7 @@ def parse_dstat_dio(aid, collect_time, content):
 def parse_pidstat(aid, collect_time, service_id, content):
     t = TextTable(content, header_ln=1)
     if t.size > 1:
-        prow = t.get_rows()[0]
+        prow = t[0]
         tid = int(prow[2])
         cpu_us, cpu_sy, cpu_gu, cpu_util = float(prow[3]), float(prow[4]), float(prow[5]), float(prow[6])
         mem_minflt, mem_majflt, mem_vsz, mem_rss, mem_util = float(prow[8]), float(prow[9]), \
@@ -335,6 +341,31 @@ def parse_pidstat(aid, collect_time, service_id, content):
         return rep
     else:
         logging.warn('invalid content of `pidstat` : %s', content)
+        return None
+
+
+def parse_jstatgc(aid, collect_time, service_id, content):
+    t = TextTable(content)
+    if t.has_body:
+        data = t[0]
+        ts = data.get_float('Timestamp')
+        S0C, S1C = data.get_float('S0C'), data.get_float('S1C')
+        S0U, S1U = data.get_float('S0U'), data.get_float('S1U')
+        EC, EU = data.get_float('EC'), data.get_float('EU')
+        OC, OU = data.get_float('OC'), data.get_float('OU')
+        MC, MU = data.get_float('MC'), data.get_float('MU')
+        CCSC, CCSU = data.get_float('CCSC'), data.get_float('CCSU')
+        YGC, YGCT = data.get_int('YGC'), data.get_float('YGCT')
+        FGC, FGCT, GCT = data.get_int('FGC'), data.get_float('FGCT'), data.get_float('GCT')
+        rep = SJstatGCReport(aid=aid, service_id=service_id, collect_at=collect_time, ts=ts,
+                             s0c=S0C, s1c=S1C, s0u=S0U, s1u=S1U,
+                             ec=EC, eu=EU, oc=OC, ou=OU,
+                             mc=MC, mu=MU, ccsc=CCSC, ccsu=CCSU,
+                             ygc=YGC, ygct=YGCT, fgc=FGC, fgct=FGCT, gct=GCT, recv_at=datetime.now())
+        logging.debug('get jstatgc report %s', rep)
+        return rep
+    else:
+        logging.warn('invalid content of `jstat-gc` : %s', content)
         return None
 
 
@@ -600,6 +631,17 @@ class SPidstatReport(Model, ServiceChronoModel):
         return cls.query(where='aid=?', orderby='collect_at DESC', params=[aid], limit=count)
 
 
+class SJstatGCReport(Model, ServiceChronoModel):
+    _TABLE = 'service_jstatgc_report'
+    _FIELDS = ['aid', 'service_id', 'collect_at',
+               'ts', 's0c', 's1c', 's0u', 's1u', 'ec', 'eu', 'oc', 'ou', 'mc', 'mu',
+               'ccsc', 'ccsu', 'ygc', 'ygct', 'fgc', 'fgct', 'gct', 'recv_at']
+
+    @classmethod
+    def lst_report_by_aid(cls, aid, count):
+        return cls.query(where='aid=?', orderby='collect_at DESC', params=[aid], limit=count)
+
+
 class Alarm(Model):
     _TABLE = ""
     _FIELDS = [""]
@@ -802,11 +844,11 @@ class Master(object):
             ser.add_history()
         else:
             # existing service, check for an update
-            logging.info('refreshing service %s', sname)
+            logging.debug('refreshing service %s from %s', sname, aid)
             ser = services[sname]
             ser.set(last_report_at=collect_at, status=SInfo.STATUS_ACT)
             if ser.pid != spid:
-                logging.info('service %s pid change detected: %s -> %s', sname, ser.pid, spid)
+                logging.info('service [%s] pid change detected: %s -> %s', sname, ser.pid, spid)
                 ser.chgpid(spid)
 
         # set service to inactive if no status update for 5 minutes
@@ -820,11 +862,13 @@ class Master(object):
 
     def _parse_smetrics(self, metrics, service):
         for metric in metrics:
+            logging.info('parsing %s of %s', metric.category, service.name)
             if 'pidstat' == metric.category:
                 pidrep = parse_pidstat(metric.aid, metric.collect_at, service.id, metric.content)
                 pidrep.save() if pidrep else None
-            if 'jstat-gc' == 'metric.catetory':
-                pass
+            if 'jstat-gc' == metric.category:
+                gcrep = parse_jstatgc(metric.aid, metric.collect_at, service.id, metric.content)
+                gcrep.save() if gcrep else None
 
     def _agent_stop(self, msg):
         return True

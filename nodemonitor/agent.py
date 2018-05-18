@@ -142,12 +142,11 @@ class AgentConfig(object):
             },
             "jstat-gc": {
                 "type": "java",
-                "cmd": ["${java_home}/bin/jstat", "-gc", "${pid}"]
+                "cmd": ["su", "${puser}", "-c", "${java_home}/bin/jstat -gc -t ${pid}"]
             }
         },
 
         "services": [
-
             {
                 "name": "agent",
                 "type": "python",
@@ -174,7 +173,7 @@ class AgentConfig(object):
                 "name": "SAPM.Reactor@Solaris",
                 "type": "java",
                 "lookup_keyword": "-Dreactor.home=/export",
-                "env" : {
+                "env": {
                     "java_home": "/export/home/stargus/jdk1.8.0_40",
                     "log_home": "/export/home/stargus/log/"
                 },
@@ -360,9 +359,8 @@ class NodeCollector(threading.Thread):
         logging.debug('translate cmd=%s by context=%s', cmd, context)
         newcmd = []
         for c in cmd:
-            m = self.CMD_VAR_PATTERN.search(c)
-            if m:
-                var = m.group(1)
+            vars = self.CMD_VAR_PATTERN.findall(c)
+            for var in vars:
                 value = context.get(var, None)
                 if value is not None:
                     c = c.replace('${%s}' % var, value)
@@ -422,17 +420,18 @@ class NodeCollector(threading.Thread):
         name = service['name']
         stype = service.get('type', None)
         lookup = service['lookup_keyword']
-        pid = self._find_service_pid(name, lookup)
+        puser, pid = self._find_service_info(name, lookup)
         if not pid:
-            logging.warn('can\'t find pid for [%s].', name)
+            logging.info('can\'t find pid for [%s].', name)
             return
         metric_names = service['metrics']
         clocks = service['clocks']
         env = service.get('env', {})
         env['pid'] = pid
+        env['puser'] = puser
         logging.info('collecting for service [%s(%s)]: metrics=%s, clocks=%s.',
                      name, pid, metric_names, clocks)
-        service_result = {'name': name, 'pid': pid, 'type': stype}
+        service_result = {'name': name, 'pid': pid, 'puser': puser, 'type': stype}
         service_metrics = {}
         for mname in metric_names:
             try:
@@ -452,13 +451,14 @@ class NodeCollector(threading.Thread):
         logging.info('%d metrics collected for %s.', len(service_metrics), name)
         return service_result
 
-    def _find_service_pid(self, servname, lookup_keyword):
+    def _find_service_info(self, servname, lookup_keyword):
         """
-        find the pid of service by keyword, via `ps -ef`
+        find the pid, puser of service by keyword, via `ps -ef`
         :param servname:
         :param lookup_keyword:
-        :return: pid or None if not found
+        :return: (puser, pid) or (None, None) if not found
         """
+        service_puser = None
         service_pid = None
         logging.info('lookup pid service=%s, keyworkd=%s', servname, lookup_keyword)
         try:
@@ -466,15 +466,14 @@ class NodeCollector(threading.Thread):
             psinfo = [psinfo for psinfo in pslist.split('\n') if lookup_keyword in psinfo]
             logging.debug('find psinfo of %s: %s', servname, psinfo)
             if len(psinfo) == 1:
-                pid = [e for e in psinfo[0].split(' ') if e][1]
-                if pid and pid.isdigit():
+                puser, pid = [e.strip() for e in psinfo[0].split(' ') if e][0:2]
+                if pid and pid.isdigit() and puser:
+                    service_puser = puser
                     service_pid = pid
-                else:
-                    service_pid = None
             logging.info('pid of service %s is %s', servname, service_pid)
         except Exception:
             logging.exception('look up service %s by %s failed', servname, lookup_keyword)
-        return service_pid
+        return service_puser, service_pid
 
 
 class NodeAgent:
