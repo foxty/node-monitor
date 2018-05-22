@@ -1,11 +1,20 @@
 .footer {
+    clear: both;
     text-align:center;
     padding:5px;
     border-top:1px solid #eee;
 }
 
-
 .no_data {
     text-align: center;
     font-size: 150%;
+}
+.router-link-active {
+    color:darkblue;
+    font-weight: bold;
+    text-decoration:underline;
+}
+
+.router-link-exact-active {
+
 }

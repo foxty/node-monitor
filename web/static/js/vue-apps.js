@@ -1,208 +1,6 @@
-/**jQuery Defaults**/
-$(document).ajaxStart(function() {
-	console.log('ajax start...')
-}).ajaxStop(function(){
-	console.log('ajax stop.')
-}).ajaxError(function (event, jqXHR, ajaxSettings, error){
-	var ct = jqXHR.getResponseHeader("Content-Type");
-	if(/application\/json/.test(ct)) {
-		alert(jqXHR.responseText);
-	} else {
-	    alert('Request error, please check console log.')
-		console.error(jqXHR.responseText);
-	}
-})
-
-/** Shortcut for ajax **/
-var Ajax = {
-	
-	doAjax: function(url, method, data, succ) {
-		if(typeof(data) == 'function' && succ == undefined) {
-			succ = data;
-		}
-		$.ajax({
-		    url: url,
-		    type: method,
-		    data: data,
-		    dataType: "json",
-		    success: succ
-		});
-	},
-
-	get: function(url, succ) {
-	    this.doAjax(url,'GET', succ);
-	},
-
-	post: function(url, data, succ) {
-		this.doAjax(url, "POST", data, succ);
-	},
-	
-	put: function(url, data, succ) {
-		this.doAjax(url, "PUT", data, succ);
-	},
-	
-	delete: function(url, succ) {
-		this.doAjax(url, "DELETE", null, succ);
-	}
-}
-
-/**Filters**/
-Vue.filter('howLongAgo', function(date) {
-	var result = "还未";
-	if(date) {
-		var curTime = new Date().getTime();
-		var gap = curTime - date;
-		var minutes = parseInt(gap / (1000 * 60));
-		if (minutes / (60 * 24) > 1) {
-			result = parseInt(minutes / (60 * 24)) + "天前";
-		} else if (minutes / 60 > 1) {
-			result = parseInt(minutes / 60) + "小时前";
-		} else if (minutes > 0) {
-			result = minutes + "分钟前";
-		} else {
-			result = "刚刚";
-		}
-	}
-	return result;
-});
-Vue.filter('datePrint', function(millis) {
-	var date = new Date(millis);
-	return (date.getYear() + 1900) + "-" + (date.getMonth() + 1) + "-" + date.getDate();
-});
-
-
-/**Components**/
-Vue.component('pager', {
-	template: '<div class="pagination pagination-centered" style="clear:both;">\
-		<ul><li :class="{disabled:pagination.page<=1}"><a @click="to(pagination.page-1)">上一页</a></li>\
-		<li v-for="p in pages"><a href="javascript:void(0);" @click="to(p)">{{p}}</a></li>\
-		<li :class="{disabled:pagination.page >= pagination.maxPage}"><a @click="to(pagination.page+1)">下一页</a></li>\
-		</ul></div>',
-	props: ['pagination'],
-	data: function() {
-		var page = this.pagination.page;
-		var maxPage = this.pagination.maxPage
-		var factor = parseInt(page / 10);
-		var startPage = factor * 10 + 1;
-		var endPage = Math.min(maxPage, factor * 10 + 10);
-		var pages = [];
-		for(var p = startPage; p <= endPage; p ++) {
-			pages.push(p);
-		}
-		return {pages:pages}
-	},
-	methods: {
-		to: function(page) {
-			if (page >= 1 && page <= this.pagination.maxPage) {
-				this.$emit("to", page);
-			} else {
-				console.warn("Invalid page " + page);
-			}
-		}
-	}
-});
-
-// In-place Editor
-Vue.component("v-ipe", {
-	template: '{{content}}',
-	props: ['content'],
-	data: function() {
-		return {}
-	},
-	methods: {		
-	}
-});
-
-// Window
-Vue.component("v-window", {
-	template: "<div v-if='on'>" +
-			"<div style='position:absolute;top:0;left:0;background-color:#666;opacity:0.5;width:100%;height:100%;z-index:100;'></div>" +
-			"<div style='position:absolute;padding:10px;border:1px solid #999;background-color:#fff;z-index:110;" +
-			"-webkit-border-radius:4px;-moz-border-radius:4px;border-radius:4px;width:{{w}}px;min-width:320px;'>" +
-			"<span style='float:right;'><a @click='closeIt'>X</a></span>" +
-			"<h4 v-if='title' style='margin:0;border-bottom:1px solid #D2B48C;padding:0 0 5px 10px;'>{{title}}</h4>" +
-			"<div style='padding:5px 5px 5px 10px;'><slot>NO CONTENT!</slot></div>" +
-			"</div>" +
-			"</div>",
-	props: ["name", "on", "title", "w", "h"],
-	data: function() {
-		return {};
-	},
-	methods: {
-		closeIt: function() {
-			this.$emit("close");
-			console.log("window " + this.name + " closed")
-		}
-	}
-});
-
-/**Echarts**/
-function genChartOption(title, data, cateProp, seriesPropsMapping, graphOptions) {
-    graphOptions = graphOptions || {}
-    graphOptions.isStack = graphOptions.isStack || false
-    graphOptions.yAxisFmt = graphOptions.yAxisFmt || '{value}'
-    var category = []
-    var seriesMap = {}
-    var legends = []
-    data.forEach(function(d) {
-        category.push(d[cateProp]);
-        for(serieName in seriesPropsMapping) {
-            if (!seriesMap[serieName]) {
-                seriesMap[serieName] = {name: serieName, type: 'line', data: []};
-            }
-            serie = seriesMap[serieName];
-            serieDataProp = seriesPropsMapping[serieName];
-            if(graphOptions.isStack) {
-                serie.stack = 'Total';
-                serie.areaStyle = {normal: {}};
-            }
-            serie.data.push(d[serieDataProp])
-        }
-    })
-    var series = [];
-    for(serieName in seriesMap) {
-        legends.push(serieName);
-        series.push(seriesMap[serieName]);
-    }
-
-    return {
-        title: {text: title},
-        animation: false,
-        tooltip: {
-            trigger: 'axis'
-        },
-        legend: {
-                data:legends
-        },
-        xAxis: {
-            type: 'category',
-            data: category,
-            boundaryGap : false,
-            axisLabel: {
-                formatter: function(v, idx) {
-                    return v && v.length > 19 ?  v.substr(0,19) : v;
-                }
-            }
-        },
-        yAxis: {
-            type: 'value',
-            axisLabel: {
-                formatter: graphOptions.yAxisFmt
-            }
-        },
-        dataZoom: [{
-                type: 'slider', // 这个 dataZoom 组件是 slider 型 dataZoom 组件
-                start: 0,      // 左边在 10% 的位置。
-                end: 100         // 右边在 60% 的位置。
-            }
-        ],
-        series: series
-    }
-}
-
 /**Vue Apps**/
 const Dashboard = {
-    template: `<div><div class="page-header"><h1>Dashboard</h1></div>
+    template: `<div>
         <div class="row" style="padding:15px;">
             <div class="col-md-3 alert alert-success" style="text-align:center">
                 <h3>{{summary ? summary.agent_count : 'N/A'}} Nodes</h3></div>
@@ -294,7 +92,7 @@ const Dashboard = {
 
 const Nodes = {
 
-    template: `<div><div class="page-header"><h1>Node List</h1></div>
+    template: `<div>
         <table class="table table-bordered" v-if="agents && agents.length > 0">
             <thead>
                 <tr>
@@ -346,16 +144,21 @@ const Nodes = {
 const Node = {
     props: ['aid'],
 
-    template: `<div><div class="page-header"><h1>Node: {{agent ? agent.name : ''}} ({{aid}}) </h1></div>
-        <ul class="nav nav-tabs">
-          <li role="presentation" :class="{'active': $route.name == 'nodeStatus'}">
-            <router-link :to="{name: 'nodeStatus', params: {aid:aid}}">Status</router-link>
-          </li>
-          <li role="presentation" :class="{'active': $route.name == 'nodeServices' || $route.name == 'serviceStatus'}">
-            <router-link :to="{name: 'nodeServices', params: {aid:aid}}">Services</router-link>
-          </li>
-        </ul>
-        <div style="margin-top:10px;"><router-view></router-view></div>
+    template: `<div>
+        <div class="col-md-2">
+            <ul class="nav nav-pills nav-stacked">
+              <li role="presentation" :class="{'active': $route.name == 'nodeStatus'}">
+                <router-link :to="{name: 'nodeStatus', params: {aid:aid}}">Status</router-link>
+              </li>
+              <li role="presentation" :class="{'active': $route.name == 'nodeServices' || $route.name.startsWith('service')}">
+                <router-link :to="{name: 'nodeServices', params: {aid:aid}}">Services</router-link>
+              </li>
+            </ul>
+        </div>
+        <div class="col-md-10">
+            <div class="alert alert-info">Node {{agent.name}}@{{agent.host}}</div>
+            <router-view></router-view>
+        </div>
     </div>`,
 
     data: function() {
@@ -365,18 +168,22 @@ const Node = {
     },
 
     created: function() {
-        this.getAgent();
+        this.loadData();
         // set default tab
         if(this.$route.name == 'node') router.push({name: 'nodeStatus'})
     },
 
     methods: {
-        getAgent: function() {
+        loadData: function() {
             var self = this;
             var aid = self.aid;
             Ajax.get(`/api/agents/${aid}`, function(agent) {
                 self.agent = agent
             })
+        },
+
+        showServiceStatus: function(serviceId) {
+            this.curServiceId = serviceId
         }
     }
 }
@@ -394,10 +201,14 @@ const NodeStatus = {
                     <button class="btn btn-sm btn-success" @click="loadSysReports()">Reload</button>
                 </div>
                 <div class="panel-body row">
-                    <chart :options="sysLoad" style="width:100%;height:300px"></chart>
-                    <div class='col-md-6'><chart :options="sysUsers" style="width:100%;height:300px"></chart></div>
-                    <div class='col-md-6'><chart :options="sysCs" style="width:100%;height:300px"></chart></div>
+                    <div v-if="sysReports && sysReports.length > 0">
+                        <chart :options="sysLoad" style="width:100%;height:300px"></chart>
+                        <div class='col-md-6'><chart :options="sysUsers" style="width:100%;height:300px"></chart></div>
+                        <div class='col-md-6'><chart :options="sysCs" style="width:100%;height:300px"></chart></div>
+                    </div>
+                    <div v-else class="no_data">No system load data.</div>
                 </div>
+                
             </div>
 
             <div class="panel panel-default">
@@ -409,7 +220,10 @@ const NodeStatus = {
                     <button class="btn btn-sm btn-success" @click="loadCpuReports()">Reload</button>
                  </div>
                 <div class="panel-body row">
-                    <chart :options="cpuChart" style="width:100%;height:300px"></chart>
+                    <div v-if="cpuReports && cpuReports.length > 0">
+                        <chart :options="cpuChart" style="width:100%;height:300px"></chart>
+                    </div>
+                    <div v-else class="no_data">No CPU data.</div>
                 </div>
             </div>
 
@@ -422,8 +236,11 @@ const NodeStatus = {
                     <button class="btn btn-sm btn-success" @click="loadMemReports()">Reload</button>
                 </div>
                 <div class="panel-body row">
-                    <div class="col-md-6"><chart :options="memoryChart" style="width:100%;height:300px"></chart></div>
-                    <div class="col-md-6"><chart :options="swapChart" style="width:100%;height:300px"></chart></div>
+                    <div v-if="memReports && memReports.length > 0">
+                        <div class="col-md-6"><chart :options="memoryChart" style="width:100%;height:300px"></chart></div>
+                        <div class="col-md-6"><chart :options="swapChart" style="width:100%;height:300px"></chart></div>
+                    </div>
+                    <div v-else class="no_data">No memory data.</div>
                 </div>
             </div>
 
@@ -436,7 +253,10 @@ const NodeStatus = {
                     <button class="btn btn-sm btn-success" @click="loadDiskReports()">Reload</button>
                 </div>
                 <div class="panel-body row">
-                    <div class="col-md-12"><chart :options="diskChart" style="width:100%;height:300px"></chart></div>
+                    <div v-if="diskReports && diskReports.length > 0">
+                        <chart :options="diskChart" style="width:100%;height:300px"></chart>
+                    </div>
+                    <div v-else class="no_data">No disk data.</div>
                 </div>
             </div>
 		</div>`,
@@ -448,13 +268,16 @@ const NodeStatus = {
 		        sysLoad: null,
                 sysUsers: null,
                 sysCs: null,
+
 		        cpuReportsRange: 'last_hour',
 		        cpuReports: null,
 		        cpuChart: null,
+
 		        memReportsRange: 'last_hour',
 		        memReports: null,
 		        memoryChart: null,
 		        swapChart: null,
+
 		        diskReportsRange: 'last_hour',
 		        diskReports: null,
 		        diskChart: null
@@ -570,7 +393,62 @@ const NodeStatus = {
 const NodeServices = {
     props: ['aid'],
 
-    template: `<div>
+    template: `
+    <div>
+        <ul class="nav nav-tabs">
+            <li role="presentation" :class="{'active': $route.name == 'serviceList'}">
+                <router-link :to="{name: 'serviceList', params: {aid: aid}}">
+                    List
+                </router-link>
+            </li>
+            <li role="presentation" :class="{'active': $route.params.service_id == s.id}" v-for="s in services" >
+                <router-link :to="{name: 'serviceStatus', params: {aid:s.aid, service_id:s.id}}">{{s.name}}</router-link>
+            </li>
+        </ul>
+        <div style="margin-top: 10px">
+            <router-view :key="curServiceId" 
+                v-bind:services="services" 
+                v-bind:services_status_map="services_status_map">
+            </router-view>
+        </div>
+    </div>`,
+
+    data: function() {
+        return {
+            services: null,
+            services_status_map: {},
+            curServiceId: null
+        }
+    },
+
+    created: function() {
+        var self = this;
+        self.loadServices();
+        router.push({name: 'serviceList'})
+        router.afterEach((to, from) => {
+            self.curServiceId = to.params.service_id
+        })
+    },
+
+    methods: {
+        loadServices: function() {
+            var self = this;
+            var aid = self.aid
+            Ajax.get(`/api/agents/${aid}/services`, function(data) {
+                self.services = data.services;
+                self.services_status_map = data.services_status_map;
+                console.debug('get services by aid ' + aid)
+                console.debug(data)
+            })
+        }
+    }
+}
+
+const ServiceList = {
+    props: ['aid', 'services', 'services_status_map'],
+
+    template: `
+    <div>
         <table class="table table-bordered" v-if="services && services.length > 0">
             <thead>
                 <tr>
@@ -601,27 +479,13 @@ const NodeServices = {
     </div>`,
 
     data: function() {
-        return {
-            services: null,
-            services_status_map: {}
-        }
+        return {}
     },
 
     created: function() {
-        this.loadServices();
     },
 
     methods: {
-        loadServices: function() {
-            var self = this;
-            var aid = self.aid
-            Ajax.get(`/api/agents/${aid}/services`, function(data) {
-                self.services = data.services;
-                self.services_status_map = data.services_status_map;
-                console.debug('get services by aid ' + aid)
-                console.debug(data)
-            })
-        }
     }
 }
 
@@ -643,7 +507,7 @@ const ServiceStatus = {
                     <div><chart :options="cpuChart" style="width:100%;height:300px"></chart></div>
                     <div><chart :options="memoryChart" style="width:100%;height:300px"></chart></div>
                 </div>
-                <div v-else class="no_data">No data of pidstat!</div>
+                <div v-else class="no_data">No pidstat data.</div>
             </div>
         </div>
         
@@ -657,10 +521,48 @@ const ServiceStatus = {
             </div>
             <div class="panel-body row">
                 <div v-if="jstatgcReports && jstatgcReports.length > 0">
+                    <div style="padding: 15px;">
+                        <label>GC</label> 
+                        <table class="table table-bordered">
+                            <thead>
+                                <tr>
+                                    <th>Range</th>
+                                    <th>YGC</th>
+                                    <th>YGC Time(s)</th>
+                                    <th>AVG Time(s)</th>
+                                    <th>FGC</th>
+                                    <th>FGC Time(s)</th>
+                                    <th>AVG Time(s)</th>
+                                    <th>Throughput</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td>{{jstatgcReportRange}}</td>
+                                    <td>{{gcStatusDelta.ygc}}</td>
+                                    <td>{{gcStatusDelta.ygct | decimal}}</td>
+                                    <td>{{gcStatusDelta.avgYgct | decimal}}</td>
+                                    <td>{{gcStatusDelta.fgc}}</td>
+                                    <td>{{gcStatusDelta.fgct | decimal}}</td>
+                                    <td>{{gcStatusDelta.avgFgct | decimal}}</td>
+                                    <td>{{gcStatusDelta.throughput | decimal(6) | percent}}</td>
+                                </tr>
+                                <tr>
+                                    <td>All</td>
+                                    <td>{{gcStatusAll.ygc}}</td>
+                                    <td>{{gcStatusAll.ygct | decimal}}</td>
+                                    <td>{{gcStatusAll.avgYgct | decimal}}</td>
+                                    <td>{{gcStatusAll.fgc}}</td>
+                                    <td>{{gcStatusAll.fgct | decimal}}</td>
+                                    <td>{{gcStatusAll.avgFgct | decimal}}</td>
+                                    <td>{{gcStatusAll.throughput | decimal(6) | percent}}</td>
+                                </tr>
+                            </tbody>
+                        </table>   
+                    </div>
                     <div><chart :options="jmemoryChart" style="width:100%;height:300px"></chart></div>
-                    <div><chart :options="jgcChart" style="width:100%;height:300px"></chart></div>
                 </div>
-                <div v-else class="no_data">No data of jstat-gc!</div>
+                <div v-else class="no_data">No jstat-gc data.</div>
             </div>
         </div>
     </div>`,
@@ -674,11 +576,12 @@ const ServiceStatus = {
 
             jstatgcReportRange: 'last_hour',
             jstatgcReports: null,
+            gcStatusAll: null,
+            gcStatusDelta: null,
             jmemoryChart:null,
             jgcChart:null
         }
     },
-
 
     created: function() {
         this.loadPidstatReports();
@@ -693,7 +596,7 @@ const ServiceStatus = {
         pidstatReports: function(n, o) {
             this.cpuChart = genChartOption("CPU Utilization", n, "collect_at",
                                            {"Total":"cpu_util", "SYS":"cpu_sy", "USER":"cpu_us"},
-                                           {isStack:false, yAxisFmt:"{value}%"});
+                                           {isStack:true, yAxisFmt:"{value}%"});
             this.memoryChart = genChartOption("Memory Utilization", n, "collect_at",
                                 {"Util":"mem_util"},
                                 {isStack:true, yAxisFmt:"{value}%"});
@@ -705,6 +608,51 @@ const ServiceStatus = {
         },
 
         jstatgcReports: function(n, o) {
+            if(!n || n.length == 0) {
+                console.warn('No data for jstat-gc')
+                return;
+            }
+            newestRec = n[n.length - 1]
+            oldestRec = newestRec
+            // Check is there an service restart
+            for (var i = n.length - 2; i >= 0; i --) {
+                if (oldestRec.ts > n[i].ts) {
+                    oldestRec = n[i]
+                } else {
+                    console.warn('Service ' + this.service_id + ' latest restart around ' + n[i].collect_at)
+                    oldestRec = {
+                        ts: 0,
+                        ygc: 0,
+                        ygct: 0,
+                        fgc: 0,
+                        fgct: 0,
+                        gct: 0
+                    }
+                    break;
+                }
+            }
+            this.gcStatusDelta = new function() {
+                this.ts = newestRec.ts - oldestRec.ts
+                this.ygc = newestRec.ygc - oldestRec.ygc
+                this.ygct = newestRec.ygct - oldestRec.ygct
+                this.avgYgct = this.ygc > 0 ? this.ygct/this.ygc : 0
+                this.fgc = newestRec.fgc - oldestRec.fgc
+                this.fgct = newestRec.fgct - oldestRec.fgct
+                this.gct = newestRec.gct - oldestRec.gct
+                this.avgFgct = this.fgc > 0 ? this.fgct/this.fgc : 0
+                this.throughput = 1 - this.gct/this.ts
+            }
+            this.gcStatusAll = new function() {
+                this.ts = newestRec.ts
+                this.ygc = newestRec.ygc
+                this.ygct = newestRec.ygct
+                this.avgYgct = this.ygc > 0 ? this.ygct/this.ygc : 0
+                this.fgc = newestRec.fgc
+                this.fgct = newestRec.fgct
+                this.gct = newestRec.gct
+                this.avgFgct = this.fgc > 0 ? this.fgct/this.fgc : 0
+                this.throughput = 1 - this.gct/this.ts
+            }
             this.jgcChart = genChartOption("CPU Utilization", n, "collect_at",
                 {"Total":"cpu_util", "SYS":"cpu_sy", "USER":"cpu_us"},
                 {isStack:false, yAxisFmt:"{value}%"});
@@ -743,7 +691,7 @@ const ServiceStatus = {
 
 const Alarms = {
 		template: `<div>
-		<div class="page-header"><h1>Alarms</h1></div>
+		    Alarms
 		</div>`,
 		data: function() {
 		    return {}
@@ -759,7 +707,7 @@ const Alarms = {
 
 const Settings = {
 		template: `<div>
-		    <div class="page-header"><h1>Settings</h1></div>
+		    Settings
 		</div>`,
 		data: function() {
 		    return {}
@@ -777,12 +725,14 @@ const router = new VueRouter({
       routes: [
         // 动态路径参数 以冒号开头
         {path: '/', redirect: {name: 'dashboard'}},
-        {path: '/dashboard', name: 'dashboard', component:  Dashboard},
+        {path: '/dashboard', name: 'dashboard', component: Dashboard},
         {path: '/nodes', component: Nodes},
         {path: '/nodes/:aid', name:'node', component: Node, props:true, children: [
                 {path: 'status', name: 'nodeStatus', component: NodeStatus, props: true},
-                {path: 'services', name: 'nodeServices', component: NodeServices, props: true},
-                {path: 'services/:service_id/status', name: 'serviceStatus', component: ServiceStatus, props: true}
+                {path: 'services', name: 'nodeServices', component: NodeServices, props: true, children: [
+                        {path: 'list', name: 'serviceList', component: ServiceList, props: true},
+                        {path: ':service_id/status', name: 'serviceStatus', component: ServiceStatus, props: true}
+                    ]},
             ]
         },
         {path: '/alarms', component:  Alarms},

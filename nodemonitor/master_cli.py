@@ -41,7 +41,7 @@ class NodeConnector(object):
         self.ssh.connect(hostname=self.node_host, username=self.username, password=self.password)
         success, message = self.exec_cmd('uname')
         if success:
-            self.ostype = OSType.SUNOS if 'SunOS' in message[0] else OSType.Linux
+            self.ostype = OSType.SUNOS if 'SunOS' in message[0] else OSType.LINUX
             logging.info('remote os type was %s' % self.ostype)
         else:
             logging.warn('can\'t detect os type use %s as default' % self.ostype)
