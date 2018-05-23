@@ -559,16 +559,21 @@ class MasterDAOTest(BaseDBTest):
         self.assertEqual(123, nag.last_sys_cs)
 
     def test_sinfo_chgpid(self):
+        ct = datetime.now()
         id = uuid4().hex
         sinfo = nm.SInfo(id=id, aid='1', name='serv', pid='123', last_report_at=datetime.now())
         sinfo.save()
         self.assertEqual('1', sinfo.aid)
         self.assertEqual('serv', sinfo.name)
-        sinfo.chgpid('456')
+        sinfo.chgpid('456', ct)
 
         sinfo1 = sinfo.query_by_aid('1')[0]
         self.assertEqual(sinfo, sinfo1)
         self.assertEqual('456', sinfo1.pid)
+
+        history = nm.SInfoHistory.query()
+        self.assertEqual(1, len(history))
+        self.assertEqual(ct, history[0].collect_at)
 
     def test_add_nmemory(self):
         mem = nm.NMemoryReport(aid='12345678', collect_at=datetime.now(),

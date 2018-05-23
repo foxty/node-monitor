@@ -135,9 +135,10 @@ function genChartOption(title, data, cateProp, seriesPropsMapping, graphOptions)
             }
         },
         dataZoom: [{
-                type: 'slider', // 这个 dataZoom 组件是 slider 型 dataZoom 组件
-                start: 0,      // 左边在 10% 的位置。
-                end: 100         // 右边在 60% 的位置。
+                type: 'slider',
+                xAxisIndex: [0],
+                start: 0,
+                end: 100
             }
         ],
         series: series
@@ -205,6 +206,44 @@ Vue.component("v-window", {
         closeIt: function() {
             this.$emit("close");
             console.log("window " + this.name + " closed")
+        }
+    }
+});
+
+// Report toolbar
+Vue.component("report-toolbar", {
+    template: `
+    <div>
+        <label>{{title}}</label> 
+        
+        <div class="btn-group" role="group">
+            <button class="btn btn-sm btn-default" :class="{'btn-primary': range == 'last_hour'}" 
+                @click="changeRange('last_hour')">Last Hour</button>
+            <button class="btn btn-sm btn-default" :class="{'btn-primary': range == 'last_day'}" 
+                @click="changeRange('last_day')">Last Day</button>
+            <button class="btn btn-sm btn-default" :class="{'btn-primary': range == 'last_week'}" 
+                @click="changeRange('last_week')">Last Week</button>
+        </div>
+    
+        <button class="btn btn-sm btn-success" @click="reload()">Reload</button>
+    </div>
+    `,
+    props: ["title"],
+    data: function() {
+        return {
+            range: 'last_hour'
+        };
+    },
+    methods: {
+        changeRange: function(range) {
+            this.range = range
+            this.$emit('changeRange', range)
+            console.log('change range of ' + this.title + ' to ' + range )
+        },
+
+        reload: function() {
+            this.$emit("reload");
+            console.log("reload data of " + this.title)
         }
     }
 });

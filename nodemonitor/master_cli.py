@@ -152,6 +152,7 @@ def push_to_nodes(nodelist):
     """push agent script to remote node and start the agent via ssh
     node list should contains list of tuple like (host, userame, password)
     """
+    logging.info('star pushing to nodes %s', nodelist)
     mhost = socket.gethostbyaddr(socket.gethostname())[0]
     for node in nodelist:
         host, user, password = node
@@ -190,7 +191,7 @@ def usage():
 
 
 if __name__ == '__main__':
-
+    logging.info('starting master cli:')
     try:
         opts, args = getopt.getopt(sys.argv[1:], "hi:p:m", ['help', 'install=', 'push=', 'master', 'stop-agents='])
     except getopt.GetoptError as e:
@@ -200,7 +201,7 @@ if __name__ == '__main__':
         if opt in ['-p', '--push', '-i', '--install']:
             with open(v, 'r') as f:
                 nodelist = [[ele.strip() for ele in l.strip().split(',')]
-                            for l in f.readlines() if l and not l.strip().startswith('#')]
+                            for l in f.readlines() if l.strip() and not l.strip().startswith('#')]
             push_to_nodes(nodelist)
         elif opt in ['-m', '--master']:
             from master import master_main

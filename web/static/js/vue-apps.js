@@ -156,7 +156,7 @@ const Node = {
             </ul>
         </div>
         <div class="col-md-10">
-            <div class="alert alert-info">Node {{agent.name}}@{{agent.host}}</div>
+            <div class="alert alert-info">Node {{agent ? agent.name + '@' + agent.host : ''}}</div>
             <router-view></router-view>
         </div>
     </div>`,
@@ -194,66 +194,29 @@ const NodeStatus = {
 		template: `<div>
             <div class="panel panel-default">
                 <div class="panel-heading">
-                    System
-                    <button class="btn btn-sm btn-link" @click="sysReportsRange='last_hour'">Last Hour</button>
-                    <button class="btn btn-sm btn-link" @click="sysReportsRange='last_day'">Last Day</button>
-                    <button class="btn btn-sm btn-link" @click="sysReportsRange='last_week'">Last Week</button>
-                    <button class="btn btn-sm btn-success" @click="loadSysReports()">Reload</button>
+                    <report-toolbar title="Node Status" v-on:changeRange="reportRange = $event" v-on:reload="loadReports()"></report-toolbar>
                 </div>
-                <div class="panel-body row">
+                <div class="panel-body">
+                
                     <div v-if="sysReports && sysReports.length > 0">
                         <chart :options="sysLoad" style="width:100%;height:300px"></chart>
                         <div class='col-md-6'><chart :options="sysUsers" style="width:100%;height:300px"></chart></div>
                         <div class='col-md-6'><chart :options="sysCs" style="width:100%;height:300px"></chart></div>
                     </div>
                     <div v-else class="no_data">No system load data.</div>
-                </div>
-                
-            </div>
-
-            <div class="panel panel-default">
-                <div class="panel-heading">
-                    CPU
-                    <button class="btn btn-sm btn-link" @click="cpuReportsRange='last_hour'">Last Hour</button>
-                    <button class="btn btn-sm btn-link" @click="cpuReportsRange='last_day'">Last Day</button>
-                    <button class="btn btn-sm btn-link" @click="cpuReportsRange='last_week'">Last Week</button>
-                    <button class="btn btn-sm btn-success" @click="loadCpuReports()">Reload</button>
-                 </div>
-                <div class="panel-body row">
-                    <div v-if="cpuReports && cpuReports.length > 0">
+                    
+                    <div v-if="cpuReports && cpuReports.length > 0" style="clear: both;">
                         <chart :options="cpuChart" style="width:100%;height:300px"></chart>
                     </div>
                     <div v-else class="no_data">No CPU data.</div>
-                </div>
-            </div>
-
-            <div class="panel panel-default">
-                <div class="panel-heading">
-                    Memory
-                    <button class="btn btn-sm btn-link" @click="memReportsRange='last_hour'">Last Hour</button>
-                    <button class="btn btn-sm btn-link" @click="memReportsRange='last_day'">Last Day</button>
-                    <button class="btn btn-sm btn-link" @click="memReportsRange='last_week'">Last Week</button>
-                    <button class="btn btn-sm btn-success" @click="loadMemReports()">Reload</button>
-                </div>
-                <div class="panel-body row">
+                    
                     <div v-if="memReports && memReports.length > 0">
                         <div class="col-md-6"><chart :options="memoryChart" style="width:100%;height:300px"></chart></div>
                         <div class="col-md-6"><chart :options="swapChart" style="width:100%;height:300px"></chart></div>
                     </div>
                     <div v-else class="no_data">No memory data.</div>
-                </div>
-            </div>
-
-            <div class="panel panel-default">
-                <div class="panel-heading">
-                    Disk Util
-                    <button class="btn btn-sm btn-link" @click="diskReportsRange='last_hour'">Last Hour</button>
-                    <button class="btn btn-sm btn-link" @click="diskReportsRange='last_day'">Last Day</button>
-                    <button class="btn btn-sm btn-link" @click="diskReportsRange='last_week'">Last Week</button>
-                    <button class="btn btn-sm btn-success" @click="loadDiskReports()">Reload</button>
-                </div>
-                <div class="panel-body row">
-                    <div v-if="diskReports && diskReports.length > 0">
+                    
+                    <div v-if="diskReports && diskReports.length > 0" style="clear: both;">
                         <chart :options="diskChart" style="width:100%;height:300px"></chart>
                     </div>
                     <div v-else class="no_data">No disk data.</div>
@@ -263,48 +226,34 @@ const NodeStatus = {
 
 		data: function() {
 		    return {
-		        sysReportsRange: 'last_hour',
+		        reportRange: 'last_hour',
+
 		        sysReports: null,
 		        sysLoad: null,
                 sysUsers: null,
                 sysCs: null,
 
-		        cpuReportsRange: 'last_hour',
 		        cpuReports: null,
 		        cpuChart: null,
 
-		        memReportsRange: 'last_hour',
 		        memReports: null,
 		        memoryChart: null,
 		        swapChart: null,
 
-		        diskReportsRange: 'last_hour',
 		        diskReports: null,
 		        diskChart: null
 		    }
 		},
 
 		watch: {
-		    sysReportsRange: function(n, o) {
+		    reportRange: function(n, o) {
                 if(n != o) {
                     this.loadSysReports()
-                }
-		    },
-		    cpuReportsRange: function(n, o) {
-		        if (n != 0) {
-		            this.loadCpuReports()
-		        }
-		    },
-		    memReportsRange: function(n, o) {
-		        if(n != o) {
-		            this.loadMemReports()
-		        }
-		    },
-		    diskReportsRange: function(n, o) {
-                if(n != o) {
+                    this.loadCpuReports()
+                    this.loadMemReports()
                     this.loadDiskReports()
                 }
-            },
+		    },
 		    sysReports: function(n, o) {
 		        this.sysLoad = genChartOption("Sys Load", n, "collect_at",
 		                            {"Load1":"load1", "Load5":"load5", "Load15":"load15"});
@@ -348,17 +297,22 @@ const NodeStatus = {
 		},
 
 		created: function() {
-            this.loadSysReports();
-            this.loadCpuReports();
-            this.loadMemReports();
-            this.loadDiskReports();
+            this.loadReports()
 		},
 
 		methods: {
+
+            loadReports: function() {
+                this.loadSysReports();
+                this.loadCpuReports();
+                this.loadMemReports();
+                this.loadDiskReports();
+            },
+
             loadSysReports: function() {
                 var self = this;
                 var aid = self.aid;
-                var range = self.sysReportsRange
+                var range = self.reportRange
                 Ajax.get(`/api/agents/${aid}/report/system/${range}`, function(reports) {
                     self.sysReports = reports
                 })
@@ -366,7 +320,7 @@ const NodeStatus = {
             loadCpuReports: function() {
                 var self = this;
                 var aid = self.aid;
-                var range = self.cpuReportsRange
+                var range = self.reportRange
                 Ajax.get(`/api/agents/${aid}/report/cpu/${range}`, function(reports) {
                     self.cpuReports = reports
                 })
@@ -374,7 +328,7 @@ const NodeStatus = {
             loadMemReports: function() {
                 var self = this;
                 var aid = self.aid;
-                var range = self.memReportsRange
+                var range = self.reportRange
                 Ajax.get(`/api/agents/${aid}/report/memory/${range}`, function(reports) {
                     self.memReports = reports
                 })
@@ -382,7 +336,7 @@ const NodeStatus = {
             loadDiskReports: function() {
                 var self = this;
                 var aid = self.aid;
-                var range = self.diskReportsRange
+                var range = self.reportRange
                 Ajax.get(`/api/agents/${aid}/report/disk/${range}`, function(reports) {
                     self.diskReports = reports
                 })
@@ -496,11 +450,7 @@ const ServiceStatus = {
     <div>
         <div class="panel panel-default">
             <div class="panel-heading">
-               PIDSTAT
-               <button class="btn btn-sm btn-link" @click="pidstatReportRange='last_hour'">Last Hour</button>
-               <button class="btn btn-sm btn-link" @click="pidstatReportRange='last_day'">Last Day</button>
-               <button class="btn btn-sm btn-link" @click="pidstatReportRange='last_week'">Last Week</button>
-               <button class="btn btn-sm btn-success" @click="loadPidstatReports()">Reload</button>
+                <report-toolbar title="Service Status" v-on:changeRange="reportRange = $event" v-on:reload="loadReports()"></report-toolbar>
             </div>
             <div class="panel-body row">
                 <div v-if="pidstatReports && pidstatReports.length > 0">
@@ -508,21 +458,10 @@ const ServiceStatus = {
                     <div><chart :options="memoryChart" style="width:100%;height:300px"></chart></div>
                 </div>
                 <div v-else class="no_data">No pidstat data.</div>
-            </div>
-        </div>
-        
-        <div class="panel panel-default">
-            <div class="panel-heading">
-               Java Stat
-               <button class="btn btn-sm btn-link" @click="jstatgcReportRange='last_hour'">Last Hour</button>
-               <button class="btn btn-sm btn-link" @click="jstatgcReportRange='last_day'">Last Day</button>
-               <button class="btn btn-sm btn-link" @click="jstatgcReportRange='last_week'">Last Week</button>
-               <button class="btn btn-sm btn-success" @click="loadJstatgcReports()">Reload</button>
-            </div>
-            <div class="panel-body row">
+                
                 <div v-if="jstatgcReports && jstatgcReports.length > 0">
                     <div style="padding: 15px;">
-                        <label>GC</label> 
+                        <label>GC Stats</label> 
                         <table class="table table-bordered">
                             <thead>
                                 <tr>
@@ -538,7 +477,7 @@ const ServiceStatus = {
                             </thead>
                             <tbody>
                                 <tr>
-                                    <td>{{jstatgcReportRange}}</td>
+                                    <td>{{reportRange}}</td>
                                     <td>{{gcStatusDelta.ygc}}</td>
                                     <td>{{gcStatusDelta.ygct | decimal}}</td>
                                     <td>{{gcStatusDelta.avgYgct | decimal}}</td>
@@ -569,12 +508,14 @@ const ServiceStatus = {
 
     data: function() {
         return {
-            pidstatReportRange: 'last_hour',
+            reportRange: 'last_hour',
+            service: null,
+            serviceHistory:null,
+
             pidstatReports: null,
             cpuChart: null,
             memoryChart: null,
 
-            jstatgcReportRange: 'last_hour',
             jstatgcReports: null,
             gcStatusAll: null,
             gcStatusDelta: null,
@@ -584,13 +525,12 @@ const ServiceStatus = {
     },
 
     created: function() {
-        this.loadPidstatReports();
-        this.loadJstatgcReports();
+        this.loadReports()
     },
 
     watch: {
-        pidstatReportRange: function(o, n) {
-            this.loadPidstatReports();
+        reportRange: function(o, n) {
+            this.loadReports();
         },
 
         pidstatReports: function(n, o) {
@@ -601,10 +541,6 @@ const ServiceStatus = {
                                 {"Util":"mem_util"},
                                 {isStack:true, yAxisFmt:"{value}%"});
 
-        },
-
-        jstatgcReportRange: function(o, n) {
-            this.loadJstatgcReports();
         },
 
         jstatgcReports: function(n, o) {
@@ -656,7 +592,7 @@ const ServiceStatus = {
             this.jgcChart = genChartOption("CPU Utilization", n, "collect_at",
                 {"Total":"cpu_util", "SYS":"cpu_sy", "USER":"cpu_us"},
                 {isStack:false, yAxisFmt:"{value}%"});
-            this.jmemoryChart = genChartOption("Memory Utilization", n, "collect_at",
+            this.jmemoryChart = genChartOption("Java Heap Util", n, "collect_at",
                 {"S0U":"s0u", "S1U":"s1u", "EU":"eu", "OU":"ou"},
                 {isStack:true, yAxisFmt: function (v, index) {
                         return Math.round(v/1024) + 'MB'
@@ -667,11 +603,28 @@ const ServiceStatus = {
     },
 
     methods: {
+        loadReports: function() {
+            this.loadServiceInfo()
+            this.loadPidstatReports()
+            this.loadJstatgcReports()
+        },
+
+        loadServiceInfo: function() {
+            var self = this;
+            var aid = self.aid;
+            var sid = self.service_id
+            var range = self.reportRange
+            Ajax.get(`/api/agents/${aid}/services/${sid}/${range}`, function(resp) {
+                self.service = resp.service
+                self.service_history = resp.service_history
+            })
+        },
+
         loadPidstatReports: function() {
             var self = this;
             var aid = self.aid;
             var sid = self.service_id
-            var range = self.pidstatReportRange
+            var range = self.reportRange
             Ajax.get(`/api/agents/${aid}/services/${sid}/report/pidstat/${range}`, function(reports) {
                 self.pidstatReports = reports
             })
@@ -681,9 +634,9 @@ const ServiceStatus = {
             var self = this;
             var aid = self.aid;
             var sid = self.service_id
-            var range = self.jstatgcReportRange
-            Ajax.get(`/api/agents/${aid}/services/${sid}/report/jstatgc/${range}`, function(reports) {
-                self.jstatgcReports = reports
+            var range = self.reportRange
+            Ajax.get(`/api/agents/${aid}/services/${sid}/report/jstatgc/${range}`, function(resp) {
+                self.jstatgcReports = resp.reports
             })
         }
     }

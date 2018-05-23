@@ -12,6 +12,7 @@ Node monitor master:
 # ==============================
 #   Node Master
 # ==============================
+import os
 import logging
 import re
 import socket
@@ -28,7 +29,8 @@ from common import Msg, InvalidMsgError, TextTable
 
 
 _MASTER = None
-_MASTER_DB_NAME = 'master.db'
+_MASTER_DB_PATH = '/opt/node-monitor/db/'
+_MASTER_DB_NAME = _MASTER_DB_PATH + 'master.db'
 _DB_SCHEMA = r'''
     CREATE TABLE IF NOT EXISTS agent(aid UNIQUE, name, host, create_at timestamp, 
         last_msg_at, last_cpu_util, last_mem_util, last_sys_load1, last_sys_cs);
@@ -72,7 +74,7 @@ _DB_SCHEMA = r'''
     CREATE INDEX IF NOT EXISTS `idx_si_aid` ON `service` (aid);
     CREATE INDEX IF NOT EXISTS `idx_si_report_at` ON `service` (last_report_at DESC);
     
-    CREATE TABLE IF NOT EXISTS service_history(service_id, pid, change_at timestamp);
+    CREATE TABLE IF NOT EXISTS service_history(aid, service_id, pid, collect_at timestamp, recv_at timestamp);
     
     CREATE TABLE IF NOT EXISTS service_pidstat_report(aid, service_id, collect_at timestamp, 
         tid, cpu_us, cpu_sy, cpu_gu, cpu_util, mem_minflt, mem_majflt, mem_vsz, mem_rss, mem_util,
@@ -594,12 +596,12 @@ class SInfo(Model):
     STATUS_ACT = 'active'
     STATUS_INACT = 'inactive'
 
-    def add_history(self):
-        SInfoHistory(service_id=self.id, pid=self.pid, change_at=datetime.now()).save()
+    def add_history(self, collect_at):
+        SInfoHistory(aid=self.aid, service_id=self.id, pid=self.pid, collect_at=collect_at, recv_at=datetime.now()).save()
 
-    def chgpid(self, newpid):
+    def chgpid(self, newpid, collect_at):
         self.set(pid=newpid)
-        self.add_history()
+        self.add_history(collect_at)
 
     def chkstatus(self, threshold_secs):
         active = False
@@ -611,13 +613,17 @@ class SInfo(Model):
         return active
 
     @classmethod
+    def byid(cls, id):
+        return cls.query(where='id=?', params=[id])
+
+    @classmethod
     def query_by_aid(cls, aid):
         return cls.query(where='aid=?', orderby='name', params=[aid])
 
 
-class SInfoHistory(Model):
+class SInfoHistory(Model, ServiceChronoModel):
     _TABLE = 'service_history'
-    _FIELDS = ['service_id', 'pid', 'change_at']
+    _FIELDS = ['aid','service_id', 'pid', 'collect_at', 'recv_at']
 
 
 class SPidstatReport(Model, ServiceChronoModel):
@@ -841,7 +847,7 @@ class Master(object):
             logging.info('service %s discovered with pid %s', sname, spid)
             ser = SInfo(id=uuid4().hex, aid=aid, name=sname, pid=spid, type=stype,
                         last_report_at=collect_at, status=SInfo.STATUS_ACT).save()
-            ser.add_history()
+            ser.add_history(collect_at)
         else:
             # existing service, check for an update
             logging.debug('refreshing service %s from %s', sname, aid)
@@ -849,7 +855,7 @@ class Master(object):
             ser.set(last_report_at=collect_at, status=SInfo.STATUS_ACT)
             if ser.pid != spid:
                 logging.info('service [%s] pid change detected: %s -> %s', sname, ser.pid, spid)
-                ser.chgpid(spid)
+                ser.chgpid(spid, collect_at)
 
         # set service to inactive if no status update for 5 minutes
         for sname, service in services.items():
@@ -894,8 +900,11 @@ class Master(object):
 
 
 def master_main():
-    create_schema()
+    if not os.path.exists(_MASTER_DB_PATH):
+        logging.warn('create folder for database file %s', _MASTER_DB_PATH)
+        os.makedirs(_MASTER_DB_PATH)
     global _MASTER
+    create_schema()
     _MASTER = Master('0.0.0.0')
     _MASTER.start()
 
