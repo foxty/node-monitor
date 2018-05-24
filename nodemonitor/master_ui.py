@@ -8,12 +8,11 @@ Created on 2017-12-22
 UI for master node
 """
 import logging
-from collections import namedtuple
 from datetime import datetime, timedelta
 from flask import Flask, render_template
 from common import dump_json
-from master import Agent, NSystemReport, NCPUReport, NMemoryReport, NDiskReport, \
-    SInfo, SInfoHistory, SPidstatReport, SJstatGCReport
+from model import Agent, NSystemReport, NCPUReport, NMemoryReport, NDiskReport, \
+    SInfo, SInfoHistory, SPidstatReport, SJstatGCReport, JavaGCStat, JavaMemStat
 logging.basicConfig(level=logging.INFO)
 
 
@@ -22,9 +21,7 @@ _APP = Flask(__name__,
              static_url_path='/static',
              template_folder='../web/template/')
 
-JavaGCStat = namedtuple('JavaGCStat', 'category, start_at, end_at, samples, '
-                                      'ygc, ygct, avg_ygct, fgc, fgct, avg_fgct, throughput')
-JavaMemStat = namedtuple('JavaMemStat', 'category, start_at, end_at, samples')
+
 
 
 def calc_daterange(r):
@@ -125,20 +122,13 @@ def get_service_jstatgc(aid, service_id, date_range='last_hour'):
     reports = SJstatGCReport.query_by_rtime(service_id, start, end)
     # shistory = SInfoHistory.query_by_rtime(service_id, start, end)
     # calculate gc stats and memory stats
-    if len(reports) >= 2:
-        lastts = 0
-        samples = 0
-        ygc = 0
-        ygct = 0
-        fgc = 0
-        fgct = 0
-        for r in reports:
 
-            pass
-    else:
-        pass
-    gcstat_recent = JavaGCStat(category='recent', )
-    return dump_json({'reports': reports})
+    gcstat_recent, gcstat_range = None
+    if reports:
+        start_rec = reports[0]
+        end_rec = reports[-1]
+        gcstat_recent = end_rec.to_gcstat()
+    return dump_json({'reports': reports, 'gcstat_recent': gcstat_recent, 'gcstat_range' : gcstat_range})
 
 
 def ui_main(host='0.0.0.0', port=8080, debug=False):
