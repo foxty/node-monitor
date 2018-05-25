@@ -597,8 +597,8 @@ class NodeAgent:
                 logging.exception('error in loop.')
                 self._connect_master()
             except InvalidMsgError:
-                logging.error('invalid message received.')
-                self.stop()
+                logging.error('invalid message received, reconnecting...')
+                self._connect_master()
 
     def _do_read(self, sock):
         rdata = sock.recv(1024)
