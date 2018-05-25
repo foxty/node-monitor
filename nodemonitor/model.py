@@ -103,11 +103,6 @@ def create_schema(cursor):
     cursor.executescript(_DB_SCHEMA)
 
 
-JavaGCStat = namedtuple('JavaGCStat', 'category, start_at, end_at, samples, '
-                                      'ygc, ygct, avg_ygct, fgc, fgct, avg_fgct, throughput')
-JavaMemStat = namedtuple('JavaMemStat', 'category, start_at, end_at, samples')
-
-
 class InvalidFieldError(Exception): pass
 
 
@@ -376,14 +371,14 @@ class SJstatGCReport(Model, ServiceChronoModel):
                'ccsc', 'ccsu', 'ygc', 'ygct', 'fgc', 'fgct', 'gct', 'recv_at']
 
     def __sub__(self, other):
-        return SJstatGCReport(aid=self.aid, service_id=self.serviceid, collect_at=self.collect_at,
-                              ts=self.ts - other.ts, s0c=self.s0c, s1c=self.s1c,
-                              s0u=self.s0u - other.s0u, s1u=self.s1u - other.s1u,
-                              ec=self.ec, eu=self.eu - other.eu,
-                              oc=self.oc, ou=self.ou - other.ou,
-                              mc=self.mc, mu=self.mc - other.mc,
-                              ccsc=self.ccsc, ccsu=self.ccsu,
-                              ygc=self.ygc - other.ygc, ygct=self.ygct - other.ygct)
+        return SJstatGCReport(aid=self.aid, service_id=self.service_id, collect_at=self.collect_at,
+                              ts=self.ts - other.ts, ygc=self.ygc - other.ygc, ygct=self.ygct - other.ygct,
+                              fgc=self.fgc - other.fgc, fgct=self.fgct - other.fgct, gct=self.gct - other.gct)
+
+    def __add__(self, other):
+        return SJstatGCReport(aid=self.aid, service_id=self.service_id, collect_at=self.collect_at,
+                              ts=self.ts + other.ts, ygc=self.ygc + other.ygc, ygct=self.ygct + other.ygct,
+                              fgc=self.fgc + other.fgc, fgct=self.fgct + other.fgct, gct=self.gct + other.gct)
 
     def avg_ygct(self):
         return self.ygct/self.ygc if self.ygc > 0 else 0
@@ -396,14 +391,19 @@ class SJstatGCReport(Model, ServiceChronoModel):
 
     def to_gcstat(self, category):
         start_at = self.collect_at - timedelta(seconds=self.ts)
-        JavaGCStat(category='recent', start_at=start_at, end_at=self.collect_at, samples=0,
-                   ygc=self.ygc, ygct=self.ygct, avg_ygct=self.avg_ygct(),
-                   fgc=self.fgc, fgct=self.fgct, avg_fgct=self.avg_fgct(),
-                   throughput=self.throughput())
+        return JavaGCStat(category=category, start_at=start_at, end_at=self.collect_at, samples=0,
+                          ygc=self.ygc, ygct=self.ygct, avg_ygct=self.avg_ygct(),
+                          fgc=self.fgc, fgct=self.fgct, avg_fgct=self.avg_fgct(),
+                          throughput=self.throughput())
 
     @classmethod
     def lst_report_by_aid(cls, aid, count):
         return cls.query(where='aid=?', orderby='collect_at DESC', params=[aid], limit=count)
+
+
+class JavaGCStat(Model):
+    _FIELDS = ['category', 'start_at', 'end_at', 'samples',
+               'ygc', 'ygct', 'avg_ygct', 'fgc', 'fgct', 'avg_fgct', 'throughput']
 
 
 class Alarm(Model):

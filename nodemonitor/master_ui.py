@@ -12,7 +12,7 @@ from datetime import datetime, timedelta
 from flask import Flask, render_template
 from common import dump_json
 from model import Agent, NSystemReport, NCPUReport, NMemoryReport, NDiskReport, \
-    SInfo, SInfoHistory, SPidstatReport, SJstatGCReport, JavaGCStat, JavaMemStat
+    SInfo, SInfoHistory, SPidstatReport, SJstatGCReport
 logging.basicConfig(level=logging.INFO)
 
 
@@ -123,12 +123,21 @@ def get_service_jstatgc(aid, service_id, date_range='last_hour'):
     # shistory = SInfoHistory.query_by_rtime(service_id, start, end)
     # calculate gc stats and memory stats
 
-    gcstat_recent, gcstat_range = None
+    gcstat_recent, gcstat_range = None, None
     if reports:
-        start_rec = reports[0]
-        end_rec = reports[-1]
-        gcstat_recent = end_rec.to_gcstat()
-    return dump_json({'reports': reports, 'gcstat_recent': gcstat_recent, 'gcstat_range' : gcstat_range})
+        end_reps = []
+        for i, rep in enumerate(reports):
+            if i > 1 and rep.ts < reports[i-1].ts:
+                end_reps.append(reports[i-1])
+        end_reps.append(reports[-1])
+        # 1st end reprot - start report to remove data beyond the range
+        end_reps[0] = end_reps[0] - reports[0]
+
+        range_rep = reduce(lambda acc, r: acc + r, end_reps)
+        final_rep = reports[-1]
+        gcstat_range = range_rep.to_gcstat('range')
+        gcstat_recent = final_rep.to_gcstat('recent')
+    return dump_json({'reports': reports, 'gcstats': [gcstat_range, gcstat_recent]})
 
 
 def ui_main(host='0.0.0.0', port=8080, debug=False):

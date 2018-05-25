@@ -465,7 +465,9 @@ const ServiceStatus = {
                         <table class="table table-bordered">
                             <thead>
                                 <tr>
-                                    <th>Range</th>
+                                    <th>Category</th>
+                                    <th>Start</th>
+                                    <th>End</th>
                                     <th>YGC</th>
                                     <th>YGC Time(s)</th>
                                     <th>AVG Time(s)</th>
@@ -476,25 +478,17 @@ const ServiceStatus = {
                                 </tr>
                             </thead>
                             <tbody>
-                                <tr>
-                                    <td>{{reportRange}}</td>
-                                    <td>{{gcStatusDelta.ygc}}</td>
-                                    <td>{{gcStatusDelta.ygct | decimal}}</td>
-                                    <td>{{gcStatusDelta.avgYgct | decimal}}</td>
-                                    <td>{{gcStatusDelta.fgc}}</td>
-                                    <td>{{gcStatusDelta.fgct | decimal}}</td>
-                                    <td>{{gcStatusDelta.avgFgct | decimal}}</td>
-                                    <td>{{gcStatusDelta.throughput | decimal(6) | percent}}</td>
-                                </tr>
-                                <tr>
-                                    <td>All</td>
-                                    <td>{{gcStatusAll.ygc}}</td>
-                                    <td>{{gcStatusAll.ygct | decimal}}</td>
-                                    <td>{{gcStatusAll.avgYgct | decimal}}</td>
-                                    <td>{{gcStatusAll.fgc}}</td>
-                                    <td>{{gcStatusAll.fgct | decimal}}</td>
-                                    <td>{{gcStatusAll.avgFgct | decimal}}</td>
-                                    <td>{{gcStatusAll.throughput | decimal(6) | percent}}</td>
+                                <tr v-for="stat in jstatgcStats">
+                                    <td>{{stat.category}}</td>
+                                    <td>{{stat.start_at}}</td>
+                                    <td>{{stat.end_at}}</td>
+                                    <td>{{stat.ygc}}</td>
+                                    <td>{{stat.ygct}}</td>
+                                    <td>{{stat.avg_ygct | decimal}}</td>
+                                    <td>{{stat.fgc}}</td>
+                                    <td>{{stat.fgct}}</td>
+                                    <td>{{stat.avg_fgct | decimal}}</td>
+                                    <td>{{stat.throughput | decimal(6) | percent}}</td>
                                 </tr>
                             </tbody>
                         </table>   
@@ -517,6 +511,7 @@ const ServiceStatus = {
             memoryChart: null,
 
             jstatgcReports: null,
+            jstatgcStats: null,
             gcStatusAll: null,
             gcStatusDelta: null,
             jmemoryChart:null,
@@ -547,47 +542,6 @@ const ServiceStatus = {
             if(!n || n.length == 0) {
                 console.warn('No data for jstat-gc')
                 return;
-            }
-            newestRec = n[n.length - 1]
-            oldestRec = newestRec
-            // Check is there an service restart
-            for (var i = n.length - 2; i >= 0; i --) {
-                if (oldestRec.ts > n[i].ts) {
-                    oldestRec = n[i]
-                } else {
-                    console.warn('Service ' + this.service_id + ' latest restart around ' + n[i].collect_at)
-                    oldestRec = {
-                        ts: 0,
-                        ygc: 0,
-                        ygct: 0,
-                        fgc: 0,
-                        fgct: 0,
-                        gct: 0
-                    }
-                    break;
-                }
-            }
-            this.gcStatusDelta = new function() {
-                this.ts = newestRec.ts - oldestRec.ts
-                this.ygc = newestRec.ygc - oldestRec.ygc
-                this.ygct = newestRec.ygct - oldestRec.ygct
-                this.avgYgct = this.ygc > 0 ? this.ygct/this.ygc : 0
-                this.fgc = newestRec.fgc - oldestRec.fgc
-                this.fgct = newestRec.fgct - oldestRec.fgct
-                this.gct = newestRec.gct - oldestRec.gct
-                this.avgFgct = this.fgc > 0 ? this.fgct/this.fgc : 0
-                this.throughput = 1 - this.gct/this.ts
-            }
-            this.gcStatusAll = new function() {
-                this.ts = newestRec.ts
-                this.ygc = newestRec.ygc
-                this.ygct = newestRec.ygct
-                this.avgYgct = this.ygc > 0 ? this.ygct/this.ygc : 0
-                this.fgc = newestRec.fgc
-                this.fgct = newestRec.fgct
-                this.gct = newestRec.gct
-                this.avgFgct = this.fgc > 0 ? this.fgct/this.fgc : 0
-                this.throughput = 1 - this.gct/this.ts
             }
             this.jgcChart = genChartOption("CPU Utilization", n, "collect_at",
                 {"Total":"cpu_util", "SYS":"cpu_sy", "USER":"cpu_us"},
@@ -637,6 +591,7 @@ const ServiceStatus = {
             var range = self.reportRange
             Ajax.get(`/api/agents/${aid}/services/${sid}/report/jstatgc/${range}`, function(resp) {
                 self.jstatgcReports = resp.reports
+                self.jstatgcStats = resp.gcstats
             })
         }
     }

@@ -507,9 +507,26 @@ class SJstatReportTest(unittest.TestCase):
         self.assertEqual(2.5, rep.avg_fgct())
         self.assertEqual(0.8, rep.throughput())
 
+    def test_to_gcstat(self):
+        ctime = datetime.now()
+        rep = model.SJstatGCReport(ts=100, service_id='sid', collect_at=ctime,
+                                   ygc=3, ygct=15.0, fgc=2, fgct=5.0, gct=20.0)
+        gcstat = rep.to_gcstat('test')
+        self.assertEqual(model.JavaGCStat(category='test', start_at=ctime - timedelta(seconds=100), end_at=ctime,
+                                          samples=0, ygc=3, ygct=15.0, avg_ygct=5.0, fgc=2, fgct=5.0, avg_fgct=2.5,
+                                          throughput=0.8), gcstat)
+
     def test_sub(self):
-        rep = model.SJstatGCReport(ts=100, ygc=3, ygct=15.0, fgc=2, fgct=5.0, gct=20.0)
-        rep - rep
+        rep1 = model.SJstatGCReport(ts=100, ygc=3, ygct=15.0, fgc=2, fgct=5.0, gct=20.0)
+        rep2 = model.SJstatGCReport(ts=20, ygc=1, ygct=10.0, fgc=1, fgct=3.0, gct=15.0)
+        sub = rep1 - rep2
+        self.assertEqual(model.SJstatGCReport(ts=80, ygc=2, ygct=5.0, fgc=1, fgct=2.0, gct=5.0), sub)
+
+    def test_add(self):
+        rep1 = model.SJstatGCReport(ts=100, ygc=3, ygct=15.0, fgc=2, fgct=5.0, gct=20.0)
+        rep2 = model.SJstatGCReport(ts=20, ygc=1, ygct=10.0, fgc=1, fgct=3.0, gct=15.0)
+        add = rep1 + rep2
+        self.assertEqual(model.SJstatGCReport(ts=120, ygc=4, ygct=25.0, fgc=3, fgct=8.0, gct=35.0), add)
 
 
 class MasterDAOTest(BaseDBTest):
