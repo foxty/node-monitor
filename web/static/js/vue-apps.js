@@ -248,30 +248,29 @@ const NodeStatus = {
 		watch: {
 		    reportRange: function(n, o) {
                 if(n != o) {
-                    this.loadSysReports()
-                    this.loadCpuReports()
-                    this.loadMemReports()
-                    this.loadDiskReports()
+                    this.loadReports()
                 }
 		    },
 		    sysReports: function(n, o) {
 		        this.sysLoad = genChartOption("Sys Load", n, "collect_at",
-		                            {"Load1":"load1", "Load5":"load5", "Load15":"load15"});
-                this.sysUsers = genChartOption("Sys Users",n, "collect_at", {"Users":"users"});
+                    {"Load1":"load1", "Load5":"load5", "Load15":"load15"},
+                    {yAxisMax:function(value) { return value.max < 10 ? 10 : value.max + 5 }});
+                this.sysUsers = genChartOption("Sys Users",n, "collect_at", {"Users":"users"},
+                    {yAxisMax:function(value) { return value.max < 10 ? 10 : value.max + 5 }});
                 this.sysCs =  genChartOption("Sys IN&CS", n, "collect_at", {"IN":"sys_in", "CS":"sys_cs"});
 		    },
 		    cpuReports: function(n, o) {
                 this.cpuChart = genChartOption("CPU", n, "collect_at",
-                                {"User":"us","System":"sy","Idle":"id","Wait":"wa","Stolen":"st"},
-                                {isStack:true, yAxisFmt: "{value}%"});
+                                {"User":"us","System":"sy", "Wait":"wa","Stolen":"st"},
+                                {stack:true, yAxisFmt: "{value}%", yAxisMax:100,});
 		    },
 		    memReports: function(n, o) {
                 this.memoryChart = genChartOption("Memory", n, "collect_at",
                                     {"Used":"used_mem", "Free":"free_mem"},
-                                    {isStack:true, yAxisFmt:"{value}M"});
+                                    {stack:true, yAxisFmt:"{value}M"});
                 this.swapChart = genChartOption("Swap", n, "collect_at",
                                    {"Used":"used_swap", "Free":"free_swap"},
-                                   {isStack:true, yAxisFmt:"{value}M"});
+                                   {stack:true, yAxisFmt:"{value}M"});
 		    },
 		    diskReports: function(n, o) {
 		        var reportsMap = {}
@@ -292,7 +291,7 @@ const NodeStatus = {
                 }
 		        this.diskChart = genChartOption("Disk Util", reports, "collect_at",
                                                spMapping,
-                                               {yAxisFmt:"{value}%"});
+                                               {yAxisFmt:"{value}%", yAxisMax:100,});
 		    }
 		},
 
@@ -303,44 +302,25 @@ const NodeStatus = {
 		methods: {
 
             loadReports: function() {
-                this.loadSysReports();
-                this.loadCpuReports();
-                this.loadMemReports();
-                this.loadDiskReports();
-            },
-
-            loadSysReports: function() {
                 var self = this;
                 var aid = self.aid;
                 var range = self.reportRange
                 Ajax.get(`/api/agents/${aid}/report/system/${range}`, function(reports) {
                     self.sysReports = reports
                 })
-            },
-            loadCpuReports: function() {
-                var self = this;
-                var aid = self.aid;
-                var range = self.reportRange
+
                 Ajax.get(`/api/agents/${aid}/report/cpu/${range}`, function(reports) {
                     self.cpuReports = reports
                 })
-            },
-            loadMemReports: function() {
-                var self = this;
-                var aid = self.aid;
-                var range = self.reportRange
+
                 Ajax.get(`/api/agents/${aid}/report/memory/${range}`, function(reports) {
                     self.memReports = reports
                 })
-            },
-            loadDiskReports: function() {
-                var self = this;
-                var aid = self.aid;
-                var range = self.reportRange
+
                 Ajax.get(`/api/agents/${aid}/report/disk/${range}`, function(reports) {
                     self.diskReports = reports
                 })
-            }
+            },
 		}
 	}
 
@@ -483,10 +463,10 @@ const ServiceStatus = {
                                     <td>{{stat.start_at}}</td>
                                     <td>{{stat.end_at}}</td>
                                     <td>{{stat.ygc}}</td>
-                                    <td>{{stat.ygct}}</td>
+                                    <td>{{stat.ygct | decimal}}</td>
                                     <td>{{stat.avg_ygct | decimal}}</td>
                                     <td>{{stat.fgc}}</td>
-                                    <td>{{stat.fgct}}</td>
+                                    <td>{{stat.fgct | decimal}}</td>
                                     <td>{{stat.avg_fgct | decimal}}</td>
                                     <td>{{stat.throughput | decimal(6) | percent}}</td>
                                 </tr>
@@ -512,8 +492,6 @@ const ServiceStatus = {
 
             jstatgcReports: null,
             jstatgcStats: null,
-            gcStatusAll: null,
-            gcStatusDelta: null,
             jmemoryChart:null,
             jgcChart:null
         }
@@ -526,73 +504,77 @@ const ServiceStatus = {
     watch: {
         reportRange: function(o, n) {
             this.loadReports();
+        }
+    },
+
+    methods: {
+        loadReports: function() {
+            var self = this;
+            var aid = self.aid;
+            var sid = self.service_id
+            var range = self.reportRange
+            var markerLines = []
+            new Promise(function(resolve){
+                // Load service history at begin
+                Ajax.get(`/api/agents/${aid}/services/${sid}/${range}`, function(resp) {
+                    self.service = resp.service
+                    self.service_history = resp.service_history
+                    markerLines = self.genRestartMarkerConfig(self.service_history)
+                    resolve()
+                })
+            }).then(function(){
+                // Load pidstat reports
+                Ajax.get(`/api/agents/${aid}/services/${sid}/report/pidstat/${range}`, function(reports) {
+                    self.pidstatReports = reports
+                    self.genPidstatReports(reports, markerLines)
+                })
+                // Load jstatgc reports
+                Ajax.get(`/api/agents/${aid}/services/${sid}/report/jstatgc/${range}`, function(resp) {
+                    self.jstatgcReports = resp.reports
+                    self.jstatgcStats = resp.gcstats
+                    self.genJstatgcReports(resp.reports, markerLines)
+                })
+            })
+
         },
 
-        pidstatReports: function(n, o) {
+        genRestartMarkerConfig: function(serviceHistory) {
+            var markers = []
+            serviceHistory.forEach(function(sh) {
+                markers.push({xAxis: sh.collect_at || sh.recv_at})
+            })
+            return {
+                label: {formatter: 'Restart\n{c}'},
+                lineStyle: {type: 'solid'},
+                data:markers
+            }
+        },
+
+        genPidstatReports: function(n, markerLine) {
             this.cpuChart = genChartOption("CPU Utilization", n, "collect_at",
-                                           {"Total":"cpu_util", "SYS":"cpu_sy", "USER":"cpu_us"},
-                                           {isStack:true, yAxisFmt:"{value}%"});
+                {"Total":"cpu_util", "SYS":"cpu_sy", "USER":"cpu_us"},
+                {stack:true, yAxisFmt:"{value}%", yAxisMax:100, markLine: markerLine})
             this.memoryChart = genChartOption("Memory Utilization", n, "collect_at",
-                                {"Util":"mem_util"},
-                                {isStack:true, yAxisFmt:"{value}%"});
+                {"Util":"mem_util"},
+                {stack:true, yAxisFmt:"{value}%", yAxisMax:100, markLine: markerLine})
 
         },
 
-        jstatgcReports: function(n, o) {
+        genJstatgcReports: function(n, markerLine) {
             if(!n || n.length == 0) {
                 console.warn('No data for jstat-gc')
                 return;
             }
             this.jgcChart = genChartOption("CPU Utilization", n, "collect_at",
                 {"Total":"cpu_util", "SYS":"cpu_sy", "USER":"cpu_us"},
-                {isStack:false, yAxisFmt:"{value}%"});
+                {stack:false, yAxisFmt:"{value}%", yAxisMax:100, markLine: markerLine});
             this.jmemoryChart = genChartOption("Java Heap Util", n, "collect_at",
                 {"S0U":"s0u", "S1U":"s1u", "EU":"eu", "OU":"ou"},
-                {isStack:true, yAxisFmt: function (v, index) {
+                {stack:true, yAxisFmt: function (v, index) {
                         return Math.round(v/1024) + 'MB'
                     }
-                });
+                , markLine: markerLine});
 
-        }
-    },
-
-    methods: {
-        loadReports: function() {
-            this.loadServiceInfo()
-            this.loadPidstatReports()
-            this.loadJstatgcReports()
-        },
-
-        loadServiceInfo: function() {
-            var self = this;
-            var aid = self.aid;
-            var sid = self.service_id
-            var range = self.reportRange
-            Ajax.get(`/api/agents/${aid}/services/${sid}/${range}`, function(resp) {
-                self.service = resp.service
-                self.service_history = resp.service_history
-            })
-        },
-
-        loadPidstatReports: function() {
-            var self = this;
-            var aid = self.aid;
-            var sid = self.service_id
-            var range = self.reportRange
-            Ajax.get(`/api/agents/${aid}/services/${sid}/report/pidstat/${range}`, function(reports) {
-                self.pidstatReports = reports
-            })
-        },
-
-        loadJstatgcReports: function() {
-            var self = this;
-            var aid = self.aid;
-            var sid = self.service_id
-            var range = self.reportRange
-            Ajax.get(`/api/agents/${aid}/services/${sid}/report/jstatgc/${range}`, function(resp) {
-                self.jstatgcReports = resp.reports
-                self.jstatgcStats = resp.gcstats
-            })
         }
     }
 }

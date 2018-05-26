@@ -376,7 +376,8 @@ class SJstatGCReport(Model, ServiceChronoModel):
                               fgc=self.fgc - other.fgc, fgct=self.fgct - other.fgct, gct=self.gct - other.gct)
 
     def __add__(self, other):
-        return SJstatGCReport(aid=self.aid, service_id=self.service_id, collect_at=self.collect_at,
+        collect_at = other.collect_at if other.collect_at > self.collect_at else self.collect_at
+        return SJstatGCReport(aid=self.aid, service_id=self.service_id, collect_at=collect_at,
                               ts=self.ts + other.ts, ygc=self.ygc + other.ygc, ygct=self.ygct + other.ygct,
                               fgc=self.fgc + other.fgc, fgct=self.fgct + other.fgct, gct=self.gct + other.gct)
 
