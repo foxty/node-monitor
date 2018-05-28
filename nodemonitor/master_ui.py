@@ -9,7 +9,7 @@ UI for master node
 """
 import logging
 from datetime import datetime, timedelta
-from flask import Flask, render_template
+from flask import Flask, request, render_template
 from common import dump_json
 from model import Agent, NSystemReport, NCPUReport, NMemoryReport, NDiskReport, \
     SInfo, SInfoHistory, SPidstatReport, SJstatGCReport
@@ -22,19 +22,11 @@ _APP = Flask(__name__,
              template_folder='../web/template/')
 
 
-
-
-def calc_daterange(r):
-    if r == 'last_hour':
-        hours = 1
-    elif r == 'last_day':
-        hours = 24
-    elif r == 'last_week':
-        hours = 24*7
-    else:
-        hours = 1
-    end = datetime.now()
-    start = end - timedelta(hours=hours)
+def calc_daterange(req):
+    start_at = req.args.get('start_at')
+    end_at = req.args.get('end_at')
+    start = datetime.strptime(start_at[:19], '%Y-%m-%dT%H:%M:%S')
+    end = datetime.strptime(end_at[:19], '%Y-%m-%dT%H:%M:%S')
     return start, end
 
 
@@ -70,27 +62,27 @@ def get_agent(aid):
     return dump_json(agent)
 
 
-@_APP.route('/api/agents/<aid>/report/system/<any(last_hour,last_day,last_week):date_range>', methods=['GET'])
-def get_agent_sysreports(aid, date_range='last_hour'):
-    reports = NSystemReport.query_by_rtime(aid, *calc_daterange(date_range))
+@_APP.route('/api/agents/<aid>/report/system', methods=['GET'])
+def get_agent_sysreports(aid):
+    reports = NSystemReport.query_by_rtime(aid, *calc_daterange(request))
     return dump_json(reports)
 
 
-@_APP.route('/api/agents/<aid>/report/cpu/<any(last_hour,last_day,last_week):date_range>', methods=['GET'])
-def get_agent_cpureports(aid, date_range='last_hour'):
-    reports = NCPUReport.query_by_rtime(aid, *calc_daterange(date_range))
+@_APP.route('/api/agents/<aid>/report/cpu', methods=['GET'])
+def get_agent_cpureports(aid):
+    reports = NCPUReport.query_by_rtime(aid, *calc_daterange(request))
     return dump_json(reports)
 
 
-@_APP.route('/api/agents/<aid>/report/memory/<any(last_hour,last_day,last_week):date_range>', methods=['GET'])
-def get_agent_memreports(aid, date_range='last_hour'):
-    reports = NMemoryReport.query_by_rtime(aid, *calc_daterange(date_range))
+@_APP.route('/api/agents/<aid>/report/memory', methods=['GET'])
+def get_agent_memreports(aid):
+    reports = NMemoryReport.query_by_rtime(aid, *calc_daterange(request))
     return dump_json(reports)
 
 
-@_APP.route('/api/agents/<aid>/report/disk/<any(last_hour,last_day,last_week):date_range>', methods=['GET'])
-def get_agent_diskreports(aid, date_range='last_hour'):
-    reports = NDiskReport.query_by_rtime(aid, *calc_daterange(date_range))
+@_APP.route('/api/agents/<aid>/report/disk', methods=['GET'])
+def get_agent_diskreports(aid):
+    reports = NDiskReport.query_by_rtime(aid, *calc_daterange(request))
     return dump_json(reports)
 
 
@@ -101,24 +93,24 @@ def get_agent_services(aid):
     return dump_json({'services': services, 'services_status_map': status_map})
 
 
-@_APP.route('/api/agents/<string:aid>/services/<string:service_id>/<any(last_hour,last_day,last_week):date_range>')
-def get_service_info(aid, service_id, date_range):
+@_APP.route('/api/agents/<string:aid>/services/<string:service_id>')
+def get_service_info(aid, service_id):
     service = SInfo.byid(service_id)
-    service_history = SInfoHistory.query_by_rtime(service_id, *calc_daterange(date_range))
+    service_history = SInfoHistory.query_by_rtime(service_id, *calc_daterange(request))
     return dump_json({'service': service, 'service_history': service_history})
 
 
-@_APP.route('/api/agents/<aid>/services/<service_id>/report/pidstat/<any(last_hour,last_day,last_week):date_range>',
+@_APP.route('/api/agents/<aid>/services/<service_id>/report/pidstat',
             methods=['GET'])
-def get_service_pidstats(aid, service_id, date_range='last_hour'):
-    reports = SPidstatReport.query_by_rtime(service_id, *calc_daterange(date_range))
+def get_service_pidstats(aid, service_id):
+    reports = SPidstatReport.query_by_rtime(service_id, *calc_daterange(request))
     return dump_json(reports)
 
 
-@_APP.route('/api/agents/<aid>/services/<service_id>/report/jstatgc/<any(last_hour,last_day,last_week):date_range>',
+@_APP.route('/api/agents/<aid>/services/<service_id>/report/jstatgc',
             methods=['GET'])
-def get_service_jstatgc(aid, service_id, date_range='last_hour'):
-    start, end = calc_daterange(date_range)
+def get_service_jstatgc(aid, service_id):
+    start, end = calc_daterange(request)
     reports = SJstatGCReport.query_by_rtime(service_id, start, end)
     # shistory = SInfoHistory.query_by_rtime(service_id, start, end)
     # calculate gc stats and memory stats

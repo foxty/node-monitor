@@ -194,7 +194,7 @@ const NodeStatus = {
 		template: `<div>
             <div class="panel panel-default">
                 <div class="panel-heading">
-                    <report-toolbar title="Node Status" v-on:changeRange="reportRange = $event" v-on:reload="loadReports()"></report-toolbar>
+                    <report-toolbar title="Node Status" v-on:changeRange="changeRange" v-on:reload="loadReports()"></report-toolbar>
                 </div>
                 <div class="panel-body">
                 
@@ -226,7 +226,8 @@ const NodeStatus = {
 
 		data: function() {
 		    return {
-		        reportRange: 'last_hour',
+		        startAt: null,
+                endAt: null,
 
 		        sysReports: null,
 		        sysLoad: null,
@@ -296,28 +297,35 @@ const NodeStatus = {
 		},
 
 		created: function() {
-            this.loadReports()
+            //this.loadReports()
 		},
 
 		methods: {
+            changeRange: function(startAt, endAt) {
+                this.startAt = startAt
+                this.endAt = endAt
+                this.loadReports()
+            },
 
             loadReports: function() {
                 var self = this;
                 var aid = self.aid;
-                var range = self.reportRange
-                Ajax.get(`/api/agents/${aid}/report/system/${range}`, function(reports) {
+                var startAt = encodeURIComponent(self.startAt.format())
+                var endAt = encodeURIComponent(self.endAt.format())
+                var q = `start_at=${startAt}&end_at=${endAt}`
+                Ajax.get(`/api/agents/${aid}/report/system?${q}`, function(reports) {
                     self.sysReports = reports
                 })
 
-                Ajax.get(`/api/agents/${aid}/report/cpu/${range}`, function(reports) {
+                Ajax.get(`/api/agents/${aid}/report/cpu?${q}`, function(reports) {
                     self.cpuReports = reports
                 })
 
-                Ajax.get(`/api/agents/${aid}/report/memory/${range}`, function(reports) {
+                Ajax.get(`/api/agents/${aid}/report/memory?${q}`, function(reports) {
                     self.memReports = reports
                 })
 
-                Ajax.get(`/api/agents/${aid}/report/disk/${range}`, function(reports) {
+                Ajax.get(`/api/agents/${aid}/report/disk?${q}`, function(reports) {
                     self.diskReports = reports
                 })
             },
@@ -430,7 +438,7 @@ const ServiceStatus = {
     <div>
         <div class="panel panel-default">
             <div class="panel-heading">
-                <report-toolbar title="Service Status" v-on:changeRange="reportRange = $event" v-on:reload="loadReports()"></report-toolbar>
+                <report-toolbar title="Service Status" v-on:changeRange="changeRange" v-on:reload="loadReports()"></report-toolbar>
             </div>
             <div class="panel-body row">
                 <div v-if="pidstatReports && pidstatReports.length > 0">
@@ -482,7 +490,9 @@ const ServiceStatus = {
 
     data: function() {
         return {
-            reportRange: 'last_hour',
+            startAt: null,
+            endAt: null,
+
             service: null,
             serviceHistory:null,
 
@@ -497,26 +507,26 @@ const ServiceStatus = {
         }
     },
 
-    created: function() {
-        this.loadReports()
-    },
-
-    watch: {
-        reportRange: function(o, n) {
-            this.loadReports();
-        }
-    },
+    created: function() {},
 
     methods: {
+        changeRange: function(startAt, endAt) {
+            this.startAt = startAt
+            this.endAt = endAt
+            this.loadReports()
+        },
+
         loadReports: function() {
             var self = this;
             var aid = self.aid;
             var sid = self.service_id
-            var range = self.reportRange
+            var startAt = encodeURIComponent(self.startAt.format())
+            var endAt = encodeURIComponent(self.endAt.format())
+            var q = `start_at=${startAt}&end_at=${endAt}`
             var markerLines = []
             new Promise(function(resolve){
                 // Load service history at begin
-                Ajax.get(`/api/agents/${aid}/services/${sid}/${range}`, function(resp) {
+                Ajax.get(`/api/agents/${aid}/services/${sid}?${q}`, function(resp) {
                     self.service = resp.service
                     self.service_history = resp.service_history
                     markerLines = self.genRestartMarkerConfig(self.service_history)
@@ -524,12 +534,12 @@ const ServiceStatus = {
                 })
             }).then(function(){
                 // Load pidstat reports
-                Ajax.get(`/api/agents/${aid}/services/${sid}/report/pidstat/${range}`, function(reports) {
+                Ajax.get(`/api/agents/${aid}/services/${sid}/report/pidstat?${q}`, function(reports) {
                     self.pidstatReports = reports
                     self.genPidstatReports(reports, markerLines)
                 })
                 // Load jstatgc reports
-                Ajax.get(`/api/agents/${aid}/services/${sid}/report/jstatgc/${range}`, function(resp) {
+                Ajax.get(`/api/agents/${aid}/services/${sid}/report/jstatgc?${q}`, function(resp) {
                     self.jstatgcReports = resp.reports
                     self.jstatgcStats = resp.gcstats
                     self.genJstatgcReports(resp.reports, markerLines)
@@ -544,7 +554,7 @@ const ServiceStatus = {
                 markers.push({xAxis: sh.collect_at || sh.recv_at})
             })
             return {
-                label: {formatter: 'Restart\n{c}'},
+                label: {formatter: 'R'},
                 lineStyle: {type: 'solid'},
                 data:markers
             }
@@ -552,7 +562,7 @@ const ServiceStatus = {
 
         genPidstatReports: function(n, markerLine) {
             this.cpuChart = genChartOption("CPU Utilization", n, "collect_at",
-                {"Total":"cpu_util", "SYS":"cpu_sy", "USER":"cpu_us"},
+                {"SYS":"cpu_sy", "USER":"cpu_us"},
                 {stack:true, yAxisFmt:"{value}%", yAxisMax:100, markLine: markerLine})
             this.memoryChart = genChartOption("Memory Utilization", n, "collect_at",
                 {"Util":"mem_util"},

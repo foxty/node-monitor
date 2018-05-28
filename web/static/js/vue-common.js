@@ -160,21 +160,54 @@ Vue.component("report-toolbar", {
             <button class="btn btn-sm btn-default" :class="{'btn-primary': range == 'last_week'}" 
                 @click="changeRange('last_week')">Last Week</button>
         </div>
-    
+        
+        <span><input type="text" placeholder="Start Time" size="8" style="text-align: center" v-model="startAtModel"/></span>
+         - 
+        <span><input type="text" placeholder="End Time" size="8" style="text-align: center" v-model="endAtModel"/></span>
+        
         <button class="btn btn-sm btn-success" @click="reload()">Reload</button>
     </div>
     `,
-    props: ["title"],
+    props: ['title'],
     data: function() {
         return {
-            range: 'last_hour'
+            range: 'last_hour',
+            startAt: moment().subtract(1, 'h'),
+            startAtModel: null,
+            endAt: moment(),
+            endAtModel: null
         };
     },
+    created: function() {
+        this.changeRange(this.range)
+    },
+    watch: {
+        startAt: function() {
+            this.startAtModel = this.startAt.format('MM/DD HH:00')
+        },
+        endAt: function() {
+            this.endAtModel = this.endAt.format('MM/DD HH:00')
+        }
+    },
     methods: {
+
         changeRange: function(range) {
             this.range = range
-            this.$emit('changeRange', range)
-            console.log('change range of ' + this.title + ' to ' + range )
+            this.startAt = moment()
+            this.endAt = moment()
+            switch (range) {
+                case 'last_hour':
+                    this.startAt.subtract(1, 'h')
+                    break;
+                case 'last_day':
+                    this.startAt.subtract(24, 'h')
+                    break;
+                case 'last_week':
+                    this.startAt.subtract(7, 'd')
+                    break;
+            }
+            this.$emit('changeRange', this.startAt, this.endAt)
+            console.log('change range of ' + this.title + ' to ' + this.startAt + ':' + this.endAt )
         },
 
         reload: function() {

@@ -16,7 +16,7 @@ import logging
 import getopt
 from multiprocessing import Process
 from common import SetupError, OSType
-_FILES_TO_COPY = ['common.py', 'agent.py', 'agent_service_solaris.xml', 'agent_service_linux.sh']
+_FILES_TO_COPY = ['common.py', 'agent.py', 'agent_service_solaris.xml', 'agent_service.sh']
 _VALID_PY = ['Python 2.4', 'Python 2.5', 'Python 2.6', 'Python 2.7']
 _INSTALL_PY27 = True
 _FILE_OF_PY27 = 'Python-2.7.14.tgz'
@@ -101,7 +101,7 @@ class NodeConnector(object):
 
     def install_service(self, mhost):
         logging.info('install agent service on %s[%s]', self.node_host, self.ostype)
-        self.exec_cmd("sed 's/master_host/%s/' %s/agent_service_linux.sh > /etc/init.d/nmagent" %
+        self.exec_cmd("sed 's/master_host/%s/' %s/agent_service.sh > /etc/init.d/nmagent" %
                       (mhost, self.APP_DIR))
         self.exec_cmd('chmod +x /etc/init.d/nmagent')
         if self.ostype == OSType.LINUX:

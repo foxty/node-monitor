@@ -20,6 +20,10 @@ lodash@^4.17.4:
   version "4.17.5"
   resolved "https://registry.yarnpkg.com/lodash/-/lodash-4.17.5.tgz#99a92d65c0272debe8c96b6057bc8fbfa3bed511"
 
+moment@^2.22.1:
+  version "2.22.1"
+  resolved "https://registry.yarnpkg.com/moment/-/moment-2.22.1.tgz#529a2e9bf973f259c9643d237fda84de3a26e8ad"
+
 resize-detector@0.0.5:
   version "0.0.5"
   resolved "https://registry.yarnpkg.com/resize-detector/-/resize-detector-0.0.5.tgz#3ccd9f57e9196166fc22a2854d4982be45fbf63b"
