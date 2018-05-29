@@ -8,8 +8,23 @@ Created on 2017-12-22
 
 import unittest
 from mock import MagicMock
-from common import Msg
-from agent import AgentConfig, NodeCollector
+from common import Msg, ostype, is_linux, is_sunos, is_win, OSType
+from agent import AgentConfig, NodeCollector, is_metric_valid
+
+
+class GlobalTest(unittest.TestCase):
+
+    def test_is_metric_valid(self):
+        os = OSType.WIN
+        if is_linux():
+            os = OSType.LINUX
+        elif is_win():
+            os = OSType.WIN
+        elif is_sunos():
+            os = OSType.SUNOS
+        metric = {'name': 'cd', 'cmd': ['ls', '/'], 'os': os}
+        re = is_metric_valid(metric)
+        self.assertTrue(re)
 
 
 class AgentConfigTest(unittest.TestCase):
@@ -26,15 +41,18 @@ class AgentConfigTest(unittest.TestCase):
 
     def test_node_metrics(self):
         metrics = self.CONFIG.node_metrics
-        self.assertEqual(10, len(metrics))
-        w = metrics['w']
+        self.assertEqual(11, len(metrics))
+        w = metrics[5]
         self.assertEqual(['w'], w['cmd'])
         self.assertEqual(6, w['clocks'])
-        free = metrics['free']
+        free = metrics[6]
         self.assertEqual(['free', '-m'], free['cmd'])
         self.assertEqual(6, free['clocks'])
-        df = metrics['df']
+        df = metrics[9]
         self.assertEqual(['df', '-k'], df['cmd'])
+        self.assertEqual(60, df['clocks'])
+        df = metrics[10]
+        self.assertEqual(['df', '-kP'], df['cmd'])
         self.assertEqual(60, df['clocks'])
 
     def test_service_metrics(self):

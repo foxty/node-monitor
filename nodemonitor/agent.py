@@ -77,14 +77,20 @@ def check_output(*popenargs, **kwargs):
     return output
 
 
-def is_valid_exist(cmd):
+def is_metric_valid(metric):
+    if 'name' not in metric or 'cmd' not in metric:
+        logging.warn('incompleted metric definition %s', metric)
+        return False
+    name = metric['name']
+    os = metric.get('os')
+    cmd = metric['cmd']
     checkcmd = 'which'
     if is_win():
         checkcmd = 'where'
     if is_sunos():
         checkcmd = 'type'
-    logging.info('check "%s" by "%s"', cmd, checkcmd)
-    return call([checkcmd, cmd]) == 0
+    logging.info('check "%s" by "%s" with os=%s', cmd[0], checkcmd, os)
+    return call([checkcmd, cmd[0]]) == 0 if os is None or os == ostype() else False
 
 
 class AgentConfig(object):
@@ -92,61 +98,97 @@ class AgentConfig(object):
     CONFIG = {
         "clock_interval": 10,
         "heartbeat_clocks": 6,
-        "node_metrics": {
-            "dstat-sys": {
+        "node_metrics": [
+            # dstat-sys
+            {
+                "name": "dstat-sys",
+                "os": "LINUX",
                 "cmd": ["dstat", "-lyp", "1", "1"],
                 "clocks": 6
             },
-            "dstat-cpu": {
+            # dstat-cpu
+            {
+                "name": "dstat-cpu",
+                "os": "LINUX",
                 "cmd": ["dstat", "-c", "1", "1"],
                 "clocks": 6
             },
-            "dstat-mem": {
+            # dstat-mem
+            {
+                "name": "dstat-mem",
+                "os": "LINUX",
                 "cmd": ["dstat", "-msg", "1", "1"],
                 "clocks": 6
             },
-            "dstat-socket": {
+            # dstat-socket
+            {
+                "name": "dstat-socket",
+                "os": "LINUX",
                 "cmd": ["dstat", "--socket", "1", "1"],
                 "clocks": 6
             },
-            "dstat-dio": {
+            # dstat-dio
+            {
+                "name": "dstat-dio",
                 "cmd": ["dstat", "-dr", "1", "1"],
                 "clocks": 6
             },
-            "w": {
+            # w
+            {
+                "name": "w",
                 "cmd": ["w"],
                 "clocks": 6
             },
-            "free": {
+            # free
+            {
+                "name": "free",
+                "os": "LINUX",
                 "cmd": ["free", "-m"],
                 "clocks":6
             },
-            "vmstat": {
+            # vmstat
+            {
+                "name": "vmstat",
                 "cmd": ["vmstat","1", "2"],
                 "clocks": 6
             },
-            "netstat": {
+            # netstat
+            {
+                "name": "netstat",
                 "cmd": ["netstat", "-s"],
                 "clocks": 6
             },
-            "df": {
+            # df solaris
+            {
+                "name": "df",
+                "os": "SOLARIS",
                 "cmd": ["df", "-k"],
                 "clocks": 60
+            },
+            # df linux
+            {
+                "name": "df",
+                "os": "LINUX",
+                "cmd": ["df", "-kP"],
+                "clocks": 60
             }
-        },
+        ],
 
         "service_metrics": {
             "pidstat": {
+                "name": "pidstat",
                 "type": "all",
                 "cmd": ["pidstat", "-tdruh", "-p", "${pid}"]
             },
             "jstat-gc": {
+                "name": "jstat-gc",
                 "type": "java",
                 "cmd": ["su", "${puser}", "-c", "${java_home}/bin/jstat -gc -t ${pid}"]
             }
         },
 
         "services": [
+            # agent
             {
                 "name": "agent",
                 "type": "python",
@@ -264,7 +306,7 @@ class AgentConfig(object):
 
     def __init__(self):
         config = self.CONFIG
-        self._node_metrics = config.get('node_metrics', {})
+        self._node_metrics = config.get('node_metrics', [])
         self._valid_node_metrics = None
         self._service_metrics = config.get('service_metrics', {})
         self._services = config.get('services',[])
@@ -278,8 +320,7 @@ class AgentConfig(object):
     def _validate(self):
         # check node metrics
         logging.info('check node metric commands')
-        self._valid_node_metrics = dict((k, v) for k, v in self._node_metrics.items()
-                                        if is_valid_exist(v['cmd'][0]))
+        self._valid_node_metrics = [v for v in self._node_metrics if is_metric_valid(v)]
         logging.info('valid node metrics = %s', self._valid_node_metrics)
 
         # check services
@@ -389,9 +430,9 @@ class NodeCollector(threading.Thread):
         """
         logging.info('try to collecting node metrics, loops=%d', loops)
         nmetrics_result = {}
-        for k, v in self._config.valid_node_metrics.items():
-            if loops % v.get('clocks', 6) == 0:
-                nmetrics_result[k] = self._get_cmd_result(v['cmd'])
+        for nm in self._config.valid_node_metrics:
+            if loops % nm.get('clocks', 6) == 0:
+                nmetrics_result[nm['name']] = self._get_cmd_result(nm['cmd'])
         if nmetrics_result:
             msg = Msg.create_msg(self._agentid, Msg.A_NODE_METRIC, nmetrics_result)
             msg.set_header(msg.H_COLLECT_AT, datetime.now())
@@ -437,7 +478,8 @@ class NodeCollector(threading.Thread):
             try:
                 metric = self._config.service_metrics[mname]
                 cmd = self._translate_cmd(metric['cmd'], env)
-                if not is_valid_exist(cmd[0]):
+                metric['cmd'] = cmd
+                if not is_metric_valid(metric):
                     logging.debug('cmd %s is not a valid command', cmd[0])
                     continue
                 service_metrics[mname] = self._get_cmd_result(cmd)
