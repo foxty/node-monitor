@@ -90,7 +90,10 @@ def is_metric_valid(metric):
     if is_sunos():
         checkcmd = 'type'
     logging.info('check "%s" by "%s" with os=%s', cmd[0], checkcmd, os)
-    return call([checkcmd, cmd[0]]) == 0 if os is None or os == ostype() else False
+    if os is None or os == ostype():
+        return call([checkcmd, cmd[0]]) == 0
+    else:
+        return False
 
 
 class AgentConfig(object):
@@ -198,6 +201,7 @@ class AgentConfig(object):
                 "clocks": 6
             },
 
+            # SAPM.Reactor@Linux
             {
                 "name": "SAPM.Reactor@Linux",
                 "type": "java",
@@ -211,6 +215,7 @@ class AgentConfig(object):
                 "clocks": 6
             },
 
+            # SAPM.Reactor@Solaris
             {
                 "name": "SAPM.Reactor@Solaris",
                 "type": "java",
@@ -224,6 +229,7 @@ class AgentConfig(object):
                 "clocks": 6
             },
 
+            # SAPM.Collector@Linux
             {
                 "name": "SAPM.Collector@Linux",
                 "type": "java",
@@ -237,6 +243,7 @@ class AgentConfig(object):
                 "clocks": 6
             },
 
+            # SAPM.Collector@Solaris
             {
                 "name": "SAPM.Collector@Solaris",
                 "type": "java",
@@ -250,6 +257,7 @@ class AgentConfig(object):
                 "clocks": 6
             },
 
+            # SAPM.Controller@Linux
             {
                 "name": "SAPM.Controller@Linux",
                 "type": "java",
@@ -263,6 +271,7 @@ class AgentConfig(object):
                 "clocks": 6
             },
 
+            # SAPM.Controller@Solaris
             {
                 "name": "SAPM.Controller@Solaris",
                 "type": "java",
@@ -276,6 +285,7 @@ class AgentConfig(object):
                 "clocks": 6
             },
 
+            # SAPM.NodeReceiver@Linux
             {
                 "name": "SAPM.NodeReceiver@Linux",
                 "type": "java",
@@ -289,6 +299,7 @@ class AgentConfig(object):
                 "clocks": 6
             },
 
+            # SAPM.NodeReceiver@Solaris
             {
                 "name": "SAPM.NodeReceiver@Solaris",
                 "type": "java",
@@ -298,6 +309,18 @@ class AgentConfig(object):
                     "log_home": "/export/home/stargus/log/"
                 },
                 "log_pattern": ["jboss_*.log"],
+                "metrics": ["pidstat", "jstat-gc"],
+                "clocks": 6
+            },
+
+            # Scaler
+            {
+                "name": "SAPM.Scaler",
+                "type": "java",
+                "lookup_keyword": "com.arrisi.sa.scaler.Agent",
+                "env" : {
+                    "java_home": "/usr/java/latest"
+                },
                 "metrics": ["pidstat", "jstat-gc"],
                 "clocks": 6
             }
