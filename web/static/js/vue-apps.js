@@ -145,17 +145,17 @@ const Node = {
     props: ['aid'],
 
     template: `<div>
-        <div class="col-md-2">
+        <div class="col-md-1">
             <ul class="nav nav-pills nav-stacked">
               <li role="presentation" :class="{'active': $route.name == 'nodeStatus'}">
                 <router-link :to="{name: 'nodeStatus', params: {aid:aid}}">Status</router-link>
               </li>
               <li role="presentation" :class="{'active': $route.name == 'nodeServices' || $route.name.startsWith('service')}">
-                <router-link :to="{name: 'nodeServices', params: {aid:aid}}">Services</router-link>
+                <router-link :to="{name: 'nodeServices', params: {aid:aid}}">Service</router-link>
               </li>
             </ul>
         </div>
-        <div class="col-md-10">
+        <div class="col-md-11">
             <div class="alert alert-info">Node {{agent ? agent.name + '@' + agent.host : ''}}</div>
             <router-view></router-view>
         </div>

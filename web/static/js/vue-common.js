@@ -153,17 +153,17 @@ Vue.component("report-toolbar", {
         <label>{{title}}</label> 
         
         <div class="btn-group" role="group">
-            <button class="btn btn-sm btn-default" :class="{'btn-primary': range == 'last_hour'}" 
+            <button class="btn btn-sm btn-default"
                 @click="changeRange('last_hour')">Last Hour</button>
-            <button class="btn btn-sm btn-default" :class="{'btn-primary': range == 'last_day'}" 
+            <button class="btn btn-sm btn-default"
                 @click="changeRange('last_day')">Last Day</button>
-            <button class="btn btn-sm btn-default" :class="{'btn-primary': range == 'last_week'}" 
+            <button class="btn btn-sm btn-default"
                 @click="changeRange('last_week')">Last Week</button>
         </div>
         
-        <span><input type="text" placeholder="Start Time" size="8" style="text-align: center" v-model="startAtModel"/></span>
+        <span><input type="text" placeholder="Start Time" size="10" style="text-align: center" v-model="startAt"/></span>
          - 
-        <span><input type="text" placeholder="End Time" size="8" style="text-align: center" v-model="endAtModel"/></span>
+        <span><input type="text" placeholder="End Time" size="10" style="text-align: center" v-model="endAt"/></span>
         
         <button class="btn btn-sm btn-success" @click="reload()">Reload</button>
     </div>
@@ -171,48 +171,48 @@ Vue.component("report-toolbar", {
     props: ['title'],
     data: function() {
         return {
-            range: 'last_hour',
+            fmt: 'YY/MM/DD HH:mm',
             startAt: moment().subtract(1, 'h'),
-            startAtModel: null,
             endAt: moment(),
-            endAtModel: null
         };
     },
     created: function() {
-        this.changeRange(this.range)
+        this.changeRange('last_hour')
     },
     watch: {
         startAt: function() {
-            this.startAtModel = this.startAt.format('MM/DD HH:00')
         },
         endAt: function() {
-            this.endAtModel = this.endAt.format('MM/DD HH:00')
-        }
+        },
+
     },
     methods: {
 
         changeRange: function(range) {
-            this.range = range
-            this.startAt = moment()
-            this.endAt = moment()
+            const start = moment()
+            const end = moment()
             switch (range) {
                 case 'last_hour':
-                    this.startAt.subtract(1, 'h')
+                    start.subtract(1, 'h')
                     break;
                 case 'last_day':
-                    this.startAt.subtract(24, 'h')
+                    start.subtract(24, 'h')
                     break;
                 case 'last_week':
-                    this.startAt.subtract(7, 'd')
+                    start.subtract(7, 'd')
                     break;
             }
-            this.$emit('changeRange', this.startAt, this.endAt)
+            this.startAt = start.format(this.fmt)
+            this.endAt = end.format(this.fmt)
+            this.$emit('changeRange', start, end)
             console.log('change range of ' + this.title + ' to ' + this.startAt + ':' + this.endAt )
         },
 
         reload: function() {
-            this.$emit("reload");
-            console.log("reload data of " + this.title)
+            const start = moment(this.startAt, this.fmt)
+            const end = moment(this.endAt, this.fmt)
+            this.$emit('changeRange', start, end)
+            console.log("reload data of " + this.title + ' to ' + this.startAt + ':' + this.endAt)
         }
     }
 });
