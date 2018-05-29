@@ -20,10 +20,30 @@
                     <!-- Collect the nav links, forms, and other content for toggling -->
                     <div class="collapse navbar-collapse">
                         <ul class="nav navbar-nav">
-                            <li><router-link to="/dashboard" exact>Dashboard</router-link></li>
-                            <li><router-link to="/nodes">Nodes</router-link></li>
-                            <li><router-link to="/alarms">Alarms</router-link></li>
-                            <li><router-link to="/settings">Settings</router-link></li>
+                            <li>
+                                <router-link to="/dashboard" exact>
+                                    <span class="glyphicon glyphicon-dashboard" aria-hidden="true"></span>
+                                    Dashboard
+                                </router-link>
+                            </li>
+                            <li>
+                                <router-link to="/nodes">
+                                    <span class="glyphicon glyphicon-th-list" aria-hidden="true"></span>
+                                    Nodes
+                                </router-link>
+                            </li>
+                            <li>
+                                <router-link to="/alarms">
+                                    <span class="glyphicon glyphicon-bell" aria-hidden="true"></span>
+                                    Alarms
+                                </router-link>
+                            </li>
+                            <li>
+                                <router-link to="/settings">
+                                    <span class="glyphicon glyphicon-cog" aria-hidden="true"></span>
+                                    Settings
+                                </router-link>
+                            </li>
                             <!--li :class="{'active': idx == curIndex}" @click="enableApp(idx)" v-for="(app, idx) in apps">
                                 <a href="#">{{app.title}}</a>
                             </li-->

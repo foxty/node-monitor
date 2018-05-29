@@ -14,7 +14,6 @@
 .router-link-active {
     color:darkblue;
     font-weight: bold;
-    text-decoration:underline;
 }
 
 .router-link-exact-active {
