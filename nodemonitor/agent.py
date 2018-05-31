@@ -545,8 +545,8 @@ class NodeAgent:
     """Agent will running the node as and keep send stats data to Master via TCP connection."""
     SEND_BUF = 128*1024
 
-    def __init__(self, master_host='localhost', master_port=7890):
-        logging.info('init agent...')
+    def __init__(self, master_host, master_port):
+        logging.info('init agent master = %s:%s', master_host, master_port)
         self._hostname = socket.gethostname()
         self._agentid = self._gen_agentid()
         self._master_addr = (master_host, master_port)
@@ -708,19 +708,21 @@ class NodeAgent:
 
 
 if __name__ == '__main__':
-
-    try:
-        opts, args = getopt.getopt(sys.argv[1:], 'p:')
-    except getopt.GetoptError:
-        print('Wrong usage')
-        sys.exit(2)
+    basepath = os.path.dirname(sys.path[0])
+    logging.basicConfig(level=logging.INFO,
+                        datefmt='%m-%d %H:%M:%S',
+                        format='%(asctime)s-%(threadName)s:%(levelname)s:%(name)s:%(module)s.%(lineno)d:%(message)s')
+    args = sys.argv[1:]
     mhost = 'localhost'
-    if len(args) == 1:
-        mhost = args[0]
-    port = 7890
-    for opt, v in opts:
-        if opt in ['-p', '--port']:
-            port = v
+    mport = 30079
 
-    agent = NodeAgent(mhost, port)
+    if len(args) == 0:
+        print('Usage: agnet.py master_host[:port]')
+        exit(-1)
+    if ':' in args[0]:
+        addr = args[0].split(':')
+        mhost, mport = addr[0], int(addr[1])
+    else:
+        mhost = args[0]
+    agent = NodeAgent(mhost, mport)
     agent.start()

@@ -8,6 +8,7 @@ Created on 2017-12-22
 UI for master node
 """
 import logging
+import yaml
 from datetime import datetime, timedelta
 from flask import Flask, request, render_template
 from common import dump_json
@@ -132,14 +133,20 @@ def get_service_jstatgc(aid, service_id):
     return dump_json({'reports': reports, 'gcstats': [gcstat_range, gcstat_recent]})
 
 
-def ui_main(host='0.0.0.0', port=8080, debug=False):
+def ui_main(config, debug=False):
+    logging.basicConfig(level=logging.INFO,
+                        datefmt='%m-%d %H:%M:%S',
+                        format='%(asctime)s-%(threadName)s:%(levelname)s:%(name)s:%(module)s.%(lineno)d:%(message)s')
     logging.info('starting master ui...')
     _APP.jinja_env.variable_start_string = '{-'
     _APP.jinja_env.variable_end_string = '-}'
     _APP.jinja_env.auto_reload = True
     _APP.config['TEMPLATES_AUTO_RELOAD'] = True
-    _APP.run(host=host, port=port, debug=debug)
+    servercfg = config['ui']['server']
+    _APP.run(host=servercfg['host'], port=servercfg['port'], debug=debug)
 
 
 if __name__ == '__main__':
-    ui_main(port=8081, debug=True)
+    with open('../conf/master.yaml') as f:
+        cfg = yaml.load(f)
+    ui_main(cfg, debug=True)

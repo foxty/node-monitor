@@ -1,0 +1,28 @@
+master:
+  server:
+    host: 0.0.0.0
+    port: 30079
+  database:
+    type: 'sqlite'
+    url: '/opt/node-monitor/db/'
+    user: 'root'
+    password: ''
+  data_retention:
+    interval: 86400 # seconds
+    policy: # days
+      node_metric_raw: 14
+      node_memory_report: 14
+      node_cpu_report: 14
+      node_system_report: 14
+      node_disk_report: 14
+      service_metric_raw: 14
+      service_pidstat_report: 14
+      service_jstatgc_report: 14
+      alarm: 14
+
+ui:
+  server:
+    host: '0.0.0.0'
+    port: 30080
+
+agent: ''

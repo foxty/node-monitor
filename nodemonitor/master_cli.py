@@ -14,6 +14,7 @@ import sys
 import socket
 import logging
 import getopt
+import yaml
 from multiprocessing import Process
 from common import SetupError, OSType
 _FILES_TO_COPY = ['common.py', 'agent.py', 'agent_service_solaris.xml', 'agent_service.sh']
@@ -99,17 +100,17 @@ class NodeConnector(object):
                 #self.exec_cmd('mv %s/%s.1 %s/%s' % (self.APP_DIR, f, self.APP_DIR, f))
                 logging.info('file %s transferred successfully', f)
 
-    def install_service(self, mhost):
+    def install_service(self, master_addr):
         logging.info('install agent service on %s[%s]', self.node_host, self.ostype)
-        self.exec_cmd("sed 's/master_host/%s/' %s/agent_service.sh > /etc/init.d/nmagent" %
-                      (mhost, self.APP_DIR))
+        self.exec_cmd("sed 's/master_addr/%s/' %s/agent_service.sh > /etc/init.d/nmagent" %
+                      (master_addr, self.APP_DIR))
         self.exec_cmd('chmod +x /etc/init.d/nmagent')
         if self.ostype == OSType.LINUX:
             self.exec_cmd('chkconfig --add nmagent')
         else:
             self.exec_cmd('svccfg import %s' % self.APP_DIR + '/agent_service_solaris.xml')
 
-    def launch_agent(self, mhost):
+    def launch_agent(self):
         """Launch remote agent via ssh channel"""
         cmd = 'service nmagent start' if self.ostype == OSType.LINUX else 'svcadm enable nmagent'
         success, message = self.exec_cmd(cmd)
@@ -148,12 +149,12 @@ def parse_nodelist(path):
                 for line in nf.readlines() if line.strip() and not line.strip().startswith('#')]
 
 
-def push_to_nodes(nodelist):
+def push_to_nodes(nodelist, mhost, mport):
     """push agent script to remote node and start the agent via ssh
     node list should contains list of tuple like (host, userame, password)
     """
-    logging.info('star pushing to nodes %s', nodelist)
-    mhost = socket.gethostbyaddr(socket.gethostname())[0]
+    master_addr = mhost + ':' + str(mport)
+    logging.info('star pushing to nodes %s with master = %s', nodelist, master_addr)
     for node in nodelist:
         host, user, password = node
         try:
@@ -169,8 +170,8 @@ def push_to_nodes(nodelist):
 
                 nc.trans_files(_FILES_TO_COPY)
                 nc.stop_agent()
-                nc.install_service(mhost)
-                nc.launch_agent(mhost)
+                nc.install_service(master_addr)
+                nc.launch_agent()
         except Exception as e:
             logging.exception('error while push to %s', host)
     return nodelist
@@ -191,7 +192,20 @@ def usage():
 
 
 if __name__ == '__main__':
-    logging.info('starting master cli:')
+    logging.basicConfig(level=logging.INFO,
+                        datefmt='%m-%d %H:%M:%S',
+                        format='%(asctime)s-%(threadName)s:%(levelname)s:%(name)s:%(module)s.%(lineno)d:%(message)s')
+
+    basepath = os.path.dirname(sys.path[0])
+    cfgpath = os.path.join(basepath, 'conf', 'master.yaml')
+    logging.info('starting master cli from %s with cfg=%s', basepath, cfgpath)
+    if not os.path.isfile(cfgpath):
+        logging.error('mater config %s not exist', cfgpath)
+        exit(1)
+    with open(cfgpath) as f:
+        config = yaml.load(f)
+    logging.info('config loaded from %s', cfgpath)
+
     try:
         opts, args = getopt.getopt(sys.argv[1:], "hi:p:m", ['help', 'install=', 'push=', 'master', 'stop-agents='])
     except getopt.GetoptError as e:
@@ -202,16 +216,21 @@ if __name__ == '__main__':
             with open(v, 'r') as f:
                 nodelist = [[ele.strip() for ele in l.strip().split(',')]
                             for l in f.readlines() if l.strip() and not l.strip().startswith('#')]
-            push_to_nodes(nodelist)
+            if len(args) == 1:
+                mhost = args[0]
+            else:
+                mhost = socket.gethostbyaddr(socket.gethostname())[0]
+            mport = config['master']['server']['port']
+            push_to_nodes(nodelist, mhost, mport)
         elif opt in ['-m', '--master']:
             from master import master_main
             from master_ui import ui_main
-            master_proc = Process(target=master_main)
-            masterui_proc = Process(target=ui_main)
+            master_proc = Process(target=master_main, args=(config,))
+            masterui_proc = Process(target=ui_main, args=(config,))
             master_proc.start()
-            logging.info('master backend process started: %s', master_proc)
+            logging.info('master started: %s', master_proc)
             masterui_proc.start()
-            logging.info('master ui process started: %s', masterui_proc)
+            logging.info('ui started: %s', masterui_proc)
 
             master_proc.join()
             masterui_proc.join()

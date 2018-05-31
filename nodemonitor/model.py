@@ -22,11 +22,10 @@ if not os.path.exists(DB_PATH):
     logging.warn('create folder for database file %s', DB_PATH)
     os.makedirs(DB_PATH)
 
+
 _DB_SCHEMA = r'''
     CREATE TABLE IF NOT EXISTS agent(aid UNIQUE, name, host, create_at timestamp, 
-        last_msg_at, last_cpu_util, last_mem_util, last_sys_load1, last_sys_cs);
-        
-    CREATE TABLE IF NOT EXISTS data_retention(table_name varchar, days INTEGER);
+        last_msg_at, last_cpu_util, last_mem_util, last_sys_load1, last_sys_cs);  
     
     CREATE TABLE IF NOT EXISTS node_metric_raw(aid, collect_at timestamp, category, content, recv_at timestamp);
     CREATE INDEX IF NOT EXISTS `idx_nmr_aid` ON `node_metric_raw` (`aid` DESC);
@@ -105,6 +104,23 @@ def create_schema(cursor):
     cursor.executescript(_DB_SCHEMA)
 
 
+@dao
+def _drop_schema(cursor):
+    cursor.executescript("""
+    DROP TABLE agent;
+    DROP TABLE node_metric_raw;
+    DROP TABLE node_memory_report;
+    DROP TABLE node_cpu_report;
+    DROP TABLE node_disk_report;
+    DROP TABLE node_system_report;
+    DROP TABLE service_metric_raw;
+    DROP TABLE service;
+    DROP TABLE service_history;
+    DROP TABLE service_pidstat_report;
+    DROP TABLE service_jstatgc_report;
+    """)
+
+
 class InvalidFieldError(Exception): pass
 
 
@@ -112,10 +128,16 @@ class NoPKError(Exception): pass
 
 
 class Model(dict):
+    _MAPPINGS = {}
     _TABLE = 'model'
     _FIELDS = []
     _PK = ["_id"]
     _ISQL = None
+
+    def __new__(cls, *args, **kwargs):
+        if not cls._MAPPINGS.has_key(cls._TABLE):
+            cls._MAPPINGS[cls._TABLE] = cls
+        return super(Model, cls).__new__(cls, args, kwargs)
 
     def __init__(self, *args, **kwargs):
         upd = None
@@ -226,11 +248,29 @@ class Model(dict):
 
     @classmethod
     @dao
+    def delete(cls, where=None, params=None, cursor=None):
+        """
+        Delete records for this model
+        :param where:
+        :param params:
+        :param cursor:
+        :return: deleted count
+        """
+        sql = 'DELETE FROM %s %s' % (cls._TABLE, 'WHERE %s' % where if where else '')
+        logging.debug('%s : %s', sql, params)
+        cursor.execute(sql, params if params else [])
+
+    @classmethod
+    @dao
     def count(cls, where=None, params=None, cursor=None):
         cursor.execute('SELECT COUNT(1) FROM %s %s' % (cls._TABLE, 'WHERE ' + where if where else ''),
                        params if params else ())
         r = cursor.fetchone()
         return r[0] if r else 0
+
+    @classmethod
+    def find_model(cls, tablename):
+        return cls._MAPPINGS[tablename]
 
 
 class AgentChronoModel(object):

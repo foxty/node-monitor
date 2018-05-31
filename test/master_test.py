@@ -8,27 +8,33 @@ Created on 2017-12-22
 
 import unittest
 import os
-import sys
-import socket
+import time
 import model
 import content_parser
 from datetime import datetime, timedelta
 from uuid import uuid4
 from common import Msg
-from master import Master
+from master import Master, DataKeeper
 
 model.DB_NAME = 'test.db'
 
 
 class BaseDBTest(unittest.TestCase):
     def setUp(self):
-        if os.path.exists(model.DB_NAME):
-            os.remove(model.DB_NAME)
         model.create_schema()
 
     def tearDown(self):
-        if os.path.exists(model.DB_NAME):
-            os.remove(model.DB_NAME)
+        model.Agent.delete()
+        model.NMetric.delete()
+        model.NCPUReport.delete()
+        model.NMemoryReport.delete()
+        model.NDiskReport.delete()
+        model.NSystemReport.delete()
+        model.SMetric.delete()
+        model.SInfo.delete()
+        model.SInfoHistory.delete()
+        model.SJstatGCReport.delete()
+        model.SPidstatReport.delete()
 
 
 class ReportModelTest(unittest.TestCase):
@@ -674,13 +680,29 @@ class MasterDAOTest(BaseDBTest):
 
 class MasterTest(BaseDBTest):
 
+    def setUp(self):
+        BaseDBTest.setUp(self)
+        config = {
+            'master': {
+                'server': {
+                    'host': '0.0.0.0',
+                    'port': 7890
+                },
+                'data_retention': {
+                    'interval': 10,
+                    'policy': {}
+                }
+            }
+        }
+        self.master = Master(config)
+
     def test_creation(self):
-        master = Master()
-        self.assertEqual((socket.gethostname(), 7890), master._addr)
+        master = self.master
+        self.assertEqual(('0.0.0.0', 7890), master._addr)
         self.assertEqual(5, len(master._handlers))
 
     def test_handle_reg(self):
-        master = Master()
+        master = self.master
 
         # test a new agent join
         regmsg = Msg.create_msg('1', Msg.A_REG, {'hostname': 'test-host'})
@@ -695,7 +717,7 @@ class MasterTest(BaseDBTest):
         pass
 
     def test_handle_empty_nmetrics(self):
-        m = Master()
+        m = self.master
         ctime = datetime.now()
         body = {'collect_time': ctime}
         regmsg = Msg.create_msg('2', Msg.A_REG, {'hostname': 'test-host'})
@@ -710,7 +732,8 @@ class MasterTest(BaseDBTest):
         agent = model.Agent('2', 'localhost', 'localhost', datetime.now())
         agent.save()
 
-        m = Master()
+        m = self.master
+        m._load_agents()
         ctime = datetime.now()
         msgbody = {
             'w': ''' 05:04:07 up 57 days, 10:57,  1 user,  load average: 2.11, 2.54, 2.77
@@ -771,7 +794,7 @@ class MasterTest(BaseDBTest):
         agent = model.Agent(aid, 'localhost', 'localhost', datetime.now())
         agent.save()
 
-        m = Master()
+        m = self.master
         ctime = datetime.now()
         msgbody = {'name': 'service1', 'pid': '1', 'metrics': {'m1': 'm1 content', 'm2': 'm2 content'}}
         nmmsg = Msg.create_msg(agent.aid, Msg.A_SERVICE_METRIC, msgbody)
@@ -801,7 +824,7 @@ class MasterTest(BaseDBTest):
         agent = model.Agent(aid, 'localhost', 'localhost', datetime.now())
         agent.save()
 
-        m = Master()
+        m = self.master
         ctime = datetime.now()
         msgbody = {'name': 'service1', 'pid': '1', 'metrics': {'m1': 'm1 content', 'm2': 'm2 content'}}
         nmmsg = Msg.create_msg(agent.aid, Msg.A_SERVICE_METRIC, msgbody)
@@ -828,6 +851,56 @@ class MasterTest(BaseDBTest):
         self.assertEqual(2, len(sinfohis))
         self.assertEqual('1', sinfohis[0].pid)
         self.assertEqual('2', sinfohis[1].pid)
+
+
+class DataKeeperTest(BaseDBTest):
+
+    def setUp(self):
+        BaseDBTest.setUp(self)
+        config = {
+            'interval': 3,
+            'policy': {
+                'node_metric_raw': 5
+            }
+        }
+        self.data_keeper = DataKeeper(config)
+
+    def test_init(self):
+        dk = self.data_keeper
+        self.assertEqual(3, dk._interval)
+        self.assertEqual({'node_metric_raw': 5}, dk._policy)
+        self.assertEqual(0, dk._count)
+        self.assertFalse(dk._run)
+        self.assertEqual(None, dk._startat)
+        self.assertEqual(None, dk._timer)
+
+    def test_start_stop(self):
+        dk = self.data_keeper
+        dk.start()
+        self.assertTrue(dk._run)
+        self.assertIsNotNone(dk._timer)
+        self.assertIsNotNone(dk._startat)
+        time.sleep(dk._interval + 1)
+        dk.stop()
+        self.assertFalse(dk._run)
+        self.assertEqual(1, dk._count)
+
+    def test_run(self):
+        dk = self.data_keeper
+        today = datetime.now()
+        metrics = []
+        for i in range(0, 20):
+            theday = today - timedelta(days=i)
+            m = model.NMetric(aid=1, collect_at=theday, category='sys', content='content' + str(i), recv_at=theday)
+            metrics.append(m)
+        model.NMetric.save_all(metrics)
+        dk.start()
+        time.sleep(dk._interval + 1)
+        dk.stop()
+        metrics = model.NMetric.query()
+        self.assertEqual(5, len(metrics))
+        for m in metrics:
+            self.assertTrue((today - m.recv_at).days < 5)
 
 
 if __name__ == '__main__':

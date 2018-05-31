@@ -18,15 +18,11 @@ import socket
 import SocketServer
 import content_parser
 import model
-from datetime import datetime
+import yaml
+from datetime import datetime, timedelta
+from threading import Timer
 from uuid import uuid4
 from common import Msg, InvalidMsgError
-
-
-
-# ====================
-# const definition
-#====================
 
 
 _MASTER = None
@@ -116,16 +112,67 @@ class AgentRequestHandler(SocketServer.StreamRequestHandler):
                 logging.info('msg handler stopped for %s from %s', msg, self.agentid)
 
 
+class DataKeeper(object):
+
+    def __init__(self, cfg):
+        self._config = cfg
+        self._interval = cfg['interval']
+        self._policy = cfg['policy']
+        self._count = 0
+        self._run = False
+        self._startat = None
+        self._timer = None
+        logging.info('data keeper created with interval=%d', self._interval)
+
+    def start(self):
+        self._run = True
+        self._startat = datetime.now()
+        self._schedule()
+
+    def stop(self):
+        if self._timer:
+            self._timer.cancel()
+        self._run = False
+
+    def _schedule(self):
+        self._timer = Timer(self._interval, self._runjob)
+        self._timer.setDaemon(True)
+        self._timer.start()
+
+    def _runjob(self):
+        try:
+            self._count += 1
+            logging.info('execute %d times', self._count)
+            self._clean_old_data()
+        except BaseException as e:
+            logging.exception('fail to run clean job , count=%s', self._count)
+        finally:
+            if self._run:
+                self._schedule()
+
+    @model.dao
+    def _clean_old_data(self, cursor):
+        for tbl, days  in self._policy.items():
+            logging.info('start to keep data of %s within %s days', tbl, days)
+            theday = datetime.now() - timedelta(days=days)
+            cursor.execute('DELETE FROM %s WHERE recv_at <= ?' % tbl, [theday])
+
+
 class Master(object):
     """Agent work as the service and received status report from every Agent."""
 
-    def __init__(self, host=socket.gethostname(), port=7890):
-        self._addr = (host, port)
+    def __init__(self, config):
+        servercfg = config['master']['server']
+        self._addr = (servercfg['host'], servercfg['port'])
         self._agents = None
         self._handlers = {}
         self._server = None
         self._init_handlers()
         self._load_agents()
+
+        retentioncfg = config['master']['data_retention']
+        self._data_keeper = DataKeeper(retentioncfg)
+        self._data_keeper.start()
         self._alarm_engine = AlarmEngine()
         self._alarm_engine.start()
         logging.info('master init on addr=%s', self._addr)
@@ -173,7 +220,6 @@ class Master(object):
         model.NMetric.save_all(metrics)
 
         memrep, cpurep, sysrep = None, None, None
-
         if 'free' in body:
             memrep = content_parser.parse_free(aid, collect_time, body['free'])
             memrep.save() if memrep else None
@@ -273,12 +319,17 @@ class Master(object):
         self._server.server_close()
 
 
-def master_main():
+def master_main(cfg):
+    logging.basicConfig(level=logging.INFO,
+                        datefmt='%m-%d %H:%M:%S',
+                        format='%(asctime)s-%(threadName)s:%(levelname)s:%(name)s:%(module)s.%(lineno)d:%(message)s')
     global _MASTER
     model.create_schema()
-    _MASTER = Master('0.0.0.0')
+    _MASTER = Master(cfg)
     _MASTER.start()
 
 
 if __name__ == '__main__':
-    master_main()
+    with open('../conf/master.yaml') as f:
+        cfg = yaml.load(f)
+    master_main(cfg)

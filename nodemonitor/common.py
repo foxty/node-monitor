@@ -22,8 +22,6 @@ import base64
 from datetime import datetime, date, time
 from struct import *
 
-logging.basicConfig(level=logging.INFO,
-                    format='%(asctime)s - %(threadName)s:%(levelname)s:%(name)s:%(module)s-%(lineno)d:%(message)s')
 DATETIME_FMT = '%Y-%m-%d %H:%M:%S'
 DATETIME_RE = re.compile('^\\d{4}-\\d{1,2}-\\d{1,2} \\d{2}:\\d{2}:\\d{2}$')
 DATE_FMT = '%Y-%m-%d'
