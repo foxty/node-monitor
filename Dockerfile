@@ -11,5 +11,5 @@ COPY web ./web
 RUN pip install -r requirements.txt
 RUN chmod +x ./nodemonitor/master_cli.py
 
-EXPOSE 7890 8080
+EXPOSE 30079 30080
 CMD [ "python", "./nodemonitor/master_cli.py", "-m" ]

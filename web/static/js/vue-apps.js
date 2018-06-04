@@ -97,6 +97,7 @@ const Nodes = {
             <thead>
                 <tr>
                     <th>Name</th>
+                    <th>Status</th>
                     <th>Host</th>
                     <th>CPU Util(%)</th>
                     <th>Mem Util(%)</th>
@@ -108,12 +109,15 @@ const Nodes = {
             <tbody>
                 <tr v-for="a in agents">
                     <td><router-link :to="{name: 'node', params: {aid:a.aid}}">{{a.name}}</router-link></td>
+                    <td>
+                        <span class="label" :class="{'label-success': a.status=='active', 'label-default': a.status=='inactive'}">{{a.status}}</span>
+                    </td>
                     <td>{{a.host}}</td>
                     <td>{{a.last_cpu_util}}</td>
                     <td>{{a.last_mem_util}}</td>
                     <td>{{a.last_sys_load1}}</td>
                     <td>{{a.last_sys_cs}}</td>
-                    <td>{{a.last_msg_at}}</td>
+                    <td>{{moment(a.last_msg_at).fromNow()}}</td>
                 </tr>
             </tbody>
        </table>

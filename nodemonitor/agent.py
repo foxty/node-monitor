@@ -501,7 +501,7 @@ class NodeCollector(threading.Thread):
             try:
                 metric = self._config.service_metrics[mname]
                 cmd = self._translate_cmd(metric['cmd'], env)
-                metric['cmd'] = cmd
+                logging.info('collecting %s of [%s(%s)] by %s', mname, name, pid, cmd)
                 if not is_metric_valid(metric):
                     logging.debug('cmd %s is not a valid command', cmd[0])
                     continue
