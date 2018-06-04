@@ -54,6 +54,9 @@ def get_agents_byload1():
 @_APP.route('/api/agents', methods=['GET'])
 def get_agents():
     agents = Agent.query(orderby='last_msg_at DESC')
+    thresh = datetime.now() - timedelta(minutes=5)
+    for a in agents:
+        a.status = 'active' if a.last_msg_at >= thresh else 'inactive'
     return dump_json(agents)
 
 

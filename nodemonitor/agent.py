@@ -89,11 +89,12 @@ def is_metric_valid(metric):
         checkcmd = 'where'
     if is_sunos():
         checkcmd = 'type'
-    logging.info('check "%s" by "%s" with os=%s', cmd[0], checkcmd, os)
     if os is None or os == ostype():
-        return call([checkcmd, cmd[0]]) == 0
+        valid = call([checkcmd, cmd[0]]) == 0
     else:
-        return False
+        valid = False
+    logging.info('check metric %s with os=%s -> %s', name, os, valid)
+    return valid
 
 
 class AgentConfig(object):
@@ -164,7 +165,7 @@ class AgentConfig(object):
             # df solaris
             {
                 "name": "df",
-                "os": "SOLARIS",
+                "os": "SUNOS",
                 "cmd": ["df", "-k"],
                 "clocks": 60
             },
@@ -181,7 +182,14 @@ class AgentConfig(object):
             "pidstat": {
                 "name": "pidstat",
                 "type": "all",
+                "os": "LINUX",
                 "cmd": ["pidstat", "-tdruh", "-p", "${pid}"]
+            },
+            "prstat": {
+                "name": "prstat",
+                "type": "all",
+                "os": "SUNOS",
+                "cmd": ["prstat", "-p", "${pid}", "-c", "1", "1"]
             },
             "jstat-gc": {
                 "name": "jstat-gc",
@@ -197,7 +205,7 @@ class AgentConfig(object):
                 "type": "python",
                 "lookup_keyword": "agent.py",
                 "log_pattern": ["agent.log"],
-                "metrics": ["pidstat"],
+                "metrics": ["pidstat", "prstat"],
                 "clocks": 6
             },
 
@@ -211,7 +219,7 @@ class AgentConfig(object):
                     "log_home": "/opt/arris/servassure/log"
                 },
                 "log_pattern": ["reactor.*"],
-                "metrics": ["pidstat", "jstat-gc"],
+                "metrics": ["pidstat", "prstat", "jstat-gc"],
                 "clocks": 6
             },
 
@@ -225,7 +233,7 @@ class AgentConfig(object):
                     "log_home": "/export/home/stargus/log/"
                 },
                 "log_pattern": ["reactor.*"],
-                "metrics": ["pidstat", "jstat-gc"],
+                "metrics": ["pidstat", "prstat", "jstat-gc"],
                 "clocks": 6
             },
 
@@ -239,7 +247,7 @@ class AgentConfig(object):
                     "log_home": "/opt/arris/servassure/log"
                 },
                 "log_pattern": ["collection_manager.log", "snmp_poller.log"],
-                "metrics": ["pidstat", "jstat-gc"],
+                "metrics": ["pidstat", "prstat", "jstat-gc"],
                 "clocks": 6
             },
 
@@ -253,7 +261,7 @@ class AgentConfig(object):
                     "log_home": "/export/home/stargus/log/"
                 },
                 "log_pattern": ["collection_manager.log", "snmp_poller.log"],
-                "metrics": ["pidstat", "jstat-gc"],
+                "metrics": ["pidstat", "prstat", "jstat-gc"],
                 "clocks": 6
             },
 
@@ -267,7 +275,7 @@ class AgentConfig(object):
                     "log_home": "/opt/arris/servassure/log"
                 },
                 "log_pattern": ["jboss-*.log"],
-                "metrics": ["pidstat", "jstat-gc"],
+                "metrics": ["pidstat", "prstat", "jstat-gc"],
                 "clocks": 6
             },
 
@@ -281,7 +289,7 @@ class AgentConfig(object):
                     "log_home": "/export/home/stargus/log/"
                 },
                 "log_pattern": ["jboss_*.log"],
-                "metrics": ["pidstat", "jstat-gc"],
+                "metrics": ["pidstat", "prstat", "jstat-gc"],
                 "clocks": 6
             },
 
@@ -321,7 +329,7 @@ class AgentConfig(object):
                 "env" : {
                     "java_home": "/usr/java/latest"
                 },
-                "metrics": ["pidstat", "jstat-gc"],
+                "metrics": ["pidstat", "prstat", "jstat-gc"],
                 "clocks": 6
             }
         ]
@@ -342,9 +350,11 @@ class AgentConfig(object):
 
     def _validate(self):
         # check node metrics
-        logging.info('check node metric commands')
         self._valid_node_metrics = [v for v in self._node_metrics if is_metric_valid(v)]
         logging.info('valid node metrics = %s', self._valid_node_metrics)
+
+        # check sevice metrics
+        logging.info('valid service metrics = %s', self._service_metrics)
 
         # check services
         invalid_serivces = [s for s in self._services if 'name' not in s or 'lookup_keyword' not in s]
@@ -535,7 +545,7 @@ class NodeCollector(threading.Thread):
                 if pid and pid.isdigit() and puser:
                     service_puser = puser
                     service_pid = pid
-            logging.info('pid of service %s is %s', servname, service_pid)
+            logging.debug('pid of service %s is %s', servname, service_pid)
         except Exception:
             logging.exception('look up service %s by %s failed', servname, lookup_keyword)
         return service_puser, service_pid

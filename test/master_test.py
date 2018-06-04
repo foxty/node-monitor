@@ -68,7 +68,7 @@ class ReportModelTest(unittest.TestCase):
         self.assertEqual(0, cpurep.used_util)
 
 
-class GlobalFuncTest(unittest.TestCase):
+class ContentParserTest(unittest.TestCase):
 
     def test_parse_w_solaris(self):
         ctime = datetime.now()
@@ -363,6 +363,20 @@ class GlobalFuncTest(unittest.TestCase):
                                            mc=66896.0, mu=65355.5, ccsc=8060.0, ccsu=7777.3,
                                            ygc=119, ygct=40.678, fgc=2, fgct=2.1, gct=40.678),
                          statgc_rep)
+
+    def test_parse_prstat(self):
+        c = '''   PID USERNAME  SIZE   RSS STATE  PRI NICE      TIME  CPU PROCESS/NLWP
+ 11023 root      192M  154M sleep   59    0   3:31:31 15.9% java/51
+Total: 1 processes, 51 lwps, load averages: 6.75, 4.85, 3.50
+'''
+        ctime = datetime.now()
+        rep = content_parser.parse_prstat('1', ctime, 'serv1', c)
+        self.assertIsNotNone(rep)
+        self.assertIsNotNone(rep.recv_at)
+        del rep['recv_at']
+        self.assertEqual(model.SPidstatReport('1', service_id='serv1', collect_at=ctime, tid=11023,
+                                              mem_vsz=192*1024, mem_rss=154*1024, cpu_util=15.9),
+                         rep)
 
 
 class ModelTest(unittest.TestCase):

@@ -292,6 +292,9 @@ class Master(object):
             if 'pidstat' == metric.category:
                 pidrep = content_parser.parse_pidstat(metric.aid, metric.collect_at, service.id, metric.content)
                 pidrep.save() if pidrep else None
+            if 'prstat' == metric.category:
+                rep = content_parser.parse_prstat(metric.aid, metric.collect_at, service.id, metric.content)
+                rep.save() if rep else None
             if 'jstat-gc' == metric.category:
                 gcrep = content_parser.parse_jstatgc(metric.aid, metric.collect_at, service.id, metric.content)
                 gcrep.save() if gcrep else None
@@ -304,6 +307,7 @@ class Master(object):
 
     def start(self):
         logging.info('master started and listening on %s', self._addr)
+        SocketServer.ThreadingTCPServer.allow_reuse_address = True
         self._server = SocketServer.ThreadingTCPServer(self._addr, AgentRequestHandler)
         self._server.serve_forever()
 

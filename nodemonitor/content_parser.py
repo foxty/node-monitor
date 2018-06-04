@@ -193,6 +193,21 @@ def conv_to_mega(value, multiplier=1024):
         return None
 
 
+def conv_to_kilo(value, multiplier=1024):
+    if value[-1] in ('G', "g"):
+        return float(value[:-1]) * pow(multiplier, 2)
+    elif value[-1] in ('M', 'm'):
+        return float(value[:-1]) * multiplier
+    elif value[-1] in ('K', 'k'):
+        return float(value[:-1])
+    elif value[-1] in ('B', 'b'):
+        return float(value[:-1]) / (multiplier)
+    elif value.isdigit():
+        return float(value)
+    else:
+        return None
+
+
 def parse_dstat_mem(aid, collect_time, content):
     """
     ------memory-usage----- ----swap--- ---paging--
@@ -243,6 +258,35 @@ def parse_pidstat(aid, collect_time, service_id, content):
         return rep
     else:
         logging.warn('invalid content of `pidstat` : %s', content)
+        return None
+
+
+def parse_prstat(aid, collect_time, service_id, content):
+    """
+    Parsing output of prstat -p from solaris, content as follow:
+
+       PID USERNAME  SIZE   RSS STATE  PRI NICE      TIME  CPU PROCESS/NLWP
+        11023 root      192M  154M sleep   59    0   3:31:12 0.0% java/50
+        Total: 1 processes, 50 lwps, load averages: 0.33, 7.15, 13.36
+
+    :param aid:
+    :param collect_time:
+    :param service_id:
+    :param content:
+    :return: SPidstatReport(partial)
+    """
+    t = TextTable(content)
+    if t.size > 1:
+        prow = t[0]
+        tid = prow.get_int('PID')
+        cpu_util = float(prow.get('CPU')[:-1])
+        mem_vsz, mem_rss = conv_to_kilo(prow.get('SIZE')), conv_to_kilo(prow.get('RSS')),
+        rep = SPidstatReport(aid=aid, service_id=service_id, collect_at=collect_time, tid=tid,
+                             cpu_util=cpu_util, mem_vsz=mem_vsz, mem_rss=mem_rss, recv_at=datetime.now())
+        logging.debug('get prstat report %s', rep)
+        return rep
+    else:
+        logging.warn('invalid content of `prstat` : %s', content)
         return None
 
 

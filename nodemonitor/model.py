@@ -25,7 +25,7 @@ if not os.path.exists(DB_PATH):
 
 _DB_SCHEMA = r'''
     CREATE TABLE IF NOT EXISTS agent(aid UNIQUE, name, host, create_at timestamp, 
-        last_msg_at, last_cpu_util, last_mem_util, last_sys_load1, last_sys_cs);  
+        last_msg_at timestamp, last_cpu_util, last_mem_util, last_sys_load1, last_sys_cs, status);  
     
     CREATE TABLE IF NOT EXISTS node_metric_raw(aid, collect_at timestamp, category, content, recv_at timestamp);
     CREATE INDEX IF NOT EXISTS `idx_nmr_aid` ON `node_metric_raw` (`aid` DESC);
@@ -298,7 +298,7 @@ class ServiceChronoModel(object):
 class Agent(Model):
     _TABLE = 'agent'
     _FIELDS = ['aid', 'name', 'host', 'create_at', 'last_msg_at',
-              'last_cpu_util', 'last_mem_util', 'last_sys_load1', 'last_sys_cs']
+               'last_cpu_util', 'last_mem_util', 'last_sys_load1', 'last_sys_cs', 'status']
     _PK = ['aid']
 
     @classmethod

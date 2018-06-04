@@ -110,7 +110,10 @@ const Nodes = {
                 <tr v-for="a in agents">
                     <td><router-link :to="{name: 'node', params: {aid:a.aid}}">{{a.name}}</router-link></td>
                     <td>
-                        <span class="label" :class="{'label-success': a.status=='active', 'label-default': a.status=='inactive'}">{{a.status}}</span>
+                        <span class="label" 
+                        :class="{'label-success': a.status=='active', 'label-default': a.status=='inactive'}">
+                        {{a.status}}
+                        </span>
                     </td>
                     <td>{{a.host}}</td>
                     <td>{{a.last_cpu_util}}</td>
