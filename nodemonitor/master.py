@@ -270,8 +270,8 @@ class Master(object):
             ser.add_history(collect_at)
         else:
             # existing service, check for an update
-            logging.debug('refreshing service %s from %s', sname, aid)
             ser = services[sname]
+            logging.debug('refreshing service %s', ser)
             ser.set(last_report_at=collect_at, status=model.SInfo.STATUS_ACT)
             if ser.pid != spid:
                 logging.info('service [%s] pid change detected: %s -> %s', sname, ser.pid, spid)
@@ -281,14 +281,14 @@ class Master(object):
         for sname, service in services.items():
             active = service.chkstatus(300)  # 300 seconds
             if not active:
-                logging.info('service [%s] turn to inactive.', sname)
+                logging.info('service %s turn to inactive.', service)
 
         self._parse_smetrics(smetrics, ser)
         return True
 
     def _parse_smetrics(self, metrics, service):
         for metric in metrics:
-            logging.info('parsing %s of %s', metric.category, service.name)
+            logging.info('parsing %s for %s', metric.category, service)
             if 'pidstat' == metric.category:
                 pidrep = content_parser.parse_pidstat(metric.aid, metric.collect_at, service.id, metric.content)
                 pidrep.save() if pidrep else None

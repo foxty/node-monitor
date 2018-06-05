@@ -575,8 +575,8 @@ const ServiceStatus = {
 
         genPidstatReports: function(n, markerLine) {
             this.cpuChart = genChartOption("CPU Utilization", n, "collect_at",
-                {"SYS":"cpu_sy", "USER":"cpu_us"},
-                {stack:true, yAxisFmt:"{value}%", yAxisMax:100, markLine: markerLine})
+                {"CPU":"cpu_util"},
+                {yAxisFmt:"{value}%", yAxisMax:100, markLine: markerLine})
             this.memoryChart = genChartOption("Memory Utilization", n, "collect_at",
                 {"Util":"mem_util"},
                 {stack:true, yAxisFmt:"{value}%", yAxisMax:100, markLine: markerLine})

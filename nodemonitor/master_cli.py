@@ -82,7 +82,7 @@ class NodeConnector(object):
             logging.error('\n'.join(errs.readlines()))
             raise SetupError('install py27 failed.')
 
-    def trans_files(self, files=[]):
+    def trans_files(self, parent_path, files=[]):
         """
         send files to remote host and convert to unix file.
         :param files:
@@ -94,11 +94,10 @@ class NodeConnector(object):
                 logging.info('%s not exist in home, create it', self.APP_DIR)
                 sftp.mkdir(self.APP_DIR)
             logging.info('copying files %s to node', files)
-            for f in files:
-                sftp.put(f, '%s/%s' % (self.APP_DIR, f))
-                #self.exec_cmd('dos2unix %s/%s %s/%s.1' % (self.APP_DIR, f, self.APP_DIR, f))
-                #self.exec_cmd('mv %s/%s.1 %s/%s' % (self.APP_DIR, f, self.APP_DIR, f))
-                logging.info('file %s transferred successfully', f)
+            for fname in files:
+                fpath = os.path.join(parent_path, fname)
+                sftp.put(fpath, '%s/%s' % (self.APP_DIR, fname))
+                logging.info('file %s transferred successfully', fpath)
 
     def install_service(self, master_addr):
         logging.info('install agent service on %s[%s]', self.node_host, self.ostype)
@@ -149,7 +148,7 @@ def parse_nodelist(path):
                 for line in nf.readlines() if line.strip() and not line.strip().startswith('#')]
 
 
-def push_to_nodes(nodelist, mhost, mport):
+def push_to_nodes(basepath, nodelist, mhost, mport):
     """push agent script to remote node and start the agent via ssh
     node list should contains list of tuple like (host, userame, password)
     """
@@ -165,10 +164,10 @@ def push_to_nodes(nodelist, mhost, mport):
                     logging.info('no suitble python, now intall python 2.7 to %s' % host)
                     if not os.path.exists(_FILE_OF_PY27):
                         download_py()
-                    nc.trans_files(_FILES_TO_COPY + [_FILE_OF_PY27])
+                    nc.trans_files(os.path.join(basepath, 'nodemonitor'), _FILES_TO_COPY + [_FILE_OF_PY27])
                     nc.install_py(_FILE_OF_PY27)
 
-                nc.trans_files(_FILES_TO_COPY)
+                nc.trans_files(os.path.join(basepath, 'nodemonitor'), _FILES_TO_COPY)
                 nc.stop_agent()
                 nc.install_service(master_addr)
                 nc.launch_agent()
@@ -221,7 +220,7 @@ if __name__ == '__main__':
             else:
                 mhost = socket.gethostbyaddr(socket.gethostname())[0]
             mport = config['master']['server']['port']
-            push_to_nodes(nodelist, mhost, mport)
+            push_to_nodes(basepath, nodelist, mhost, mport)
         elif opt in ['-m', '--master']:
             from master import master_main
             from master_ui import ui_main
