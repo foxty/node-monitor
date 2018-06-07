@@ -5,8 +5,9 @@ ENV APP_BASE=/opt/node-monitor
 WORKDIR /opt/node-monitor
 
 COPY requirements.txt ./
+COPY conf ./conf
 COPY nodemonitor ./nodemonitor
-COPY web ./web
+COPY web/dist ./web/dist
 
 RUN pip install -r requirements.txt
 RUN chmod +x ./nodemonitor/master_cli.py
