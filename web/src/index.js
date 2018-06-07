@@ -1,73 +1,46 @@
-/**jQuery Defaults**/
-$(document).ajaxStart(function() {
-	console.log('ajax start...')
-}).ajaxStop(function(){
-	console.log('ajax stop.')
-}).ajaxError(function (event, jqXHR, ajaxSettings, error){
-	var ct = jqXHR.getResponseHeader("Content-Type");
-	if(/application\/json/.test(ct)) {
-		alert(jqXHR.responseText);
-	} else {
-	    alert('Request error, please check console log.')
-		console.error(jqXHR.responseText);
-	}
-})
+import './asserts/all.css'
+import 'bootstrap/dist/css/bootstrap.min.css'
 
-/** Shortcut for ajax **/
-var Ajax = {
-	
-	doAjax: function(url, method, data, succ) {
-		if(typeof(data) == 'function' && succ == undefined) {
-			succ = data;
-		}
-		$.ajax({
-		    url: url,
-		    type: method,
-		    data: data,
-		    dataType: "json",
-		    success: succ
-		});
-	},
+import $ from 'jquery';
+import Vue from 'vue';
+import VueRouter from 'vue-router';
+import VueECharts from 'vue-echarts'
+import moment from 'moment';
 
-	get: function(url, succ) {
-	    this.doAjax(url,'GET', succ);
-	},
+import Dashboard from './components/Dashboard'
+import Nodes from './components/Nodes'
+import Node from './components/Node'
+import NodeStatus from './components/NodeStatus'
+import NodeServices from './components/NodeServices'
+import ServiceList from './components/ServiceList'
+import ServiceStatus from './components/ServiceStatus'
+import Alarms from './components/Alarms'
+import Settings from './components/Settings'
 
-	post: function(url, data, succ) {
-		this.doAjax(url, "POST", data, succ);
-	},
-	
-	put: function(url, data, succ) {
-		this.doAjax(url, "PUT", data, succ);
-	},
-	
-	delete: function(url, succ) {
-		this.doAjax(url, "DELETE", null, succ);
-	}
-}
+Vue.use(VueRouter)
+Vue.component('chart', VueECharts)
 
-/**Filters**/
 Vue.filter('howLongAgo', function(date) {
-	var result = "还未";
-	if(date) {
-		var curTime = new Date().getTime();
-		var gap = curTime - date;
-		var minutes = parseInt(gap / (1000 * 60));
-		if (minutes / (60 * 24) > 1) {
-			result = parseInt(minutes / (60 * 24)) + "天前";
-		} else if (minutes / 60 > 1) {
-			result = parseInt(minutes / 60) + "小时前";
-		} else if (minutes > 0) {
-			result = minutes + "分钟前";
-		} else {
-			result = "刚刚";
-		}
-	}
-	return result;
+    var result = "还未";
+    if(date) {
+        var curTime = new Date().getTime();
+        var gap = curTime - date;
+        var minutes = parseInt(gap / (1000 * 60));
+        if (minutes / (60 * 24) > 1) {
+            result = parseInt(minutes / (60 * 24)) + "天前";
+        } else if (minutes / 60 > 1) {
+            result = parseInt(minutes / 60) + "小时前";
+        } else if (minutes > 0) {
+            result = minutes + "分钟前";
+        } else {
+            result = "刚刚";
+        }
+    }
+    return result;
 });
 Vue.filter('datePrint', function(millis) {
-	var date = new Date(millis);
-	return (date.getYear() + 1900) + "-" + (date.getMonth() + 1) + "-" + date.getDate();
+    var date = new Date(millis);
+    return (date.getYear() + 1900) + "-" + (date.getMonth() + 1) + "-" + date.getDate();
 });
 Vue.filter('percent', function(number) {
     return (number * 100) + '%'
@@ -81,7 +54,6 @@ Vue.filter('decimal', function(number, precision) {
     return d;
 });
 
-/** common components**/
 Vue.component('pager', {
     template: '<div class="pagination pagination-centered" style="clear:both;">\
 		<ul><li :class="{disabled:pagination.page<=1}"><a @click="to(pagination.page-1)">上一页</a></li>\
@@ -217,83 +189,6 @@ Vue.component("report-toolbar", {
     }
 });
 
-
-/**Echarts**/
-function genChartOption(title, data, cateProp, seriesPropsMapping, options) {
-    options = options || {}
-    options.stack = options.stack || false
-    options.yAxisFmt = options.yAxisFmt || '{value}'
-    //options.yAxisMin
-    //options.yAxisMax
-    console.log('options for graph ' + title + ': ' + JSON.stringify(options))
-
-    var category = []
-    var seriesMap = {}
-    var legends = []
-    data.forEach(function(d) {
-        var serieDataCatetory = d[cateProp]
-        category.push(serieDataCatetory)
-        for(var serieName in seriesPropsMapping) {
-            var serie = seriesMap[serieName];
-            if (!serie) {
-                serie = {name: serieName, type: 'line', data: []};
-                if(options.stack) {
-                    serie.stack = 'Total';
-                    serie.areaStyle = {normal: {}};
-                }
-                serie.markLine = options.markLine
-                seriesMap[serieName] = serie;
-            }
-            var serieDataProp = seriesPropsMapping[serieName];
-            var serieDataValue = d[serieDataProp]
-            serie.data.push(serieDataValue)
-        }
-    })
-    var series = [];
-    for(serieName in seriesMap) {
-        legends.push(serieName);
-        series.push(seriesMap[serieName]);
-    }
-
-    return {
-        title: {text: title},
-        animation: false,
-        tooltip: {
-            trigger: 'axis'
-        },
-        legend: {
-            data:legends
-        },
-        xAxis: {
-            type: 'category',
-            data: category,
-            boundaryGap : false,
-            axisLabel: {
-                formatter: function(v, idx) {
-                    return v.substr(5, v.length)
-                }
-            }
-        },
-        yAxis: {
-            type: 'value',
-            min: options.yAxisMin,
-            max: options.yAxisMax,
-            axisLabel: {
-                formatter: options.yAxisFmt
-            }
-        },
-        dataZoom: [{
-            type: 'slider',
-            xAxisIndex: [0],
-            start: 0,
-            end: 100
-        }
-        ],
-        series: series
-    }
-}
-
-
 moment.locale('cn', {
     relativeTime : {
         future: "in %s",
@@ -311,3 +206,40 @@ moment.locale('cn', {
         yy: "%d年"
     }
 });
+
+const router = new VueRouter({
+    routes: [
+        // 动态路径参数 以冒号开头
+        {path: '/', redirect: {name: 'dashboard'}},
+        {path: '/dashboard', name: 'dashboard', component: Dashboard},
+        {path: '/nodes', component: Nodes},
+        {path: '/nodes/:aid', name:'node', component: Node, props:true, children: [
+                {path: 'status', name: 'nodeStatus', component: NodeStatus, props: true},
+                {path: 'services', name: 'nodeServices', component: NodeServices, props: true, children: [
+                        {path: 'list', name: 'serviceList', component: ServiceList, props: true},
+                        {path: ':service_id/status', name: 'serviceStatus', component: ServiceStatus, props: true}
+                    ]},
+            ]
+        },
+        {path: '/alarms', component:  Alarms},
+        {path: '/settings', component:  Settings}
+    ]
+});
+
+
+$(document).ajaxStart(function() {
+    console.log('ajax start...')
+}).ajaxStop(function(){
+    console.log('ajax stop.')
+}).ajaxError(function (event, jqXHR, ajaxSettings, error){
+    var ct = jqXHR.getResponseHeader("Content-Type");
+    if(/application\/json/.test(ct)) {
+        alert(jqXHR.responseText);
+    } else {
+        alert('Request error, please check console log.')
+        console.error(jqXHR.responseText);
+    }
+}).ready(function() {
+    const app = new Vue({router})
+    app.$mount('#app')
+})

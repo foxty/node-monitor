@@ -18,9 +18,9 @@ logging.basicConfig(level=logging.INFO)
 
 
 _APP = Flask(__name__,
-             static_folder='../web/static/',
-             static_url_path='/static',
-             template_folder='../web/template/')
+             static_folder='../web/dist/',
+             static_url_path='',
+             template_folder='../web/dist/')
 
 
 def calc_daterange(req):

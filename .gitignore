@@ -107,3 +107,5 @@ Python*.tgz
 /web/static/lib
 nodes.txt
 out
+/web/node_modules
+npm-debug.*
