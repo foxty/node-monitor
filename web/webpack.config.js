@@ -18,6 +18,7 @@ module.exports = {
         rules: [
             {
                 test: /\.vue$/,
+                //include: path.resolve(__dirname, "src", "components"),
                 loader: 'vue-loader'
             },
             {
@@ -28,12 +29,7 @@ module.exports = {
                 ]
             },
             {
-                test: /\.(png|svg|jpg|gif)$/,
-                use: [
-                    'file-loader'
-                ]
-            }, {
-                test: /\.(woff|woff2|eot|ttf|otf)$/,
+                test: /\.(png|svg|jpg|gif|woff|woff2|eot|ttf|otf)$/,
                 use: [
                     'file-loader'
                 ]
@@ -54,4 +50,3 @@ module.exports = {
                 path.resolve(__dirname, 'dist')
         }
 }
-;

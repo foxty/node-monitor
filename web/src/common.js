@@ -1,11 +1,11 @@
 /*
 Common libs
  */
-import $ from 'jquery';
+import $ from 'jquery'
 
 const Ajax = {
-    doAjax: function(url, method, data, succ) {
-        if(typeof(data) == 'function' && succ == undefined) {
+    doAjax: function (url, method, data, succ) {
+        if (typeof(data) == 'function' && succ == undefined) {
             succ = data;
         }
         $.ajax({
@@ -17,25 +17,25 @@ const Ajax = {
         });
     },
 
-    get: function(url, succ) {
-        this.doAjax(url,'GET', succ);
+    get: function (url, succ) {
+        this.doAjax(url, 'GET', succ);
     },
 
-    post: function(url, data, succ) {
+    post: function (url, data, succ) {
         this.doAjax(url, "POST", data, succ);
     },
 
-    put: function(url, data, succ) {
+    put: function (url, data, succ) {
         this.doAjax(url, "PUT", data, succ);
     },
 
-    delete: function(url, succ) {
+    delete: function (url, succ) {
         this.doAjax(url, "DELETE", null, succ);
     }
 }
 
 /**Echarts**/
-const genChartOption = function(title, data, cateProp, seriesPropsMapping, options) {
+const genChartOption = function (title, data, cateProp, seriesPropsMapping, options) {
     options = options || {}
     options.stack = options.stack || false
     options.yAxisFmt = options.yAxisFmt || '{value}'
@@ -46,14 +46,14 @@ const genChartOption = function(title, data, cateProp, seriesPropsMapping, optio
     var category = []
     var seriesMap = {}
     var legends = []
-    data.forEach(function(d) {
+    data.forEach(function (d) {
         var serieDataCatetory = d[cateProp]
         category.push(serieDataCatetory)
-        for(var serieName in seriesPropsMapping) {
+        for (var serieName in seriesPropsMapping) {
             var serie = seriesMap[serieName];
             if (!serie) {
                 serie = {name: serieName, type: 'line', data: []};
-                if(options.stack) {
+                if (options.stack) {
                     serie.stack = 'Total';
                     serie.areaStyle = {normal: {}};
                 }
@@ -66,7 +66,7 @@ const genChartOption = function(title, data, cateProp, seriesPropsMapping, optio
         }
     })
     var series = [];
-    for(var serieName in seriesMap) {
+    for (var serieName in seriesMap) {
         legends.push(serieName);
         series.push(seriesMap[serieName]);
     }
@@ -78,14 +78,14 @@ const genChartOption = function(title, data, cateProp, seriesPropsMapping, optio
             trigger: 'axis'
         },
         legend: {
-            data:legends
+            data: legends
         },
         xAxis: {
             type: 'category',
             data: category,
-            boundaryGap : false,
+            boundaryGap: false,
             axisLabel: {
-                formatter: function(v, idx) {
+                formatter: function (v, idx) {
                     return v.substr(5, v.length)
                 }
             }
@@ -109,4 +109,4 @@ const genChartOption = function(title, data, cateProp, seriesPropsMapping, optio
     }
 }
 
-export { Ajax, genChartOption }
+export {Ajax, genChartOption}
