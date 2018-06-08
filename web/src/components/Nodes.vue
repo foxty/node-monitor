@@ -53,7 +53,6 @@
 
 <script>
     import moment from 'moment'
-    import {Ajax} from '../common'
 
     export default {
         data () {
@@ -69,11 +68,13 @@
         methods: {
             loadAgents: function() {
                 var self = this;
-                Ajax.get('/api/agents', function(data) {
+                self.$http.get('/api/agents').then(resp => {
+                    return resp.json()
+                }).then(data => {
                     data.forEach(function(ele) {
                         ele.last_msg_at = moment(ele.last_msg_at)
                     })
-                    self.agents = data;
+                    self.agents = data
                 })
             }
         }

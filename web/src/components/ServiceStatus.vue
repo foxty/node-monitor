@@ -54,7 +54,7 @@
 </template>
 
 <script>
-    import {Ajax, genChartOption} from '../common'
+    import {genChartOption} from '../common'
 
     export default {
         props: ['aid', 'service_id'],
@@ -97,20 +97,24 @@
                 var markerLines = []
                 new Promise(function(resolve){
                     // Load service history at begin
-                    Ajax.get(`/api/agents/${aid}/services/${sid}?${q}`, function(resp) {
-                        self.service = resp.service
-                        self.service_history = resp.service_history
+                    self.$http.get(`/api/agents/${aid}/services/${sid}?${q}`).then(resp => {
+                        return resp.json()
+                    }).then(data => {
+                        self.service = data.service
+                        self.service_history = data.service_history
                         markerLines = self.genRestartMarkerConfig(self.service_history)
                         resolve()
                     })
                 }).then(function(){
-                    // Load pidstat reports
-                    Ajax.get(`/api/agents/${aid}/services/${sid}/report/pidstat?${q}`, function(reports) {
+                    self.$http.get(`/api/agents/${aid}/services/${sid}/report/pidstat?${q}`).then(resp => {
+                        return resp.json()
+                    }).then(reports => {
                         self.pidstatReports = reports
                         self.genPidstatReports(reports, markerLines)
                     })
-                    // Load jstatgc reports
-                    Ajax.get(`/api/agents/${aid}/services/${sid}/report/jstatgc?${q}`, function(resp) {
+                    self.$http.get(`/api/agents/${aid}/services/${sid}/report/jstatgc?${q}`).then(resp => {
+                        return resp.json()
+                    }).then(resp => {
                         self.jstatgcReports = resp.reports
                         self.jstatgcStats = resp.gcstats
                         self.genJstatgcReports(resp.reports, markerLines)

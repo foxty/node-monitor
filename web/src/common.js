@@ -1,38 +1,7 @@
 /*
 Common libs
  */
-import $ from 'jquery'
 
-const Ajax = {
-    doAjax: function (url, method, data, succ) {
-        if (typeof(data) == 'function' && succ == undefined) {
-            succ = data;
-        }
-        $.ajax({
-            url: url,
-            type: method,
-            data: data,
-            dataType: "json",
-            success: succ
-        });
-    },
-
-    get: function (url, succ) {
-        this.doAjax(url, 'GET', succ);
-    },
-
-    post: function (url, data, succ) {
-        this.doAjax(url, "POST", data, succ);
-    },
-
-    put: function (url, data, succ) {
-        this.doAjax(url, "PUT", data, succ);
-    },
-
-    delete: function (url, succ) {
-        this.doAjax(url, "DELETE", null, succ);
-    }
-}
 
 /**Echarts**/
 const genChartOption = function (title, data, cateProp, seriesPropsMapping, options) {
@@ -109,4 +78,4 @@ const genChartOption = function (title, data, cateProp, seriesPropsMapping, opti
     }
 }
 
-export {Ajax, genChartOption}
+export {genChartOption}

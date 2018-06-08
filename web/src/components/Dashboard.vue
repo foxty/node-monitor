@@ -63,8 +63,6 @@
 </template>
 
 <script>
-    import {Ajax} from '../common'
-
     export default {
         data () {
             return {
@@ -74,26 +72,19 @@
         },
 
         created: function() {
-            this.loadSummary();
-            this.loadWorstNodes();
+            this.loadData();
         },
 
         methods: {
-            loadSummary: function() {
+            loadData: function() {
                 var self = this;
-                Ajax.get('/api/dashboard/summary', function(summary) {
-                    self.summary = summary;
-                })
-            },
-            loadWorstNodes: function() {
-                var self = this;
-                Ajax.get('/api/agents/by_load1', function(agents) {
-                    self.worstNodes = agents;
-                })
+                self.$http.get('/api/dashboard/summary').then( resp => {
+                    return resp.json();
+                }).then( data => self.summary = data)
+                self.$http.get('/api/agents/by_load1').then( resp => {
+                    return resp.json();
+                }).then(data => self.worstNodes = data)
             }
         }
     }
 </script>
-
-<style>
-</style>

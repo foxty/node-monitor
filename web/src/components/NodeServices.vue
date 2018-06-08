@@ -20,8 +20,6 @@
 </template>
 
 <script>
-    import {Ajax} from '../common'
-
     export default {
         props: ['aid'],
 
@@ -46,11 +44,11 @@
             loadServices: function() {
                 var self = this;
                 var aid = self.aid
-                Ajax.get(`/api/agents/${aid}/services`, function(data) {
+                self.$http.get(`/api/agents/${aid}/services`).then(resp => {
+                    return resp.json()
+                }).then(data => {
                     self.services = data.services;
                     self.services_status_map = data.services_status_map;
-                    console.debug('get services by aid ' + aid)
-                    console.debug(data)
                 })
             }
         }

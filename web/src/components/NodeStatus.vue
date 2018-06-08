@@ -34,7 +34,7 @@
 </template>
 
 <script>
-    import {Ajax, genChartOption} from '../common'
+    import {genChartOption} from '../common'
 
     export default {
         props: ['aid'],
@@ -128,19 +128,27 @@
                 var startAt = encodeURIComponent(self.startAt.format())
                 var endAt = encodeURIComponent(self.endAt.format())
                 var q = `start_at=${startAt}&end_at=${endAt}`
-                Ajax.get(`/api/agents/${aid}/report/system?${q}`, function(reports) {
+                self.$http.get(`/api/agents/${aid}/report/system?${q}`).then(resp => {
+                    return resp.json()
+                }).then(reports => {
                     self.sysReports = reports
                 })
 
-                Ajax.get(`/api/agents/${aid}/report/cpu?${q}`, function(reports) {
+                self.$http.get(`/api/agents/${aid}/report/cpu?${q}`).then(resp => {
+                    return resp.json()
+                }).then(reports => {
                     self.cpuReports = reports
                 })
 
-                Ajax.get(`/api/agents/${aid}/report/memory?${q}`, function(reports) {
+                self.$http.get(`/api/agents/${aid}/report/memory?${q}`).then(resp => {
+                    return resp.json()
+                }).then(reports => {
                     self.memReports = reports
                 })
 
-                Ajax.get(`/api/agents/${aid}/report/disk?${q}`, function(reports) {
+                self.$http.get(`/api/agents/${aid}/report/disk?${q}`).then(resp => {
+                    return resp.json()
+                }).then(reports => {
                     self.diskReports = reports
                 })
             },

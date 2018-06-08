@@ -1,10 +1,10 @@
 import './asserts/all.css'
 import 'bootstrap/dist/css/bootstrap.min.css'
 
-import $ from 'jquery';
-import Vue from 'vue';
-import VueRouter from 'vue-router';
-import moment from 'moment';
+import Vue from 'vue'
+import VueRouter from 'vue-router'
+import VueResource from 'vue-resource'
+import moment from 'moment'
 
 import Dashboard from './components/Dashboard'
 import Nodes from './components/Nodes'
@@ -18,9 +18,18 @@ import Settings from './components/Settings'
 import ReportToolbar from './components/ReportToolbar'
 
 Vue.use(VueRouter)
+Vue.use(VueResource)
+Vue.http.headers.common['Content-Type'] = 'application/json';
+Vue.http.interceptors.push(function(request) {
+    console.log('start ajax..')
+    // return response callback
+    return function(response) {
+        console.log('end ajax')
+    };
+});
+
 Vue.component('chart', () => import('vue-echarts'))
 Vue.component("report-toolbar", ReportToolbar);
-
 Vue.filter('percent', function(number) {
     return (number * 100) + '%'
 });
@@ -70,19 +79,5 @@ const router = new VueRouter({
     ]
 });
 
-$(document).ajaxStart(function() {
-    console.log('ajax start...')
-}).ajaxStop(function(){
-    console.log('ajax stop.')
-}).ajaxError(function (event, jqXHR, ajaxSettings, error){
-    var ct = jqXHR.getResponseHeader("Content-Type");
-    if(/application\/json/.test(ct)) {
-        alert(jqXHR.responseText);
-    } else {
-        alert('Request error, please check console log.')
-        console.error(jqXHR.responseText);
-    }
-}).ready(function() {
-    const app = new Vue({router})
-    app.$mount('#app')
-})
+const app = new Vue({router})
+app.$mount('#app')
