@@ -1,7 +1,7 @@
 <template>
     <div>
         <div style="margin-bottom: 5px;">
-            <button type="button" class="btn btn-success">Add Node</button>
+            <button type="button" class="btn btn-success" @click="addNode">Add Node</button>
             <span> Total {{agents ? agents.length : ''}} Nodes</span>
         </div>
         <table class="table table-bordered" v-if="agents && agents.length > 0">
@@ -40,7 +40,7 @@
                     <button class="btn btn-sm btn-info">
                         <span class="glyphicon glyphicon-edit" aria-hidden="true"></span>
                     </button>
-                    <button class="btn btn-sm btn-danger">
+                    <button class="btn btn-sm btn-danger" @click="removeAgent(a.aid, a.name)">
                         <span class="glyphicon glyphicon-trash" aria-hidden="true"></span>
                     </button>
                 </td>
@@ -53,6 +53,7 @@
 
 <script>
     import moment from 'moment'
+    import NodeForm from './NodeForm'
 
     export default {
         data () {
@@ -76,10 +77,46 @@
                     })
                     self.agents = data
                 })
+            },
+
+            removeAgent: function(aid, name) {
+                let self = this
+                this.$modal.show('dialog', {
+                    title: 'Confirm',
+                    text: 'do you want remove agent ' + name +'?',
+                    buttons: [
+                        {
+                            title: 'Yes',
+                            handler: () => {
+                                self.sendRemoveAgent(aid)
+                                self.$modal.hide('dialog')
+                            }
+                        },
+                        {
+                            title: 'No',
+                            default: true,
+                            handler: () => { self.$modal.hide('dialog') }
+                        }
+                    ]
+                })
+            },
+
+            sendRemoveAgent: function(aid) {
+                var self = this;
+                self.$http.delete(`/api/agents/${aid}`).then(resp => {
+                    return resp.json()
+                }).then(data => {
+                    console.log('agent ' + data.name + ' was removed.')
+                    self.agents = self.agents.filter(a => a.aid != data.aid)
+                })
+            },
+
+            addNode: function() {
+                var self = this
+                self.$modal.show(NodeForm,
+                    {},
+                    {height: 'auto'})
             }
         }
     }
 </script>
-
-<style>
-</style>

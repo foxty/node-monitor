@@ -4,6 +4,7 @@ import 'bootstrap/dist/css/bootstrap.min.css'
 import Vue from 'vue'
 import VueRouter from 'vue-router'
 import VueResource from 'vue-resource'
+import VModal from 'vue-js-modal'
 import moment from 'moment'
 
 import Dashboard from './components/Dashboard'
@@ -24,9 +25,24 @@ Vue.http.interceptors.push(function(request) {
     console.log('start ajax..')
     // return response callback
     return function(response) {
+        if(response.status == 0) {
+            this.$modal.show('dialog', {
+                title: 'Connection Error',
+                text: 'Seems you lost the connection with server, please check your network or contact our admin.',
+            })
+        } else if (response.status >= 300) {
+            response.text().then(data => {
+                this.$modal.show('dialog', {
+                    title: 'Error',
+                    text: data,
+                })
+                console.error('error of ajax code=' + response.status + ', body=' + data)
+            })
+        }
         console.log('end ajax')
     };
 });
+Vue.use(VModal, { dialog: true, dynamic: true })
 
 Vue.component('chart', () => import('vue-echarts'))
 Vue.component("report-toolbar", ReportToolbar);

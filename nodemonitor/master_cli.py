@@ -17,7 +17,6 @@ import getopt
 import yaml
 from multiprocessing import Process
 from common import SetupError, OSType
-_FILES_TO_COPY = ['common.py', 'agent.py', 'agent_service_solaris.xml', 'agent_service.sh']
 _VALID_PY = ['Python 2.4', 'Python 2.5', 'Python 2.6', 'Python 2.7']
 _INSTALL_PY27 = True
 _FILE_OF_PY27 = 'Python-2.7.14.tgz'
@@ -26,7 +25,8 @@ _FILE_OF_PY27 = 'Python-2.7.14.tgz'
 class NodeConnector(object):
     """Using ssh connect to node and provide list of operation utils"""
 
-    APP_DIR = 'node-monitor'
+    _APP_DIR = 'node-monitor'
+    _FILES_TO_COPY = ['common.py', 'agent.py', 'agent_service_solaris.xml', 'agent_service.sh']
 
     def __init__(self, node_host, username, password):
         self.node_host = node_host
@@ -75,14 +75,20 @@ class NodeConnector(object):
         logging.info('install %s ...', filename)
         ins, outs, errs = self.ssh.exec_command('tar xvfz %s/Python-2.7.14.tgz && cd Python-2.7.14 '
                                                 '&& ./configure && make && make install && python2 -V' %
-                                                self.APP_DIR)
+                                                self._APP_DIR)
         if self.is_py_installed():
             logging.info('%s installed success.', filename)
         else:
             logging.error('\n'.join(errs.readlines()))
             raise SetupError('install py27 failed.')
 
-    def trans_files(self, parent_path, files=[]):
+    def install_agent(self, basepath, master_addr):
+        self._stop_agent()
+        self._trans_files(os.path.join(basepath, 'nodemonitor'), NodeConnector._FILES_TO_COPY)
+        self._set_agent_service(master_addr)
+        self._launch_agent()
+
+    def _trans_files(self, parent_path, files=[]):
         """
         send files to remote host and convert to unix file.
         :param files:
@@ -90,26 +96,26 @@ class NodeConnector(object):
         """
         with self.ssh.open_sftp() as sftp:
             dirs = sftp.listdir()
-            if self.APP_DIR not in dirs:
-                logging.info('%s not exist in home, create it', self.APP_DIR)
-                sftp.mkdir(self.APP_DIR)
+            if self._APP_DIR not in dirs:
+                logging.info('%s not exist in home, create it', self._APP_DIR)
+                sftp.mkdir(self._APP_DIR)
             logging.info('copying files %s to node', files)
             for fname in files:
                 fpath = os.path.join(parent_path, fname)
-                sftp.put(fpath, '%s/%s' % (self.APP_DIR, fname))
+                sftp.put(fpath, '%s/%s' % (self._APP_DIR, fname))
                 logging.info('file %s transferred successfully', fpath)
 
-    def install_service(self, master_addr):
+    def _set_agent_service(self, master_addr):
         logging.info('install agent service on %s[%s]', self.node_host, self.ostype)
         self.exec_cmd("sed 's/master_addr/%s/' %s/agent_service.sh > /etc/init.d/nmagent" %
-                      (master_addr, self.APP_DIR))
+                      (master_addr, self._APP_DIR))
         self.exec_cmd('chmod +x /etc/init.d/nmagent')
         if self.ostype == OSType.LINUX:
             self.exec_cmd('chkconfig --add nmagent')
         else:
-            self.exec_cmd('svccfg import %s' % self.APP_DIR + '/agent_service_solaris.xml')
+            self.exec_cmd('svccfg import %s' % self._APP_DIR + '/agent_service_solaris.xml')
 
-    def launch_agent(self):
+    def _launch_agent(self):
         """Launch remote agent via ssh channel"""
         cmd = 'service nmagent start' if self.ostype == OSType.LINUX else 'svcadm enable nmagent'
         success, message = self.exec_cmd(cmd)
@@ -118,7 +124,7 @@ class NodeConnector(object):
         else:
             logging.error('failed to start agent on node %s, message=%s', self.node_host, message)
 
-    def stop_agent(self):
+    def _stop_agent(self):
         """Stop agent in remote node"""
         logging.info('try to stop agent on %s', self.node_host)
         cmd = 'service nmagent stop' if self.ostype == OSType.LINUX else 'svcadm disable nmagent'
@@ -164,13 +170,9 @@ def push_to_nodes(basepath, nodelist, mhost, mport):
                     logging.info('no suitble python, now intall python 2.7 to %s' % host)
                     if not os.path.exists(_FILE_OF_PY27):
                         download_py()
-                    nc.trans_files(os.path.join(basepath, 'nodemonitor'), _FILES_TO_COPY + [_FILE_OF_PY27])
+                    nc._trans_files(os.path.join(basepath, 'nodemonitor'), [_FILE_OF_PY27])
                     nc.install_py(_FILE_OF_PY27)
-
-                nc.trans_files(os.path.join(basepath, 'nodemonitor'), _FILES_TO_COPY)
-                nc.stop_agent()
-                nc.install_service(master_addr)
-                nc.launch_agent()
+                nc.install_agent(basepath, master_addr)
         except Exception as e:
             logging.exception('error while push to %s', host)
     return nodelist
@@ -181,7 +183,7 @@ def stop_agents(nodes):
         host, user, password = node
         try:
             with NodeConnector(host, user, password) as nc:
-                nc.stop_agent()
+                nc._stop_agent()
         except Exception as e:
             logging.exception('error while stop agnet on %s', host)
 

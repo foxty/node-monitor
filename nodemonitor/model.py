@@ -186,6 +186,18 @@ class Model(dict):
         return self
 
     @dao
+    def remove(self, cursor):
+        if not self._PK:
+            raise NoPKError(self._TABLE)
+        logging.debug('delete model %s with %s', self._TABLE,)
+        wherephrase = ' AND '.join(['%s=?' % pk for pk in self._PK])
+        pkvalues = tuple([self.get(pk) for pk in self._PK])
+        sql = 'DELETE FROM %s WHERE %s' % (self._TABLE, wherephrase)
+        params = pkvalues
+        logging.debug('%s : %s', sql, params)
+        cursor.execute(sql, params)
+
+    @dao
     def set(self, **kwargs):
         """
         update the model and save to db
@@ -300,6 +312,9 @@ class Agent(Model):
     _FIELDS = ['aid', 'name', 'host', 'create_at', 'last_msg_at',
                'last_cpu_util', 'last_mem_util', 'last_sys_load1', 'last_sys_cs', 'status']
     _PK = ['aid']
+
+    def __str__(self):
+        return '[Agent:aid=%s, name=%s, host=%s, status=%s]' % (self.aid, self.name, self.host, self.status)
 
     @classmethod
     def get_by_id(cls, aid):

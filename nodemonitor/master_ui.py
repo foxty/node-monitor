@@ -14,7 +14,7 @@ from flask import Flask, request, render_template
 from common import dump_json
 from model import Agent, NSystemReport, NCPUReport, NMemoryReport, NDiskReport, \
     SInfo, SInfoHistory, SPidstatReport, SJstatGCReport
-logging.basicConfig(level=logging.INFO)
+from master_cli import NodeConnector
 
 
 _APP = Flask(__name__,
@@ -60,9 +60,35 @@ def get_agents():
     return dump_json(agents)
 
 
-@_APP.route('/api/agents/<string:aid>')
+@_APP.route('/api/agents', methods=['POST'])
+def add_agent():
+    data = request.get_json()
+    logging.info('request add agent: %s', data)
+    return dump_json(data)
+
+
+@_APP.route('/api/agents/<string:aid>', methods=['GET'])
 def get_agent(aid):
     agent = Agent.get_by_id(aid)
+    return dump_json(agent)
+
+
+@_APP.route('/api/agents/<string:aid>/refresh', methods=['PUT'])
+def refresh_agent(aid):
+    u = request.args.get('user')
+    p = request.args.get('pass')
+    mhost = request.args.get('master_addr')
+    agent = Agent.get_by_id(aid)
+    logging.info('refreshing agent %s with ssh user %s', agent, u)
+    with NodeConnector(agent.host, u, p) as nc:
+        nc.install_agent('.', mhost)
+
+
+@_APP.route('/api/agents/<string:aid>', methods=['DELETE'])
+def del_agent(aid):
+    agent = Agent.get_by_id(aid)
+    agent.remove()
+    logging.info('agent %s removed', agent)
     return dump_json(agent)
 
 
