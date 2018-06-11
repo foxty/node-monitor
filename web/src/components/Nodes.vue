@@ -1,7 +1,14 @@
 <template>
     <div>
         <div style="margin-bottom: 5px;">
-            <button type="button" class="btn btn-success" @click="addNode">Add Node</button>
+            <button type="button" class="btn btn-success" @click="addNode">
+                <span class="glyphicon glyphicon-plus"></span>
+                Add Node
+            </button>
+            <button type="button" class="btn btn-default" @click="loadAgents">
+                <span class="glyphicon glyphicon-refresh"></span>
+                Reload
+            </button>
             <span> Total {{agents ? agents.length : ''}} Nodes</span>
         </div>
         <table class="table table-bordered" v-if="agents && agents.length > 0">
@@ -34,13 +41,13 @@
                 <td>{{a.last_sys_cs || '-'}}</td>
                 <td>{{a.last_msg_at.fromNow()}}</td>
                 <td>
-                    <button class="btn btn-sm btn-warning">
+                    <button class="btn btn-sm btn-warning" @click="refreshNode(a)">
                         <span class="glyphicon glyphicon-refresh" aria-hidden="true"></span>
                     </button>
-                    <button class="btn btn-sm btn-info">
+                    <!--button class="btn btn-sm btn-info">
                         <span class="glyphicon glyphicon-edit" aria-hidden="true"></span>
-                    </button>
-                    <button class="btn btn-sm btn-danger" @click="removeAgent(a.aid, a.name)">
+                    </button-->
+                    <button class="btn btn-sm btn-danger" @click="removeNode(a)">
                         <span class="glyphicon glyphicon-trash" aria-hidden="true"></span>
                     </button>
                 </td>
@@ -72,14 +79,15 @@
                 self.$http.get('/api/agents').then(resp => {
                     return resp.json()
                 }).then(data => {
-                    data.forEach(function(ele) {
+                    data.agents.forEach(function(ele) {
                         ele.last_msg_at = moment(ele.last_msg_at)
                     })
-                    self.agents = data
+                    self.agents = data.agents
+                    self.master_addr = data.master_addr
                 })
             },
 
-            removeAgent: function(aid, name) {
+            /*removeAgent: function(aid, name) {
                 let self = this
                 this.$modal.show('dialog', {
                     title: 'Confirm',
@@ -109,13 +117,45 @@
                     console.log('agent ' + data.name + ' was removed.')
                     self.agents = self.agents.filter(a => a.aid != data.aid)
                 })
-            },
+            },*/
 
             addNode: function() {
                 var self = this
-                self.$modal.show(NodeForm,
-                    {},
-                    {height: 'auto'})
+                self.$modal.show(NodeForm, {
+                    model: {
+                        master_addr: self.master_addr,
+                        username: 'root'
+                    }
+                }, {
+                    height: 'auto'
+                }, {
+                    'before-close': (event) => { self.loadAgents() }
+                })
+            },
+
+            refreshNode: function(agent) {
+                var self = this
+                agent.master_addr = self.master_addr
+                agent.username = 'root'
+                self.$modal.show(NodeForm, {
+                    model: agent
+                }, {
+                    height: 'auto'
+                })
+            },
+
+            removeNode: function (agent) {
+                var self = this
+                agent.master_addr = self.master_addr
+                agent.username = 'root'
+                self.$modal.show(NodeForm, {
+                    model: agent,
+                    action: 'remove'
+                }, {
+                    height: 'auto'
+                }, {
+                    'before-close': (event) => { self.loadAgents() }
+                })
             }
         }
     }

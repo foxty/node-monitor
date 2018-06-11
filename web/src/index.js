@@ -6,6 +6,7 @@ import VueRouter from 'vue-router'
 import VueResource from 'vue-resource'
 import VModal from 'vue-js-modal'
 import moment from 'moment'
+import Spinner from 'vue-simple-spinner'
 
 import Dashboard from './components/Dashboard'
 import Nodes from './components/Nodes'
@@ -20,30 +21,7 @@ import ReportToolbar from './components/ReportToolbar'
 
 Vue.use(VueRouter)
 Vue.use(VueResource)
-Vue.http.headers.common['Content-Type'] = 'application/json';
-Vue.http.interceptors.push(function(request) {
-    console.log('start ajax..')
-    // return response callback
-    return function(response) {
-        if(response.status == 0) {
-            this.$modal.show('dialog', {
-                title: 'Connection Error',
-                text: 'Seems you lost the connection with server, please check your network or contact our admin.',
-            })
-        } else if (response.status >= 300) {
-            response.text().then(data => {
-                this.$modal.show('dialog', {
-                    title: 'Error',
-                    text: data,
-                })
-                console.error('error of ajax code=' + response.status + ', body=' + data)
-            })
-        }
-        console.log('end ajax')
-    };
-});
-Vue.use(VModal, { dialog: true, dynamic: true })
-
+Vue.use(VModal, {dialog: true, dynamic: true})
 Vue.component('chart', () => import('vue-echarts'))
 Vue.component("report-toolbar", ReportToolbar);
 Vue.filter('percent', function(number) {
@@ -56,24 +34,6 @@ Vue.filter('decimal', function(number, precision) {
     var pows = Math.pow(10, precision)
     var d = Math.round(number * pows) / pows
     return d;
-});
-
-moment.locale('cn', {
-    relativeTime : {
-        future: "in %s",
-        past:   "%s之前",
-        s:  "几秒",
-        m:  "一分钟",
-        mm: "%d分钟",
-        h:  "一小时",
-        hh: "%d小时",
-        d:  "一天",
-        dd: "%d天",
-        M:  "一个月",
-        MM: "%d个月",
-        y:  "一年",
-        yy: "%d年"
-    }
 });
 
 const router = new VueRouter({
@@ -95,5 +55,74 @@ const router = new VueRouter({
     ]
 });
 
-const app = new Vue({router})
+const app = new Vue({
+    router,
+    // global state
+    data: function() {
+        return {
+            ajaxCount: 0
+        }
+    },
+    computed: {
+      isLoading: function() {
+          return this.ajaxCount > 0
+      }
+    },
+    components: {
+        Spinner
+    },
+    methods: {
+        incAjax: function() {
+            this.ajaxCount ++
+        },
+        decAjax: function() {
+            this.ajaxCount --
+        }
+    }
+})
 app.$mount('#app')
+
+moment.locale('cn', {
+    relativeTime : {
+        future: "in %s",
+        past:   "%s之前",
+        s:  "几秒",
+        m:  "一分钟",
+        mm: "%d分钟",
+        h:  "一小时",
+        hh: "%d小时",
+        d:  "一天",
+        dd: "%d天",
+        M:  "一个月",
+        MM: "%d个月",
+        y:  "一年",
+        yy: "%d年"
+    }
+});
+
+Vue.http.headers.common['Content-Type'] = 'application/json';
+Vue.http.interceptors.push(function(request) {
+    console.log(app)
+    app.incAjax()
+    // return response callback
+    return function(response) {
+        app.decAjax()
+        console.log('done ajax, now ajax count=' + app.ajaxCount)
+        if(response.status == 0) {
+            this.$modal.show('dialog', {
+                title: 'Connection Error',
+                text: 'Seems you lost the connection with server, please check your network or contact our admin.',
+            })
+        } else if (response.status >= 300) {
+            let isJson = response.headers.get('content-type') &&
+                response.headers.get('content-type').indexOf('application/json') >= 0;
+            (isJson ? response.json() : response.text()).then(data => {
+                this.$modal.show('dialog', {
+                    title: 'Application Error',
+                    text: isJson ? data.message : data,
+                })
+                console.error('error of ajax code=' + response.status + ', body=' + data)
+            })
+        }
+    };
+});

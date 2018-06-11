@@ -7,16 +7,19 @@ Created on 2017-12-22
 
 UI for master node
 """
+import sys
 import logging
+import socket
 import yaml
 from datetime import datetime, timedelta
-from flask import Flask, request, render_template
+from flask import Flask, request, make_response, render_template, got_request_exception
 from common import dump_json
 from model import Agent, NSystemReport, NCPUReport, NMemoryReport, NDiskReport, \
     SInfo, SInfoHistory, SPidstatReport, SJstatGCReport
 from master_cli import NodeConnector
 
 
+_CONFIG = None
 _APP = Flask(__name__,
              static_folder='../web/dist/',
              static_url_path='',
@@ -29,6 +32,12 @@ def calc_daterange(req):
     start = datetime.strptime(start_at[:19], '%Y-%m-%dT%H:%M:%S')
     end = datetime.strptime(end_at[:19], '%Y-%m-%dT%H:%M:%S')
     return start, end
+
+
+@_APP.errorhandler(Exception)
+def exception_handler(error):
+    logging.exception('unexpected error occurs')
+    return dump_json({'code': 400, 'message': error.message}), 400, {'Content-Type': 'application/json'}
 
 
 @_APP.route("/")
@@ -53,18 +62,30 @@ def get_agents_byload1():
 
 @_APP.route('/api/agents', methods=['GET'])
 def get_agents():
+    mhost = socket.gethostname()
+    mport = _CONFIG['master']['server']['port']
+    master_addr = '%s:%s' % (mhost, mport)
     agents = Agent.query(orderby='last_msg_at DESC')
     thresh = datetime.now() - timedelta(minutes=5)
     for a in agents:
-        a.status = 'active' if a.last_msg_at >= thresh else 'inactive'
-    return dump_json(agents)
+        a.status = 'active' if a.last_msg_at and a.last_msg_at >= thresh else 'inactive'
+    return dump_json({'agents': agents, 'master_addr': master_addr})
 
 
 @_APP.route('/api/agents', methods=['POST'])
 def add_agent():
     data = request.get_json()
     logging.info('request add agent: %s', data)
-    return dump_json(data)
+    nhost = data.get('host')
+    mhost = data.get('master_addr')
+    connectType = data.get('connect_type')
+    u = data.get('username')
+    p = data.get('password')
+    logging.info('install agent on %s@%s with master=%s', u, nhost, mhost)
+    with NodeConnector(nhost, u, p) as nc:
+        nc.install_agent('..', mhost)
+    logging.info('agent installed on %s@%s finished.', u, nhost)
+    return 'ok'
 
 
 @_APP.route('/api/agents/<string:aid>', methods=['GET'])
@@ -73,22 +94,17 @@ def get_agent(aid):
     return dump_json(agent)
 
 
-@_APP.route('/api/agents/<string:aid>/refresh', methods=['PUT'])
-def refresh_agent(aid):
-    u = request.args.get('user')
-    p = request.args.get('pass')
-    mhost = request.args.get('master_addr')
-    agent = Agent.get_by_id(aid)
-    logging.info('refreshing agent %s with ssh user %s', agent, u)
-    with NodeConnector(agent.host, u, p) as nc:
-        nc.install_agent('.', mhost)
-
-
 @_APP.route('/api/agents/<string:aid>', methods=['DELETE'])
 def del_agent(aid):
+    connectType = request.args.get('connect_type')
+    u = request.args.get('username')
+    p = request.args.get('password')
     agent = Agent.get_by_id(aid)
-    agent.remove()
-    logging.info('agent %s removed', agent)
+    logging.info('remove agent on %s@%s', u, agent)
+    with NodeConnector(agent.host, u, p) as nc:
+        nc.remove_agent()
+        agent.remove()
+    logging.info('agent removed on %s@%s finished.', u, agent)
     return dump_json(agent)
 
 
@@ -167,6 +183,8 @@ def ui_main(config, debug=False):
                         datefmt='%m-%d %H:%M:%S',
                         format='%(asctime)s-%(threadName)s:%(levelname)s:%(name)s:%(module)s.%(lineno)d:%(message)s')
     logging.info('starting master ui...')
+    global _CONFIG
+    _CONFIG = config
     _APP.jinja_env.variable_start_string = '{-'
     _APP.jinja_env.variable_end_string = '-}'
     _APP.jinja_env.auto_reload = True

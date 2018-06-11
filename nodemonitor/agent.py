@@ -19,6 +19,7 @@ import select
 import re
 import Queue as Q
 import threading
+import hashlib
 from datetime import datetime
 from subprocess import Popen, PIPE, call
 from common import Msg, InvalidMsgError, is_win, is_sunos, ostype, OSType
@@ -556,7 +557,6 @@ class NodeAgent:
     SEND_BUF = 128*1024
 
     def __init__(self, master_host, master_port):
-        logging.info('init agent master = %s:%s', master_host, master_port)
         self._hostname = socket.gethostname()
         self._agentid = self._gen_agentid()
         self._master_addr = (master_host, master_port)
@@ -565,8 +565,8 @@ class NodeAgent:
         self._retry = threading.Event()
         self._config = AgentConfig()
         self._stat_collector = NodeCollector(self, self._config)
-        logging.info('agent init with id=%s, master=%s, hostname=%s',
-                     self._agentid, self._master_addr, self._hostname)
+        logging.info('agent init with id=%s, host=%s, master=%s, hostname=%s',
+                     self._agentid, self._hostname, self._master_addr, self._hostname)
 
     @property
     def agentid(self):
@@ -574,17 +574,12 @@ class NodeAgent:
 
     def _gen_agentid(self):
         aid = None
-        if ostype() == OSType.WIN:
-            if len(self._hostname) >= 8:
-                aid = self._hostname[0:8]
-            else:
-                aid = self._hostname.ljust(8, 'x')
+        if ostype() in [OSType.WIN, OSType.SUNOS]:
+            md5 = hashlib.md5()
+            md5.update(self._hostname)
+            aid = md5.hexdigest()
         else:
-            hostid = check_output(['hostid'])
-            if len(hostid) >= 8:
-                aid = hostid[0:8]
-            else:
-                aid = hostid.ljust(8, 'x')
+            aid = check_output(['hostid'])
         return aid
 
     def _connect_master(self):

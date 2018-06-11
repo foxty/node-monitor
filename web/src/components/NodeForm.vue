@@ -1,29 +1,36 @@
 <template>
     <form class="form-horizontal" style="margin:30px">
-        <div class="form-group">
-            <label for="nodeHost" class="col-sm-3 control-label">Node Host</label>
+        <div class="form-group" v-if="agent.aid">
+            <label class="col-sm-3 control-label">Node ID</label>
             <div class="col-sm-9">
-                <input type="text" class="form-control" id="nodeHost" placeholder="host or ip" v-model="agent.host">
+                <input type="text" disabled="disabled" class="form-control" v-model="agent.aid">
             </div>
         </div>
         <div class="form-group">
-            <label for="masterHost" class="col-sm-3 control-label">Master Host</label>
+            <label for="node_host" class="col-sm-3 control-label">Node Host</label>
             <div class="col-sm-9">
-                <input type="text" class="form-control" id="masterHost" placeholder="x.x.x.x:30079" v-model="agent.masterHost">
+                <input type="text" v-bind:disabled="action=='remove'" class="form-control" id="node_host" placeholder="host or ip" v-model="agent.host">
+            </div>
+        </div>
+        <div class="form-group" v-if="action != 'remove'">
+            <label for="master_addr" class="col-sm-3 control-label">Master Host</label>
+            <div class="col-sm-9">
+                <input type="text" class="form-control" id="master_addr" placeholder="x.x.x.x:30079" v-model="agent.master_addr">
             </div>
         </div>
         <div class="form-group">
             <label class="col-sm-3 control-label">Connect Type</label>
             <div class="col-sm-9">
                 <label class="radio-inline">
-                    <input type="radio" name="connectType" id="connectType1" value="password" v-model="agent.connectType">Password SSH
+                    <input type="radio" name="connect_type" value="password" v-model="agent.connect_type">Password SSH
                 </label>
                 <label class="radio-inline">
-                    <input type="radio" name="connectType" id="connectType2" value="passwordless" v-model="agent.connectType">Passwordless SSH
+                    <input type="radio" name="connect_type" value="passwordless" v-model="agent.connect_type">Passwordless SSH
                 </label>
             </div>
         </div>
-        <div v-if="agent.connectType == 'password'">
+
+        <div v-if="agent.connect_type == 'password'">
             <div class="form-group">
                 <label for="username" class="col-sm-3 control-label">User</label>
                 <div class="col-sm-9">
@@ -37,7 +44,7 @@
                 </div>
             </div>
         </div>
-        <div class="form-group" v-if="agent.connectType == 'passwordless'">
+        <div v-else class="form-group">
             <div class="alert alert-info">Please make sure passwordless access was setup from master to {{agent.host || 'node'}}.</div>
         </div>
         <div class="form-group">
@@ -52,24 +59,50 @@
 <script>
     export default {
         name: 'NodeForm',
-        props: ['model'],
+        props: ['model', 'action'],
         data: function () {
             return {
                 agent: this.model || {}
             }
         },
         created: function () {
-            agent.connectType = 'password'
         },
         methods: {
             submit: function() {
-                let self = this
                 console.log('submit agent ' + JSON.stringify(this.agent))
+                this.action == 'remove' ? this.removeNode() : this.installNode()
+            },
+
+            installNode: function() {
+                let self = this
                 if (self.agent) {
                     self.$http.post('/api/agents', self.agent).then(resp => {
-                        console.log(resp)
+                        self.$emit('close')
+                        self.$modal.show('dialog', {
+                            title: 'Success',
+                            text: 'Node ' + self.agent.host + ' has been setup, please wait few seconds for update.',
+                        })
+                    }, resp => {
+                        self.$emit('close')
                     })
                 }
+            },
+            
+            removeNode: function () {
+                let self = this;
+                let params = {
+                    connect_type: self.agent.connect_type,
+                    username: self.agent.username,
+                    password: self.agent.password
+                }
+                self.$http.delete(`/api/agents/` + self.agent.aid, {params: params}).then(resp => {
+                    return resp.json()
+                }, resp => {
+                    self.$emit('close')
+                }).then(data => {
+                    self.$emit('close')
+                    console.log('agent ' + data.name + ' was removed.')
+                })
             }
         }
     }

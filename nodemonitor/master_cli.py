@@ -88,6 +88,9 @@ class NodeConnector(object):
         self._set_agent_service(master_addr)
         self._launch_agent()
 
+    def remove_agent(self):
+        self._stop_agent()
+
     def _trans_files(self, parent_path, files=[]):
         """
         send files to remote host and convert to unix file.
@@ -132,7 +135,7 @@ class NodeConnector(object):
         if success:
             logging.info('agent stopped on %s' % self.node_host)
         else:
-            logging.warn('faile to stop agent on %s, error=%s', self.node_host, message)
+            logging.warn('fail to stop agent on %s, error=%s', self.node_host, message)
 
 
 def download_py():
