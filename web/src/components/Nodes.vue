@@ -87,43 +87,12 @@
                 })
             },
 
-            /*removeAgent: function(aid, name) {
-                let self = this
-                this.$modal.show('dialog', {
-                    title: 'Confirm',
-                    text: 'do you want remove agent ' + name +'?',
-                    buttons: [
-                        {
-                            title: 'Yes',
-                            handler: () => {
-                                self.sendRemoveAgent(aid)
-                                self.$modal.hide('dialog')
-                            }
-                        },
-                        {
-                            title: 'No',
-                            default: true,
-                            handler: () => { self.$modal.hide('dialog') }
-                        }
-                    ]
-                })
-            },
-
-            sendRemoveAgent: function(aid) {
-                var self = this;
-                self.$http.delete(`/api/agents/${aid}`).then(resp => {
-                    return resp.json()
-                }).then(data => {
-                    console.log('agent ' + data.name + ' was removed.')
-                    self.agents = self.agents.filter(a => a.aid != data.aid)
-                })
-            },*/
-
             addNode: function() {
                 var self = this
                 self.$modal.show(NodeForm, {
                     model: {
                         master_addr: self.master_addr,
+                        connect_type: 'password',
                         username: 'root'
                     }
                 }, {
@@ -137,10 +106,13 @@
                 var self = this
                 agent.master_addr = self.master_addr
                 agent.username = 'root'
+                agent.connect_type = 'password'
                 self.$modal.show(NodeForm, {
                     model: agent
                 }, {
                     height: 'auto'
+                }, {
+                    'before-close': (event) => { self.loadAgents() }
                 })
             },
 
@@ -148,6 +120,7 @@
                 var self = this
                 agent.master_addr = self.master_addr
                 agent.username = 'root'
+                agent.connect_type = 'password'
                 self.$modal.show(NodeForm, {
                     model: agent,
                     action: 'remove'

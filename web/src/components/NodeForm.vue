@@ -62,10 +62,8 @@
         props: ['model', 'action'],
         data: function () {
             return {
-                agent: this.model || {}
+                agent: this.model
             }
-        },
-        created: function () {
         },
         methods: {
             submit: function() {
