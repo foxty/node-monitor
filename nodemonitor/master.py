@@ -14,7 +14,7 @@ Node monitor master:
 # ==============================
 import os
 import logging
-import socket
+import sys
 import SocketServer
 import content_parser
 import model
@@ -327,8 +327,10 @@ def master_main(cfg):
     logging.basicConfig(level=logging.INFO,
                         datefmt='%m-%d %H:%M:%S',
                         format='%(asctime)s-%(threadName)s:%(levelname)s:%(name)s:%(module)s.%(lineno)d:%(message)s')
+    basepath = os.path.dirname(sys.path[0])
+    schemapath = os.path.join(basepath, 'conf', 'schema.sql')
     global _MASTER
-    model.create_schema()
+    model.create_schema(schemapath)
     _MASTER = Master(cfg)
     _MASTER.start()
 

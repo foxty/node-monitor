@@ -21,7 +21,7 @@ model.DB_NAME = 'test.db'
 
 class BaseDBTest(unittest.TestCase):
     def setUp(self):
-        model.create_schema()
+        model.create_schema('../conf/schema.sql')
 
     def tearDown(self):
         model.Agent.delete()
