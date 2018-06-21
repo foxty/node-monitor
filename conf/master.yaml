@@ -18,7 +18,6 @@ master:
       service_metric_raw: 14
       service_pidstat_report: 14
       service_jstatgc_report: 14
-      alarm: 14
 
 ui:
   server:
