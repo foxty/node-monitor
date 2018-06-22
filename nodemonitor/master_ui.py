@@ -7,7 +7,7 @@ Created on 2017-12-22
 
 UI for master node
 """
-import sys
+import sys, os
 import logging
 import socket
 import yaml
@@ -82,8 +82,9 @@ def add_agent():
     u = data.get('username')
     p = data.get('password')
     logging.info('install agent on %s@%s with master=%s', u, nhost, mhost)
+    basepath = os.path.dirname(sys.path[0])
     with NodeConnector(nhost, u, p) as nc:
-        nc.install_agent('..', mhost)
+        nc.install_agent(basepath, mhost)
     logging.info('agent installed on %s@%s finished.', u, nhost)
     return 'ok'
 
@@ -194,6 +195,7 @@ def ui_main(config, debug=False):
 
 
 if __name__ == '__main__':
-    with open('../conf/master.yaml') as f:
+    basepath = os.path.dirname(sys.path[0])
+    with open(os.path.join(basepath, 'conf', 'master.yaml')) as f:
         cfg = yaml.load(f)
     ui_main(cfg, debug=True)
