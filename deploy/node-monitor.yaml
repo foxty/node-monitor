@@ -39,3 +39,11 @@ spec:
         ports:
         - containerPort: 30079
         - containerPort: 30080
+        volumeMounts:
+          - name: node-monitor-storage
+            mountPath: /opt/node-monitor/db
+      volumes:
+        - name: node-monitor-storage
+          glusterfs:
+            endpoints: ep-glusterfs
+            path: gv-node-monitor
