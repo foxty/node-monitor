@@ -296,6 +296,27 @@ class ContentParserTest(unittest.TestCase):
                                            disk_rd=1.0, disk_wr=7.17, disk_ccwr=2.45),
                          pidrep)
 
+    def test_parse_pidstat_centos7(self):
+        c = """
+        Linux 3.10.0-123.el7.x86_64 (saa018)    06/27/2018      _x86_64_        (2 CPU)
+
+        #      Time   UID      TGID       TID    %usr %system  %guest    %CPU   CPU  minflt/s  majflt/s     VSZ    RSS   %MEM   kB_rd/s   kB_wr/s kB_ccwr/s  Command
+         1530099976     0      7443         0    0.13    0.02    0.00    0.15     1      0.47      0.10  160052   8800   0.23      1.00      7.17      2.45  python
+         1530099976     0         0      7443    0.00    0.00    0.00    0.00     1      0.04      0.00  160052   8800   0.23      0.00      0.00      0.00  |__python
+         1530099976     0         0      7455    0.00    0.00    0.00    0.00     0      0.14      0.00  160052   8800   0.23      0.00      0.00      0.00  |__python
+        """
+        ctime = datetime.now()
+        pidrep = content_parser.parse_pidstat('1', ctime, 'serv1', c)
+        self.assertIsNotNone(pidrep)
+        self.assertIsNotNone(pidrep.recv_at)
+        del pidrep['recv_at']
+        self.assertEqual(model.SPidstatReport('1', service_id='serv1', collect_at=ctime, tid=0,
+                                              cpu_us=0.13, cpu_sy=0.02, cpu_gu=0.0, cpu_util=0.15,
+                                              mem_minflt=0.47, mem_majflt=0.10, mem_vsz=160052,
+                                              mem_rss=8800, mem_util=0.23,
+                                              disk_rd=1.0, disk_wr=7.17, disk_ccwr=2.45),
+                         pidrep)
+
     def test_parse_jstatgc(self):
         c = '''
         Timestamp   S0C    S1C      S0U    S1U      EC       EU        OC         OU       MC       MU     CCSC   CCSU      YGC   YGCT    FGC    FGCT     GCT

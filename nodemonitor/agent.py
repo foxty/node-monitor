@@ -576,7 +576,7 @@ class NodeAgent:
         if ostype() in [OSType.WIN, OSType.SUNOS]:
             aid = self._hostname
         else:
-            aid = check_output(['hostid'])
+            aid = check_output(['hostid']).strip()
         logging.info('agent id %s generated for %s', aid, self._hostname)
         return aid
 
@@ -701,7 +701,9 @@ class NodeAgent:
                     data = data[sent:]
                 except socket.error:
                     logging.exception('send data failed by times = %d', times)
-                    continue
+                    if times > 10:
+                        logging.info('break the send msg loop while times=%s', times)
+                        break
             finally:
                 times += 1
         return times

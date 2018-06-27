@@ -242,14 +242,15 @@ def parse_dstat_dio(aid, collect_time, content):
 
 
 def parse_pidstat(aid, collect_time, service_id, content):
-    t = TextTable(content, header_ln=1)
+    t = TextTable(content.replace('#', ''), header_ln=1)
     if t.size > 1:
         prow = t[0]
-        tid = int(prow[2])
-        cpu_us, cpu_sy, cpu_gu, cpu_util = float(prow[3]), float(prow[4]), float(prow[5]), float(prow[6])
-        mem_minflt, mem_majflt, mem_vsz, mem_rss, mem_util = float(prow[8]), float(prow[9]), \
-                                                             int(prow[10]), int(prow[11]), float(prow[12])
-        disk_rd, disk_wr, disk_ccwr = float(prow[13]), float(prow[14]), float(prow[15])
+        tid = int(prow['TID'])
+        cpu_us, cpu_sy, cpu_gu, cpu_util = float(prow['%usr']), float(prow['%system']), \
+                                           float(prow['%guest']), float(prow['%CPU'])
+        mem_minflt, mem_majflt, mem_vsz, mem_rss, mem_util = float(prow['minflt/s']), float(prow['majflt/s']), \
+                                                             int(prow['VSZ']), int(prow['RSS']), float(prow['%MEM'])
+        disk_rd, disk_wr, disk_ccwr = float(prow['kB_rd/s']), float(prow['kB_wr/s']), float(prow['kB_ccwr/s'])
         rep = SPidstatReport(aid=aid, service_id=service_id, collect_at=collect_time, tid=tid,
                              cpu_us=cpu_us, cpu_sy=cpu_sy, cpu_gu=cpu_gu, cpu_util=cpu_util,
                              mem_minflt=mem_minflt, mem_majflt=mem_majflt, mem_vsz=mem_vsz, mem_rss=mem_rss, mem_util=mem_util,
