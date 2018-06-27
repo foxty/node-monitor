@@ -40,7 +40,7 @@ def parse_w(aid, collect_time, content):
         return NSystemReport(aid, collect_time, uptime=days*24*3600, users=users,
                              load1=load1, load5=load5, load15=load15,
                              procs_r=None, procs_b=None, sys_in=None, sys_cs=None
-                             , recv_at=datetime.now())
+                             , recv_at=datetime.utcnow())
     else:
         logging.warn('invalid content of `w`: %s', content)
         return None
@@ -68,7 +68,7 @@ def parse_free(aid, collect_time, content):
         free_swap = t.get_int('Swap:', 'free')
         return NMemoryReport(aid, collect_time, total_mem=total_mem, used_mem=used_mem,
                              free_mem=free_mem, cache_mem=None, total_swap=total_swap,
-                             used_swap=use_swap, free_swap=free_swap, recv_at=datetime.now())
+                             used_swap=use_swap, free_swap=free_swap, recv_at=datetime.utcnow())
     else:
         logging.warn('invalid content of`free`: %s', content)
         return None
@@ -103,7 +103,7 @@ def parse_vmstat(aid, collect_time, content):
         id_, wa = t.get_int(data_rn,'id'), t.get_int(data_rn,'wa')
         st = t.get_int(data_rn,'st')
         r = NCPUReport(aid=aid, collect_at=collect_time,
-                       us=us, sy=sy,id=id_, wa=wa, st=st, recv_at=datetime.now())
+                       us=us, sy=sy,id=id_, wa=wa, st=st, recv_at=datetime.utcnow())
         return r, procs_r, procs_b, sys_in, sys_cs
     else:
         logging.warn('invalid content of `vmstat` : %s', content)
@@ -120,7 +120,7 @@ def parse_df(aid, collect_time, content):
     """
     t = TextTable(content)
     if t.size > 1:
-        diskreps = [NDiskReport(aid, collect_time, *row.as_tuple(), recv_at=datetime.now()) for row in t.get_rows()]
+        diskreps = [NDiskReport(aid, collect_time, *row.as_tuple(), recv_at=datetime.utcnow()) for row in t.get_rows()]
         return diskreps
     else:
         logging.warn('invalid content of `df` : %s', content)
@@ -159,7 +159,7 @@ def parse_dstat_sys(aid, collect_time, content):
     return NSystemReport(aid=aid, collect_at=collect_time,
                          load1=float(data[0]), load5=float(data[1]), load15=float(data[2]),
                          sys_in=int(data[3]), sys_cs=int(data[4]), procs_r=int(data[5]),
-                         procs_b=int(data[6]), recv_at=datetime.now()) if data else None
+                         procs_b=int(data[6]), recv_at=datetime.utcnow()) if data else None
 
 
 def parse_dstat_cpu(aid, collect_time, content):
@@ -175,7 +175,7 @@ def parse_dstat_cpu(aid, collect_time, content):
     """
     data = parse_dstat(content, 6)
     return NCPUReport(aid=aid, collect_at=collect_time, us=int(data[0]), sy=int(data[1]),
-                         id=int(data[2]), wa=int(data[3]), recv_at=datetime.now()) if data else None
+                         id=int(data[2]), wa=int(data[3]), recv_at=datetime.utcnow()) if data else None
 
 
 def conv_to_mega(value, multiplier=1024):
@@ -230,7 +230,7 @@ def parse_dstat_mem(aid, collect_time, content):
     return NMemoryReport(aid, collect_time, total_mem=used_mem+cache_mem+free_mem,
                          used_mem=used_mem, free_mem=free_mem, cache_mem=cache_mem,
                          total_swap=used_swap+free_swap, used_swap=used_swap,
-                         free_swap=free_swap, recv_at=datetime.now()) if data else None
+                         free_swap=free_swap, recv_at=datetime.utcnow()) if data else None
 
 
 def parse_dstat_sock(aid, collect_time, content):
@@ -253,7 +253,7 @@ def parse_pidstat(aid, collect_time, service_id, content):
         rep = SPidstatReport(aid=aid, service_id=service_id, collect_at=collect_time, tid=tid,
                              cpu_us=cpu_us, cpu_sy=cpu_sy, cpu_gu=cpu_gu, cpu_util=cpu_util,
                              mem_minflt=mem_minflt, mem_majflt=mem_majflt, mem_vsz=mem_vsz, mem_rss=mem_rss, mem_util=mem_util,
-                             disk_rd=disk_rd, disk_wr=disk_wr, disk_ccwr=disk_ccwr, recv_at=datetime.now())
+                             disk_rd=disk_rd, disk_wr=disk_wr, disk_ccwr=disk_ccwr, recv_at=datetime.utcnow())
         logging.debug('get pidsat report %s', rep)
         return rep
     else:
@@ -282,7 +282,7 @@ def parse_prstat(aid, collect_time, service_id, content):
         cpu_util = float(prow.get('CPU')[:-1])
         mem_vsz, mem_rss = conv_to_kilo(prow.get('SIZE')), conv_to_kilo(prow.get('RSS')),
         rep = SPidstatReport(aid=aid, service_id=service_id, collect_at=collect_time, tid=tid,
-                             cpu_util=cpu_util, mem_vsz=mem_vsz, mem_rss=mem_rss, recv_at=datetime.now())
+                             cpu_util=cpu_util, mem_vsz=mem_vsz, mem_rss=mem_rss, recv_at=datetime.utcnow())
         logging.debug('get prstat report %s', rep)
         return rep
     else:
@@ -307,7 +307,7 @@ def parse_jstatgc(aid, collect_time, service_id, content):
                              s0c=S0C, s1c=S1C, s0u=S0U, s1u=S1U,
                              ec=EC, eu=EU, oc=OC, ou=OU,
                              mc=MC, mu=MU, ccsc=CCSC, ccsu=CCSU,
-                             ygc=YGC, ygct=YGCT, fgc=FGC, fgct=FGCT, gct=GCT, recv_at=datetime.now())
+                             ygc=YGC, ygct=YGCT, fgc=FGC, fgct=FGCT, gct=GCT, recv_at=datetime.utcnow())
         logging.debug('get jstat-gc report %s', rep)
         return rep
     else:

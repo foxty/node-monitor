@@ -20,6 +20,7 @@
 </template>
 
 <script>
+    import moment from 'moment'
     export default {
         props: ['aid'],
 
@@ -47,6 +48,9 @@
                 self.$http.get(`/api/agents/${aid}/services`).then(resp => {
                     return resp.json()
                 }).then(data => {
+                    data.services.forEach(function(ele) {
+                        ele.last_report_at = moment.utc(ele.last_report_at)
+                    })
                     self.services = data.services;
                     self.services_status_map = data.services_status_map;
                 })

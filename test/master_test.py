@@ -355,13 +355,12 @@ class MasterTest(model_test.BaseDBTest):
         master = self.master
 
         # test a new agent join
-        regmsg = Msg.create_msg('1', Msg.A_REG, {'hostname': 'test-host'})
-        regmsg.client_addr = ('127.0.0.1', 1234)
+        regmsg = Msg.create_msg('1', Msg.A_REG, {'os': 'LINUX', 'hostname': 'test-host'})
         master.handle_msg(regmsg, None)
         agent = master.find_agent('1')
         self.assertEqual('1', agent.aid)
-        self.assertEqual('127.0.0.1', agent.host)
-        self.assertEqual('test-host', agent.name)
+        self.assertEqual('test-host', agent.host)
+        self.assertEqual('test-host@LINUX', agent.name)
 
     def test_handle_hearbeat(self):
         pass
@@ -370,8 +369,7 @@ class MasterTest(model_test.BaseDBTest):
         m = self.master
         ctime = datetime.now()
         body = {'collect_time': ctime}
-        regmsg = Msg.create_msg('2', Msg.A_REG, {'hostname': 'test-host'})
-        regmsg.client_addr = ('127.0.0.1', 1234)
+        regmsg = Msg.create_msg('2', Msg.A_REG, {'os': 'LINUX', 'hostname': 'test-host'})
         m.handle_msg(regmsg, None)
 
         nmmsg = Msg.create_msg('2', Msg.A_NODE_METRIC, body)

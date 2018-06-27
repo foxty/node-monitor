@@ -22,7 +22,7 @@
                 <td>{{s.pid}}</td>
                 <td>{{services_status_map[s.id] ? services_status_map[s.id].cpu_util : '-'}}</td>
                 <td>{{services_status_map[s.id] ? services_status_map[s.id].mem_util : '-'}}</td>
-                <td>{{s.last_report_at}}</td>
+                <td>{{s.last_report_at.fromNow()}}</td>
             </tr>
             </tbody>
         </table>

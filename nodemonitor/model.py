@@ -333,7 +333,7 @@ class SInfo(Model):
     def chkstatus(self, threshold_secs):
         active = False
         if self.last_report_at:
-            now = datetime.now()
+            now = datetime.utcnow()
             dt = now - self.last_report_at
             active = dt.seconds <= threshold_secs or self.last_report_at >= now
         self.set(status=self.STATUS_ACT if active else self.STATUS_INACT)

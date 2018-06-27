@@ -80,7 +80,7 @@
                     return resp.json()
                 }).then(data => {
                     data.agents.forEach(function(ele) {
-                        ele.last_msg_at = moment(ele.last_msg_at)
+                        ele.last_msg_at = moment.utc(ele.last_msg_at)
                     })
                     self.agents = data.agents
                     self.master_addr = data.master_addr

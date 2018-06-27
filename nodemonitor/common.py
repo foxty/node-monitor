@@ -18,12 +18,12 @@ try:
 except:
     pass
 import pickle
-import base64
+from base64 import standard_b64encode, standard_b64decode
 from datetime import datetime, date, time
 from struct import *
 
-DATETIME_FMT = '%Y-%m-%d %H:%M:%S'
-DATETIME_RE = re.compile('^\\d{4}-\\d{1,2}-\\d{1,2} \\d{2}:\\d{2}:\\d{2}$')
+DATETIME_FMT = '%Y-%m-%dT%H:%M:%SZ'
+DATETIME_RE = re.compile('^\\d{4}-\\d{1,2}-\\d{1,2}T\\d{2}:\\d{2}:\\d{2}Z$')
 DATE_FMT = '%Y-%m-%d'
 DATE_RE = re.compile('^\\d{4}-\\d{1,2}-\\d{1,2}$')
 TIME_FMT = '%H:%M:%S'
@@ -119,8 +119,8 @@ class Msg(object):
         e.g:
         [MSG:A_REG, AgentID:xxxxxxx, SendTime:YYYYMMDD HH:mm:ss], <body>
         """
-        head = map(lambda x: '%s:%s' % x, self._headers.items())
-        encbody = base64.b64encode(pickle.dumps(self._body, protocol=pickle.HIGHEST_PROTOCOL))
+        head = map(lambda x: '%s:%s' % (x[0], standard_b64encode(x[1])), self._headers.items())
+        encbody = standard_b64encode(pickle.dumps(self._body, protocol=pickle.HIGHEST_PROTOCOL))
         return head, encbody
 
     def __eq__(self, other):
@@ -136,8 +136,8 @@ class Msg(object):
 
     @classmethod
     def decode(cls, header_list=[], body=''):
-        headers = dict((h[:h.index(':')], h[h.index(':') + 1:]) for h in header_list)
-        body = pickle.loads(base64.b64decode(body))
+        headers = dict((h[:h.index(':')], standard_b64decode(h[h.index(':') + 1:])) for h in header_list)
+        body = pickle.loads(standard_b64decode(body))
         return Msg(headers=headers, body=body)
 
     @classmethod
@@ -308,7 +308,7 @@ def dump_json(obj):
         elif isinstance(o, time):
             return o.strftime(TIME_FMT)
         else:
-            raise TypeError('Object %s not supporot by JSON encoder', o)
+            raise TypeError('Object %s not support by JSON encoder', o)
     return json.dumps(obj, default=dt_converter)
 
 

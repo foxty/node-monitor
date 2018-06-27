@@ -11,12 +11,13 @@ Build scirpt for node-monitor
 
 import os, sys
 import logging
+import yaml
 from datetime import timedelta, datetime
 from subprocess import check_call, check_output, CalledProcessError
 
 BASE_PATH = sys.path[0]
-VERSION = '1.0.0-SNAPSHOT'
-DOCKER_IMG_TAG = 'registry.cn-shenzhen.aliyuncs.com/foxty/node-monitor:%s' % VERSION
+VERSION = '1.0.0-%s'
+DOCKER_IMG_TAG = 'registry.cn-shenzhen.aliyuncs.com/foxty/node-monitor:%s'
 
 
 def run_cmd(title, cmd):
@@ -47,7 +48,7 @@ def build_ui():
     """
     logging.info('[ui] build ui component')
     # step 1 install js libs
-    ret = run_cmd('[ui] install javascript libraries',
+    ret = run_cmd('[ui] install javascript libs',
                   ["cd", "web", "&&", "npm", "install", "--production"])
     # step 2 webpack build
     ret = run_cmd('[ui] webpack build', ['cd', 'web', '&&', 'npm', 'run', 'build']) if ret else False
@@ -72,11 +73,33 @@ def build_master():
     return ret
 
 
+def update_k8s_deployer():
+    cfgpath = os.path.join(sys.path[0], 'deploy', 'node-monitor.yaml')
+    logging.info('replace DOCKER_IMAGE_TAG in %s', cfgpath)
+    cfgs = []
+    with open(cfgpath) as k8scfg:
+        cfg = yaml.load_all(k8scfg)
+        for c in cfg:
+            if c['kind'] == 'Deployment':
+                c['spec']['template']['spec']['containers'][0]['image'] = DOCKER_IMG_TAG
+            cfgs.append(c)
+    with open(cfgpath, 'w') as k8scfg:
+        yaml.dump_all(cfgs, k8scfg)
+    return True
+
+
 if __name__ == '__main__':
+    if '--prod' in sys.argv or '--production' in sys.argv:
+        VERSION = VERSION % datetime.now().strftime('%Y%m%d%H%M%S')
+        DOCKER_IMG_TAG = DOCKER_IMG_TAG % VERSION
+    else:
+        VERSION = VERSION % 'SNAPSHOT'
+        DOCKER_IMG_TAG = DOCKER_IMG_TAG % VERSION
+
     logging.basicConfig(level=logging.INFO)
     start = datetime.now()
     logging.info('start build node-monitor@%s...', VERSION)
-    res = build_ui() and build_master()
+    res = build_ui() and build_master() and update_k8s_deployer()
     logging.info('node-monitor@%s build %s, take %s seconds',
                  VERSION,
                  'succeed' if res else 'failed.',

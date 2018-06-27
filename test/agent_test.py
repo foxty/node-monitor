@@ -57,7 +57,7 @@ class AgentConfigTest(unittest.TestCase):
 
     def test_service_metrics(self):
         metrics = self.CONFIG.service_metrics
-        self.assertEqual(2, len(metrics))
+        self.assertEqual(3, len(metrics))
         pidstat = metrics['pidstat']
         self.assertEqual(["pidstat", "-tdruh", "-p", "${pid}"], pidstat['cmd'])
 

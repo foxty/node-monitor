@@ -91,8 +91,8 @@
                 var self = this;
                 var aid = self.aid;
                 var sid = self.service_id
-                var startAt = encodeURIComponent(self.startAt.format())
-                var endAt = encodeURIComponent(self.endAt.format())
+                var startAt = self.startAt.valueOf()
+                var endAt = self.endAt.valueOf()
                 var q = `start_at=${startAt}&end_at=${endAt}`
                 var markerLines = []
                 new Promise(function(resolve){

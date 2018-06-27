@@ -194,12 +194,13 @@ class Master(object):
     def _agent_reg(self, msg):
         agent = self.find_agent(msg.agentid)
         ahostname = msg.body['hostname']
+        aname = ahostname + '@' + msg.body['os']
         if agent:
-            agent.set(name=ahostname)
+            agent.set(name=aname)
             logging.info('activate existing agent %s', agent)
             # TODO activation
         else:
-            agent = model.Agent(msg.agentid, ahostname, msg.client_addr[0], datetime.now())
+            agent = model.Agent(msg.agentid, aname, ahostname, create_at=datetime.utcnow())
             agent.save()
             logging.info('new agent %s registered', agent)
             self._agents[agent.aid] = agent
@@ -207,6 +208,7 @@ class Master(object):
 
     def _agent_heartbeat(self, msg):
         agent = self.find_agent(msg.agentid)
+        agent.set(last_msg_at=datetime.utcnow())
         logging.debug('heart beat get from %s', agent)
         return True
 
@@ -216,7 +218,7 @@ class Master(object):
         body = msg.body
         collect_time = msg.collect_at
 
-        metrics = map(lambda x: model.NMetric(aid, collect_time, x[0], x[1], datetime.now()), body.items())
+        metrics = map(lambda x: model.NMetric(aid, collect_time, x[0], x[1], datetime.utcnow()), body.items())
         model.NMetric.save_all(metrics)
 
         memrep, cpurep, sysrep = None, None, None
@@ -242,7 +244,7 @@ class Master(object):
         last_cpu_util = cpurep.used_util if cpurep else None
         last_mem_util = memrep.used_util if memrep else None
         last_sys_load1, last_sys_cs = (sysrep.load1, sysrep.sys_cs) if sysrep else (None, None)
-        agent.set(last_msg_at=datetime.now(),
+        agent.set(last_msg_at=datetime.utcnow(),
                   last_cpu_util=last_cpu_util,
                   last_mem_util=last_mem_util,
                   last_sys_load1=last_sys_load1,
@@ -256,7 +258,7 @@ class Master(object):
         sname = body['name']
         spid = body['pid']
         stype = body.get('type', None)
-        smetrics = [model.SMetric(aid, collect_at, sname, spid, mname, mcontent, datetime.now())
+        smetrics = [model.SMetric(aid, collect_at, sname, spid, mname, mcontent, datetime.utcnow())
                     for mname, mcontent in body['metrics'].items()]
         model.SMetric.save_all(smetrics)
 

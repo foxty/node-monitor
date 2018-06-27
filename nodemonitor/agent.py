@@ -19,7 +19,6 @@ import select
 import re
 import Queue as Q
 import threading
-import hashlib
 from datetime import datetime
 from subprocess import Popen, PIPE, call
 from common import Msg, InvalidMsgError, is_win, is_sunos, ostype, OSType
@@ -426,7 +425,7 @@ class NodeCollector(threading.Thread):
 
     def _prod_heartbeat(self):
         logging.info('produce heartbeat...')
-        body = {'datetime': datetime.now()}
+        body = {'datetime': datetime.utcnow()}
         hb_msg = Msg.create_msg(self._agentid, Msg.A_HEARTBEAT, body)
         self._agent.add_msg(hb_msg)
 
@@ -469,7 +468,7 @@ class NodeCollector(threading.Thread):
                 nmetrics_result[nm['name']] = self._get_cmd_result(nm['cmd'])
         if nmetrics_result:
             msg = Msg.create_msg(self._agentid, Msg.A_NODE_METRIC, nmetrics_result)
-            msg.set_header(msg.H_COLLECT_AT, datetime.now())
+            msg.set_header(msg.H_COLLECT_AT, datetime.utcnow())
             self._agent.add_msg(msg)
             logging.info('%d node metrics collected', len(nmetrics_result))
         else:
@@ -522,7 +521,7 @@ class NodeCollector(threading.Thread):
         service_result['metrics'] = service_metrics
         # send message
         msg = Msg.create_msg(self._agentid, Msg.A_SERVICE_METRIC, service_result)
-        msg.set_header(Msg.H_COLLECT_AT, datetime.now())
+        msg.set_header(Msg.H_COLLECT_AT, datetime.utcnow())
         self._agent.add_msg(msg)
         logging.info('%d metrics collected for %s.', len(service_metrics), name)
         return service_result
@@ -575,11 +574,10 @@ class NodeAgent:
     def _gen_agentid(self):
         aid = None
         if ostype() in [OSType.WIN, OSType.SUNOS]:
-            md5 = hashlib.md5()
-            md5.update(self._hostname)
-            aid = md5.hexdigest()
+            aid = self._hostname
         else:
             aid = check_output(['hostid'])
+        logging.info('agent id %s generated for %s', aid, self._hostname)
         return aid
 
     def _connect_master(self):
@@ -643,7 +641,7 @@ class NodeAgent:
     def _do_reg(self):
         """Produce a agent reg message after connected"""
         logging.info('do registration...')
-        reg_data = {'os': os.name, 'hostname': self._hostname}
+        reg_data = {'os': ostype(), 'hostname': self._hostname}
         reg_msg = Msg.create_msg(self._agentid, Msg.A_REG, reg_data)
         self.add_msg(reg_msg)
 
@@ -684,15 +682,15 @@ class NodeAgent:
             except Q.Empty:
                 logging.warn('Try to get msg from empty queue..')
                 return
-            msg.set_header(msg.H_SEND_AT, datetime.now())
+            msg.set_header(msg.H_SEND_AT, datetime.utcnow())
             headers, body = msg.encode()
-            headers.append(body)
-            data = '\n'.join(headers)
+            data = '\n'.join(headers + [body])
             datasize = len(data)
             self._send_data(sock, 'MSG:%d\n' % datasize)
             times = self._send_data(sock, data)
             logging.info('send msg type=%s, datasize=%d, times=%d to=%s',
                           msg.msg_type, datasize, times, self._master_addr)
+            logging.debug('msg data = %s', data)
 
     def _send_data(self, sock, data):
         times = 0

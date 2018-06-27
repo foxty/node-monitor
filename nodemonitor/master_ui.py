@@ -27,10 +27,10 @@ _APP = Flask(__name__,
 
 
 def calc_daterange(req):
-    start_at = req.args.get('start_at')
-    end_at = req.args.get('end_at')
-    start = datetime.strptime(start_at[:19], '%Y-%m-%dT%H:%M:%S')
-    end = datetime.strptime(end_at[:19], '%Y-%m-%dT%H:%M:%S')
+    start_at = float(req.args.get('start_at'))
+    end_at = float(req.args.get('end_at'))
+    start = datetime.utcfromtimestamp(start_at/1000)
+    end = datetime.utcfromtimestamp(end_at/1000)
     return start, end
 
 
@@ -66,7 +66,7 @@ def get_agents():
     mport = _CONFIG['master']['server']['port']
     master_addr = '%s:%s' % (mhost, mport)
     agents = Agent.query(orderby='last_msg_at DESC')
-    thresh = datetime.now() - timedelta(minutes=5)
+    thresh = datetime.utcnow() - timedelta(minutes=5)
     for a in agents:
         a.status = 'active' if a.last_msg_at and a.last_msg_at >= thresh else 'inactive'
     return dump_json({'agents': agents, 'master_addr': master_addr})

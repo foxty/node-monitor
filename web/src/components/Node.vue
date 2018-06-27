@@ -18,7 +18,7 @@
             </ul>
         </div>
         <div class="col-md-10">
-            <div class="alert alert-info">Node {{agent ? agent.name + '@' + agent.host : ''}}</div>
+            <div class="alert alert-info">Node {{agent ? agent.name : ''}}</div>
             <router-view></router-view>
         </div>
     </div>

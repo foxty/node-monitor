@@ -3,6 +3,14 @@ Common libs
  */
 
 
+// parse json
+const DATETIME_RE = /^\d{4}-\d{1,2}-\d{1,2}T\d{2}:\d{2}:\d{2}Z$/
+const parseJson = function(text) {
+    JSON.parse(text, (key, value) => {
+        typeof value == 'string' && DATETIME_RE.test(value) ? new Date(value) : value
+    })
+}
+
 /**Echarts**/
 const genChartOption = function (title, data, cateProp, seriesPropsMapping, options) {
     options = options || {}
@@ -16,8 +24,11 @@ const genChartOption = function (title, data, cateProp, seriesPropsMapping, opti
     var seriesMap = {}
     var legends = []
     data.forEach(function (d) {
-        var serieDataCatetory = d[cateProp]
-        category.push(serieDataCatetory)
+        var serieCategory = d[cateProp]
+        serieCategory = typeof serieCategory == 'string' && DATETIME_RE.test(serieCategory)
+            ? new Date(serieCategory)
+            : serieCategory
+        category.push(serieCategory)
         for (var serieName in seriesPropsMapping) {
             var serie = seriesMap[serieName];
             if (!serie) {
@@ -31,7 +42,7 @@ const genChartOption = function (title, data, cateProp, seriesPropsMapping, opti
             }
             var serieDataProp = seriesPropsMapping[serieName];
             var serieDataValue = d[serieDataProp]
-            serie.data.push(serieDataValue)
+            serie.data.push([serieCategory, serieDataValue])
         }
     })
     var series = [];
@@ -50,14 +61,9 @@ const genChartOption = function (title, data, cateProp, seriesPropsMapping, opti
             data: legends
         },
         xAxis: {
-            type: 'category',
+            type: 'time',
             data: category,
-            boundaryGap: false,
-            axisLabel: {
-                formatter: function (v, idx) {
-                    return v.substr(5, v.length)
-                }
-            }
+            boundaryGap: false
         },
         yAxis: {
             type: 'value',

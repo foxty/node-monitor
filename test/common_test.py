@@ -15,7 +15,7 @@ class CommonTest(unittest.TestCase):
     def test_dumpjson_date(self):
         dt = datetime(2018, 1, 8, 17, 26, 26, 999)
         json_dt = dump_json(dt)
-        self.assertEqual('"2018-01-08 17:26:26"', json_dt)
+        self.assertEqual('"2018-01-08T17:26:26Z"', json_dt)
 
         d = dt.date()
         json_d = dump_json(d)
@@ -26,10 +26,10 @@ class CommonTest(unittest.TestCase):
         self.assertEqual('"17:26:26"', json_t)
 
     def test_loadjson_date(self):
-        json_dt = '{"date":"2018-01-08 17:26:26", ' \
-                  '"entry1":{"start_dt":"2018-01-08 17:26:27", "d":"2018-01-01", "t":"01:01:01"}}'
+        json_dt = '{"date":"2018-01-08T17:26:26Z", ' \
+                  '"entry1":{"start_dt":"2018-01-08T17:26:27Z", "d":"2018-01-01", "t":"01:01:01"}}'
         dt = load_json(json_dt)
-        self.assertEqual('2018-01-08 17:26:26', dt['date'].strftime(DATETIME_FMT))
+        self.assertEqual('2018-01-08T17:26:26Z', dt['date'].strftime(DATETIME_FMT))
         self.assertEqual('2018-01-01', dt['entry1']['d'].strftime(DATE_FMT))
         self.assertEqual('01:01:01', dt['entry1']['t'].strftime(TIME_FMT))
 
@@ -112,6 +112,10 @@ class MonMsgTest(unittest.TestCase):
         self.assertEqual(Msg.NONE, m1.msg_type)
         self.assertEqual('', m1.body)
 
+    def test_specialchar_header(self):
+        msg = Msg.create_msg('123\n456', Msg.A_REG)
+        self.assertEqual('123\n456', msg.agentid)
+
     def test_collectat(self):
         now = datetime.now()
         m = Msg.create_msg('1', Msg.A_SERVICE_METRIC)
@@ -145,7 +149,20 @@ class MonMsgTest(unittest.TestCase):
 
         header_list, encbody = msg.encode()
         self.assertEqual(2, len(header_list))
-        self.assertEqual(msg_body, pickle.loads(base64.b64decode(encbody)))
+        self.assertEqual(msg_body, pickle.loads(standard_b64decode(encbody)))
+
+        msg1 = Msg.decode(header_list, encbody)
+        self.assertEqual(msg, msg1)
+        self.assertIsNone(msg1.send_at)
+
+    def test_special_char_enc_dec(self):
+        msg_body = "12\n\t\n\t34中文"
+        msg = Msg.create_msg('1234\n5678', Msg.A_HEARTBEAT, msg_body)
+        self.assertEqual(Msg.A_HEARTBEAT, msg.msg_type)
+
+        header_list, encbody = msg.encode()
+        self.assertEqual(2, len(header_list))
+        self.assertEqual(msg_body, pickle.loads(standard_b64decode(encbody)))
 
         msg1 = Msg.decode(header_list, encbody)
         self.assertEqual(msg, msg1)

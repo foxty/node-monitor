@@ -125,13 +125,14 @@
             loadReports: function() {
                 var self = this;
                 var aid = self.aid;
-                var startAt = encodeURIComponent(self.startAt.format())
-                var endAt = encodeURIComponent(self.endAt.format())
+                var startAt = self.startAt.valueOf()
+                var endAt = self.endAt.valueOf()
                 var q = `start_at=${startAt}&end_at=${endAt}`
                 self.$http.get(`/api/agents/${aid}/report/system?${q}`).then(resp => {
                     return resp.json()
                 }).then(reports => {
                     self.sysReports = reports
+                    console.log(reports)
                 })
 
                 self.$http.get(`/api/agents/${aid}/report/cpu?${q}`).then(resp => {
