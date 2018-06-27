@@ -16,7 +16,7 @@ from datetime import timedelta, datetime
 from subprocess import check_call, check_output, CalledProcessError
 
 BASE_PATH = sys.path[0]
-VERSION = '1.0.0-%s'
+VERSION = 'v1.0.0-%s'
 DOCKER_IMG_TAG = 'registry.cn-shenzhen.aliyuncs.com/foxty/node-monitor:%s'
 
 
@@ -82,6 +82,8 @@ def update_k8s_deployer():
         for c in cfg:
             if c['kind'] == 'Deployment':
                 c['spec']['template']['spec']['containers'][0]['image'] = DOCKER_IMG_TAG
+                c['spec']['template']['spec']['containers'][0]['imagePullPolicy'] = 'Always' \
+                    if VERSION.endswith('SNAPSHOT') else 'IfNotPresent'
             cfgs.append(c)
     with open(cfgpath, 'w') as k8scfg:
         yaml.dump_all(cfgs, k8scfg)
