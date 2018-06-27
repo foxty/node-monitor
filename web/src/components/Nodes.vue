@@ -35,10 +35,10 @@
                         </span>
                 </td>
                 <td>{{a.host}}</td>
-                <td>{{a.last_cpu_util || '-'}}</td>
-                <td>{{a.last_mem_util || '-'}}</td>
-                <td>{{a.last_sys_load1 || '-'}}</td>
-                <td>{{a.last_sys_cs || '-'}}</td>
+                <td>{{a.last_cpu_util}}</td>
+                <td>{{a.last_mem_util}}</td>
+                <td>{{a.last_sys_load1}}</td>
+                <td>{{a.last_sys_cs}}</td>
                 <td>{{a.last_msg_at.fromNow()}}</td>
                 <td>
                     <button class="btn btn-sm btn-warning" @click="refreshNode(a)">
