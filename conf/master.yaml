@@ -3,10 +3,15 @@ master:
     host: 0.0.0.0
     port: 30079
   database:
-    type: 'sqlite'
-    url: '/opt/node-monitor/db/'
-    user: 'root'
-    password: ''
+    info:
+      type: sqlite
+      url: /opt/node-monitor/db/info.sqlite3
+      user: root
+      password:
+    tsd:
+      type: opentsdb
+      host: localhost
+      port: 4242
   data_retention:
     interval: 86400 # seconds
     policy: # days
@@ -24,4 +29,3 @@ ui:
     host: '0.0.0.0'
     port: 30080
 
-agent: ''

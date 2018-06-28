@@ -15,7 +15,7 @@ from datetime import datetime, timedelta
 from flask import Flask, request, make_response, render_template, got_request_exception
 from common import dump_json
 from model import Agent, NSystemReport, NCPUReport, NMemoryReport, NDiskReport, \
-    SInfo, SInfoHistory, SPidstatReport, SJstatGCReport
+    SInfo, SInfoHistory, SPidstatReport, SJstatGCReport, init_db
 from master_cli import NodeConnector
 
 
@@ -184,6 +184,10 @@ def ui_main(config, debug=False):
                         datefmt='%m-%d %H:%M:%S',
                         format='%(asctime)s-%(threadName)s:%(levelname)s:%(name)s:%(module)s.%(lineno)d:%(message)s')
     logging.info('starting master ui...')
+    basepath = os.path.dirname(sys.path[0])
+    schemapath = os.path.join(basepath, 'conf', 'schema.sql')
+    dbcfg = cfg['master']['database']
+    init_db(dbcfg, schemapath)
     global _CONFIG
     _CONFIG = config
     _APP.jinja_env.variable_start_string = '{-'

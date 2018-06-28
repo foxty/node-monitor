@@ -16,32 +16,55 @@ from collections import namedtuple
 from datetime import datetime, timedelta
 
 
-DB_PATH = '/opt/node-monitor/db/'
-DB_NAME = DB_PATH + 'master.db'
-if not os.path.exists(DB_PATH):
-    logging.warn('create folder for database file %s', DB_PATH)
-    os.makedirs(DB_PATH)
+DB_CONFIG = None
 
 
-def dao(f):
-    def dao_decorator(*kargs, **kdargs):
-        with sqlite3.connect(DB_NAME,
-                             detect_types=sqlite3.PARSE_DECLTYPES|sqlite3.PARSE_COLNAMES) as conn:
-            c = conn.cursor()
-            kdargs['cursor'] = c
+def init_db(dbconfig, schema):
+    """
+    setup database by sqlite3
+    :return:
+    """
+    global DB_CONFIG
+    DB_CONFIG = dbconfig
+    logging.info('init db with config: %s', dbconfig)
+    dburl = dbconfig['info']['url']
+    dbfolder = os.path.dirname(dburl)
+    if dbfolder and not os.path.exists(dbfolder):
+        logging.warn('create folder for database file %s', dbfolder)
+        os.makedirs(dbfolder)
+    logging.info('initialize db schemas for %s', dburl)
+    with sqlite3.connect(dburl, detect_types=sqlite3.PARSE_DECLTYPES|sqlite3.PARSE_COLNAMES) as conn:
+        c = conn.cursor()
+        with open(schema, 'r') as f:
+            c.executescript(f.read())
+        conn.commit()
+        c.close()
+
+
+def dao(db):
+    def db_info(f):
+        def dao_decorator(*kargs, **kdargs):
+            with sqlite3.connect(DB_CONFIG['info']['url'],
+                                 detect_types=sqlite3.PARSE_DECLTYPES|sqlite3.PARSE_COLNAMES) as conn:
+                c = conn.cursor()
+                kdargs['cursor'] = c
+                r = f(*kargs, **kdargs)
+                conn.commit()
+                c.close()
+            return r
+        return dao_decorator
+
+    def db_tsd(f):
+        def dao_decorator(*kargs, **kdargs):
+            dburl = 'http://' + DB_CONFIG['tsd']['host'] + ':' + DB_CONFIG['tsd']['port']
+            kdargs['dburl'] = dburl
             r = f(*kargs, **kdargs)
-            conn.commit()
-            c.close()
-        return r
-    return dao_decorator
-
-
-@dao
-def create_schema(schema, cursor):
-    logging.info('init master db with schema %s', schema)
-    with open(schema, 'r') as f:
-        cursor.executescript(f.read())
-    logging.info('init master db done')
+            return r
+        return dao_decorator
+    if callable(db):
+        return db_info(db)
+    else:
+        return db_info if db == 'info' else db_tsd
 
 
 @dao
@@ -223,6 +246,68 @@ class Model(dict):
     @classmethod
     def find_model(cls, tablename):
         return cls._MAPPINGS[tablename]
+
+
+class TSDModel(dict):
+    _METRIC_PREFIX = 'model'
+    _METRICS = []
+    _TAGS = []
+
+    def __init__(self, **kwargs):
+        self.timestamp = kwargs.pop('timestamp')
+        upd = None
+        kwupd = self._check_updates(kwargs)
+        upd = kwupd if not upd else upd + kwupd
+        if upd:
+            self.update({k: v for k, v in upd if v is not None})
+
+    def __getattr__(self, item):
+        if item in self._METRICS or item in self._TAGS or item == 'timestamp':
+            return self.get(item, None)
+        else:
+            raise InvalidFieldError('model field "%s" not defined.' % item)
+
+    def __setattr__(self, key, value):
+        if key in self._METRICS or key in self._TAGS or key == 'timestamp':
+            self[key] = value
+        else:
+            raise InvalidFieldError('field %s not defined.' % key)
+
+    def _check_updates(self, kwargs):
+        if kwargs:
+            diff = kwargs.viewkeys() - set(self._METRICS + self._TAGS)
+            if diff:
+                raise InvalidFieldError(','.join(diff))
+            else:
+                upd = kwargs.items()
+        else:
+            upd = []
+        return upd
+
+    @dao('tsd')
+    def save(self, dburl):
+        """
+        save current model to opentsdb
+        :param cursor:
+        :return:
+        """
+        logging.debug('saving model %s to %s', self, dburl)
+        logging.info('save tsd model %s', self._METRIC_PREFIX)
+        return self
+
+    @classmethod
+    @dao('tsd')
+    def save_all(cls, l, dburl):
+        records = [m.as_tuple() for m in l]
+        logging.info('save all records %s to tsdb %s', l, dburl)
+
+    @classmethod
+    @dao('tsd')
+    def query(cls, agg=None, tags=None, downsample=None, dburl=None):
+        """
+        query data form tsdb
+        """
+        logging.info('query data from %s', dburl)
 
 
 class AgentChronoModel(object):

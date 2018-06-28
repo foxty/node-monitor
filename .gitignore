@@ -104,6 +104,7 @@ ENV/
 *.iml
 Python*.tgz
 *.db
+*.sqlite3
 /web/static/lib
 nodes.txt
 out

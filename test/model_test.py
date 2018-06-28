@@ -16,12 +16,22 @@ from uuid import uuid4
 from common import Msg
 from master import Master, DataKeeper
 
-model.DB_NAME = 'test.db'
-
 
 class BaseDBTest(unittest.TestCase):
     def setUp(self):
-        model.create_schema('../conf/schema.sql')
+        dbconfig = {
+            'info': {
+                'type': 'sqlite',
+                'url': 'test.sqlite3',
+                'user': 'root'
+            },
+            'tsd': {
+                'type': 'opentsdb',
+                'host': 'localhost',
+                'port': 4242
+            }
+        }
+        model.init_db(dbconfig, '../conf/schema.sql')
 
     def tearDown(self):
         model.Agent.delete()
@@ -95,7 +105,7 @@ class ModelTest(unittest.TestCase):
 
         ma = ModelTest.ModelA(1, 2, 3, 4)
         t = ma.as_tuple()
-        self.assertEqual((1,2,3,4), t)
+        self.assertEqual((1, 2, 3, 4), t)
 
     def test_nonexsit_fields(self):
         ma = ModelTest.ModelA()
@@ -142,6 +152,24 @@ class ModelTest(unittest.TestCase):
         self.assertEqual(2, ma.a1)
         self.assertEqual('a2', ma.a2)
         self.assertEqual(3.3, ma.a3)
+
+
+class TSDModelTest(unittest.TestCase):
+    class TSDModelA(model.TSDModel):
+        _METRIC_PREFIX = 'test.prefix'
+        _METRICS = ['m1', 'm2', 'm3']
+        _TAGS = ['tag1', 'tag2']
+
+    def test_creation(self):
+        tm = TSDModelTest.TSDModelA(timestamp=123455)
+        self.assertEqual(1, len(tm))
+        self.assertEqual(123455, tm.timestamp)
+
+        tm = TSDModelTest.TSDModelA(timestamp=1234, tag1=1, m1=11)
+        self.assertEqual(3, len(tm))
+        self.assertEqual(1234, tm.timestamp)
+        self.assertEqual(1, tm.tag1)
+        self.assertEqual(11, tm.m1)
 
 
 class AgentTest(BaseDBTest):
@@ -233,7 +261,7 @@ class SInfoTest(BaseDBTest):
         self.assertEqual(id1, infos[1].id)
 
     def test_chkstatus(self):
-        d1 = datetime.now() - timedelta(seconds=100)
+        d1 = datetime.utcnow() - timedelta(seconds=100)
         sinfo = model.SInfo(last_report_at=d1, status=model.SInfo.STATUS_INACT)
         self.assertTrue(sinfo.chkstatus(200))
         self.assertFalse(sinfo.chkstatus(99))

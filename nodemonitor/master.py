@@ -331,8 +331,9 @@ def master_main(cfg):
                         format='%(asctime)s-%(threadName)s:%(levelname)s:%(name)s:%(module)s.%(lineno)d:%(message)s')
     basepath = os.path.dirname(sys.path[0])
     schemapath = os.path.join(basepath, 'conf', 'schema.sql')
+    dbcfg = cfg['master']['database']
+    model.init_db(dbcfg, schemapath)
     global _MASTER
-    model.create_schema(schemapath)
     _MASTER = Master(cfg)
     _MASTER.start()
 
