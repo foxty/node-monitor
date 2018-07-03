@@ -9,12 +9,11 @@ dao and model for master
 
 """
 
-import os
 import logging
+import os
 import sqlite3
-from collections import namedtuple
+import requests
 from datetime import datetime, timedelta
-
 
 DB_CONFIG = None
 
@@ -56,7 +55,7 @@ def dao(db):
 
     def db_tsd(f):
         def dao_decorator(*kargs, **kdargs):
-            dburl = 'http://' + DB_CONFIG['tsd']['host'] + ':' + DB_CONFIG['tsd']['port']
+            dburl = 'http://%s:%s' % (DB_CONFIG['tsd']['host'], DB_CONFIG['tsd']['port'])
             kdargs['dburl'] = dburl
             r = f(*kargs, **kdargs)
             return r
@@ -84,10 +83,12 @@ def _drop_schema(cursor):
     """)
 
 
-class InvalidFieldError(Exception): pass
+class InvalidFieldError(Exception):
+    pass
 
 
-class NoPKError(Exception): pass
+class NoPKError(Exception):
+    pass
 
 
 class Model(dict):
@@ -288,12 +289,23 @@ class TSDModel(dict):
     def save(self, dburl):
         """
         save current model to opentsdb
-        :param cursor:
-        :return:
         """
         logging.debug('saving model %s to %s', self, dburl)
         logging.info('save tsd model %s', self._METRIC_PREFIX)
-        return self
+        values = []
+        for metric in self._METRICS:
+            value = dict()
+            value['metric'] = self._METRIC_PREFIX + '.' + metric
+            value['timestamp'] = self.timestamp
+            value['value'] = self[metric]
+            value['tags'] = {t: self[t] for t in self._TAGS}
+            values.append(value)
+        logging.debug('metrics %s will post to remote tsdb %s', values, dburl)
+        r = requests.post(dburl + '/api/put?detail', json=values)
+        rj = r.json()
+        logging.info('metrics %s saved to tsdb with %s success, %s failed, errors=%s',
+                     rj.success, rj.failed, rj.errors)
+        return r.status_code == 204
 
     @classmethod
     @dao('tsd')

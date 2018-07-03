@@ -8,13 +8,11 @@ Created on 2017-12-22
 
 import unittest
 import os
-import time
 import model
-import content_parser
+import mock
+import requests
 from datetime import datetime, timedelta
 from uuid import uuid4
-from common import Msg
-from master import Master, DataKeeper
 
 
 class BaseDBTest(unittest.TestCase):
@@ -154,7 +152,7 @@ class ModelTest(unittest.TestCase):
         self.assertEqual(3.3, ma.a3)
 
 
-class TSDModelTest(unittest.TestCase):
+class TSDModelTest(BaseDBTest):
     class TSDModelA(model.TSDModel):
         _METRIC_PREFIX = 'test.prefix'
         _METRICS = ['m1', 'm2', 'm3']
@@ -170,6 +168,35 @@ class TSDModelTest(unittest.TestCase):
         self.assertEqual(1234, tm.timestamp)
         self.assertEqual(1, tm.tag1)
         self.assertEqual(11, tm.m1)
+
+    def test_save(self):
+        with mock.patch('requests.Response') as resp:
+            resp.status_code = 400
+            resp.json = mock.MagicMock(retrn_value={})
+            requests.post = mock.Mock(return_value=resp)
+            tm = TSDModelTest.TSDModelA(timestamp=12345, m1=1.1, m2=1.2, m3=1.3, tag1='t1', tag2='t2')
+            re = tm.save()
+            tags = {'tag1': 't1', 'tag2': 't2'}
+            expdata = [{
+                'timestamp': 12345,
+                'metric': 'test.prefix.m1',
+                'value': 1.1,
+                'tags': tags
+            }, {
+                'timestamp': 12345,
+                'metric': 'test.prefix.m2',
+                'value': 1.2,
+                'tags': tags
+            }, {
+                'timestamp': 12345,
+                'metric': 'test.prefix.m3',
+                'value': 1.3,
+                'tags': tags
+            }]
+
+            requests.post.assert_called_with('http://localhost:4242/api/put?detail', json=expdata)
+            requests.post.assert_called_once()
+            self.assertFalse(re)
 
 
 class AgentTest(BaseDBTest):
