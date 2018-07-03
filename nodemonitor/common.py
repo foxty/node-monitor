@@ -17,17 +17,29 @@ try:
     import json, json.decoder
 except:
     pass
+import logging.handlers
 import pickle
 from base64 import standard_b64encode, standard_b64decode
 from datetime import datetime, date, time
 from struct import *
 
+LOGGING_FMT = '%(asctime)s-%(threadName)s:%(levelname)s:%(name)s:%(module)s.%(lineno)d:%(message)s'
 DATETIME_FMT = '%Y-%m-%dT%H:%M:%SZ'
 DATETIME_RE = re.compile('^\\d{4}-\\d{1,2}-\\d{1,2}T\\d{2}:\\d{2}:\\d{2}Z$')
 DATE_FMT = '%Y-%m-%d'
 DATE_RE = re.compile('^\\d{4}-\\d{1,2}-\\d{1,2}$')
 TIME_FMT = '%H:%M:%S'
 TIME_RE = re.compile('^\\d{2}:\\d{2}:\\d{2}$')
+
+
+def set_logging(filename, when='d', backupCount=7):
+    logging.basicConfig(level=logging.INFO,
+                        datefmt=DATETIME_FMT,
+                        format=LOGGING_FMT)
+    trh = logging.handlers.TimedRotatingFileHandler(filename, when=when, backupCount=backupCount)
+    trh.setLevel(logging.INFO)
+    trh.setFormatter(logging.Formatter(fmt=LOGGING_FMT, datefmt=DATETIME_FMT))
+    logging.root.addHandler(trh)
 
 
 class ConfigError(Exception):

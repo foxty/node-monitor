@@ -13,6 +13,7 @@ Node Agent
 import os
 import sys
 import logging
+import logging.handlers
 import getopt
 import socket
 import select
@@ -21,7 +22,7 @@ import Queue as Q
 import threading
 from datetime import datetime
 from subprocess import Popen, PIPE, call
-from common import Msg, InvalidMsgError, is_win, is_sunos, ostype, OSType
+from common import Msg, InvalidMsgError, is_win, is_sunos, ostype, OSType, set_logging
 
 
 _MAX_BACKOFF_SECOND = 60  # in agent retry policy
@@ -714,9 +715,7 @@ class NodeAgent:
 
 if __name__ == '__main__':
     basepath = os.path.dirname(sys.path[0])
-    logging.basicConfig(level=logging.INFO,
-                        datefmt='%m-%d %H:%M:%S',
-                        format='%(asctime)s-%(threadName)s:%(levelname)s:%(name)s:%(module)s.%(lineno)d:%(message)s')
+    set_logging('agent.log')
     args = sys.argv[1:]
     mhost = 'localhost'
     mport = 30079

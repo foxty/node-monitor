@@ -22,7 +22,7 @@ import yaml
 from datetime import datetime, timedelta
 from threading import Timer
 from uuid import uuid4
-from common import Msg, InvalidMsgError
+from common import Msg, InvalidMsgError, set_logging
 
 
 _MASTER = None
@@ -326,9 +326,7 @@ class Master(object):
 
 
 def master_main(cfg):
-    logging.basicConfig(level=logging.INFO,
-                        datefmt='%m-%d %H:%M:%S',
-                        format='%(asctime)s-%(threadName)s:%(levelname)s:%(name)s:%(module)s.%(lineno)d:%(message)s')
+    set_logging('master.log')
     basepath = os.path.dirname(sys.path[0])
     schemapath = os.path.join(basepath, 'conf', 'schema.sql')
     dbcfg = cfg['master']['database']

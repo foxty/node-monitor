@@ -12,8 +12,8 @@ import logging
 import socket
 import yaml
 from datetime import datetime, timedelta
-from flask import Flask, request, make_response, render_template, got_request_exception
-from common import dump_json
+from flask import Flask, request, render_template
+from common import dump_json, set_logging
 from model import Agent, NSystemReport, NCPUReport, NMemoryReport, NDiskReport, \
     SInfo, SInfoHistory, SPidstatReport, SJstatGCReport, init_db
 from master_cli import NodeConnector
@@ -180,9 +180,7 @@ def get_service_jstatgc(aid, service_id):
 
 
 def ui_main(config, debug=False):
-    logging.basicConfig(level=logging.INFO,
-                        datefmt='%m-%d %H:%M:%S',
-                        format='%(asctime)s-%(threadName)s:%(levelname)s:%(name)s:%(module)s.%(lineno)d:%(message)s')
+    set
     logging.info('starting master ui...')
     basepath = os.path.dirname(sys.path[0])
     schemapath = os.path.join(basepath, 'conf', 'schema.sql')
@@ -200,6 +198,7 @@ def ui_main(config, debug=False):
 
 if __name__ == '__main__':
     basepath = os.path.dirname(sys.path[0])
+    set_logging('ui.log')
     with open(os.path.join(basepath, 'conf', 'master.yaml')) as f:
         cfg = yaml.load(f)
     ui_main(cfg, debug=True)
