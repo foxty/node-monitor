@@ -22,7 +22,7 @@ spec:
       labels: {app: node-monitor}
     spec:
       containers:
-      - image: registry.cn-shenzhen.aliyuncs.com/foxty/node-monitor:v1.0.0-SNAPSHOT
+      - image: registry.cn-shenzhen.aliyuncs.com/foxty/node-monitor:1.0.0-SNAPSHOT
         imagePullPolicy: Always
         name: node-monitor
         ports:

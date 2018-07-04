@@ -16,7 +16,7 @@ from datetime import timedelta, datetime
 from subprocess import check_call, check_output, CalledProcessError
 
 BASE_PATH = sys.path[0]
-VERSION = 'v1.0.0-%s'
+VERSION = '1.0.0-%s'
 DOCKER_IMG_TAG = 'registry.cn-shenzhen.aliyuncs.com/foxty/node-monitor:%s'
 
 
