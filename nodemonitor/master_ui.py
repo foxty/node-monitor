@@ -180,11 +180,11 @@ def get_service_jstatgc(aid, service_id):
 
 
 def ui_main(config, debug=False):
-    set
+    set_logging('ui.log')
     logging.info('starting master ui...')
     basepath = os.path.dirname(sys.path[0])
     schemapath = os.path.join(basepath, 'conf', 'schema.sql')
-    dbcfg = cfg['master']['database']
+    dbcfg = config['master']['database']
     init_db(dbcfg, schemapath)
     global _CONFIG
     _CONFIG = config
@@ -198,7 +198,6 @@ def ui_main(config, debug=False):
 
 if __name__ == '__main__':
     basepath = os.path.dirname(sys.path[0])
-    set_logging('ui.log')
     with open(os.path.join(basepath, 'conf', 'master.yaml')) as f:
-        cfg = yaml.load(f)
-    ui_main(cfg, debug=True)
+        c = yaml.load(f)
+    ui_main(c, debug=True)
