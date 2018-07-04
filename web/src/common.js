@@ -28,13 +28,19 @@ const genChartOption = function (title, data, cateProp, seriesPropsMapping, opti
         serieCategory = typeof serieCategory == 'string' && DATETIME_RE.test(serieCategory)
             ? new Date(serieCategory)
             : serieCategory
+
         category.push(serieCategory)
         for (var serieName in seriesPropsMapping) {
             var serie = seriesMap[serieName];
             if (!serie) {
-                serie = {name: serieName, type: 'line', data: []};
+                serie = {
+                    name: serieName,
+                    type: 'line',
+                    showSymbol: false,
+                    data: []
+                };
                 if (options.stack) {
-                    serie.stack = 'Total';
+                    serie.stack = true;
                     serie.areaStyle = {normal: {}};
                 }
                 serie.markLine = options.markLine
@@ -51,9 +57,8 @@ const genChartOption = function (title, data, cateProp, seriesPropsMapping, opti
         series.push(seriesMap[serieName]);
     }
 
-    return {
+    let go = {
         title: {text: title},
-        animation: false,
         tooltip: {
             trigger: 'axis'
         },
@@ -61,9 +66,14 @@ const genChartOption = function (title, data, cateProp, seriesPropsMapping, opti
             data: legends
         },
         xAxis: {
-            type: 'time',
-            data: category,
-            boundaryGap: false
+            type: 'category',
+            boundaryGap: false,
+            axisLabel: {
+                formatter: function(value, index) {
+                    return (value.getMonth() + 1) + "/" + value.getDate() + " "
+                    + value.getHours() + ":" + value.getMinutes()
+                }
+            }
         },
         yAxis: {
             type: 'value',
@@ -82,6 +92,7 @@ const genChartOption = function (title, data, cateProp, seriesPropsMapping, opti
         ],
         series: series
     }
+    return go;
 }
 
 export {genChartOption}

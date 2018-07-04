@@ -11,7 +11,7 @@
   },
   "dependencies": {
     "bootstrap": "3.3.7",
-    "echarts": "4.0.2",
+    "echarts": "4.1.0",
     "moment": "2.22.1",
     "vue": "2.5.13",
     "vue-echarts": "*",
