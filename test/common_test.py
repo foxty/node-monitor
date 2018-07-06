@@ -33,6 +33,18 @@ class CommonTest(unittest.TestCase):
         self.assertEqual('2018-01-01', dt['entry1']['d'].strftime(DATE_FMT))
         self.assertEqual('01:01:01', dt['entry1']['t'].strftime(TIME_FMT))
 
+    def test_interpret_str(self):
+        context = {
+            'var1': 1,
+            'var2': 'v2',
+            'var3': 3.33
+        }
+        self.assertEqual('1abc2', interpret_str('1abc2', context))
+        self.assertEqual('1', interpret_str('${var1}', context))
+        self.assertEqual('a1-bv2', interpret_str('a${var1}-b${var2}', context))
+        self.assertEqual('1v23.33', interpret_str('${var1}${var2}${var3}', context))
+        self.assertEqual('default', interpret_str('${v4:default}', context))
+
 
 class TextTableTest(unittest.TestCase):
 
@@ -167,6 +179,40 @@ class MonMsgTest(unittest.TestCase):
         msg1 = Msg.decode(header_list, encbody)
         self.assertEqual(msg, msg1)
         self.assertIsNone(msg1.send_at)
+
+
+class YAMLConfigTest(unittest.TestCase):
+
+    def setUp(self):
+        self._cfgurl = os.path.join(os.path.dirname(__file__), 'common_test_master.yaml')
+        self._cfg = YAMLConfig(self._cfgurl)
+
+    def test_creation(self):
+        cfg = self._cfg
+        self.assertEqual(self._cfgurl, cfg._url)
+        self.assertIsNotNone(cfg._config)
+        self.assertTrue(type(cfg['master']) is YAMLConfig)
+
+    def test_get(self):
+        cfg = self._cfg
+        self.assertEqual("0.0.0.0", cfg['master']['server']['host'])
+        self.assertEqual(30079, cfg['master']['server']['port'])
+        self.assertEqual('localhost', cfg['master']['database']['tsd']['host'])
+        self.assertEqual('4242', cfg['master']['database']['tsd']['port'])
+
+    def test_get_exp(self):
+        cfg = self._cfg
+        os.environ['TSDB_HOST'] = 'test.tsdb.com'
+        os.environ['TSDB_PORT'] = '1234'
+        self.assertEqual('test.tsdb.com', cfg['master']['database']['tsd']['host'])
+        self.assertEqual('1234', cfg['master']['database']['tsd']['port'])
+
+
+    def test_setconfig(self):
+        with self.assertRaises(ConfigError) as ce:
+            self._cfg['test'] = 1
+        self.assertEqual('config is immutable.', ce.exception.message)
+
 
 
 if __name__ == '__main__':

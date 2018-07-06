@@ -13,7 +13,7 @@ import socket
 import yaml
 from datetime import datetime, timedelta
 from flask import Flask, request, render_template
-from common import dump_json, set_logging
+from common import YAMLConfig, dump_json, set_logging
 from model import Agent, NSystemReport, NCPUReport, NMemoryReport, NDiskReport, \
     SInfo, SInfoHistory, SPidstatReport, SJstatGCReport, init_db
 from master_cli import NodeConnector
@@ -198,6 +198,4 @@ def ui_main(config, debug=False):
 
 if __name__ == '__main__':
     basepath = os.path.dirname(sys.path[0])
-    with open(os.path.join(basepath, 'conf', 'master.yaml')) as f:
-        c = yaml.load(f)
-    ui_main(c, debug=True)
+    ui_main(YAMLConfig(os.path.join(basepath, 'conf', 'master.yaml')), debug=True)

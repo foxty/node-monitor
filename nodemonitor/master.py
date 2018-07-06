@@ -18,11 +18,10 @@ import sys
 import SocketServer
 import content_parser
 import model
-import yaml
 from datetime import datetime, timedelta
 from threading import Timer
 from uuid import uuid4
-from common import Msg, InvalidMsgError, set_logging
+from common import YAMLConfig, Msg, InvalidMsgError, set_logging
 
 
 _MASTER = None
@@ -337,6 +336,5 @@ def master_main(cfg):
 
 
 if __name__ == '__main__':
-    with open('../conf/master.yaml') as f:
-        cfg = yaml.load(f)
-    master_main(cfg)
+    basepath = os.path.dirname(sys.path[0])
+    master_main(YAMLConfig(os.path.join(basepath, 'conf', 'master.yaml')))

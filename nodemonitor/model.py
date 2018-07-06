@@ -119,13 +119,13 @@ class Model(dict):
         if item in self._FIELDS:
             return self.get(item, None)
         else:
-            raise InvalidFieldError('model field "%s" not defined.' % item)
+            raise InvalidFieldError('field "%s.%s" not defined.' % (self._TABLE, item))
 
     def __setattr__(self, key, value):
         if key in self._FIELDS:
             self[key] = value
         else:
-            raise InvalidFieldError('field %s not defined.' % key)
+            raise InvalidFieldError('field "%s.%s" not defined.' % (self._TABLE, key))
 
     def _check_updates(self, kwargs):
         if kwargs:

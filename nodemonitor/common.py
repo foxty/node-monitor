@@ -11,8 +11,10 @@ Common for node monitor
 #   Common Area (Agent & Master)
 # ==============================
 import sys
+import os
 import re
 import logging
+
 try:
     import json, json.decoder
 except:
@@ -40,6 +42,25 @@ def set_logging(filename, when='d', backupCount=7):
     trh.setLevel(logging.INFO)
     trh.setFormatter(logging.Formatter(fmt=LOGGING_FMT, datefmt=DATETIME_FMT))
     logging.root.addHandler(trh)
+
+
+VAR_PATTERN = re.compile('\${([\w_:]+)}')
+
+
+def interpret_str(content, context={}):
+    if not isinstance(content, basestring):
+        return content
+    logging.debug('interpret content=%s by context=%s', content, context)
+    keys = VAR_PATTERN.findall(content)
+    for key in keys:
+        if ':' in key:
+            k, d = key.split(':')
+        else:
+            k, d = key, None
+        value = context.get(k, d)
+        if value is not None:
+            content = content.replace('${%s}' % key, str(value))
+    return content
 
 
 class ConfigError(Exception):
@@ -144,7 +165,7 @@ class Msg(object):
             return False
 
     def __str__(self):
-        return '%s from %s'%(self.msg_type, self.agentid)
+        return '%s from %s' % (self.msg_type, self.agentid)
 
     @classmethod
     def decode(cls, header_list=[], body=''):
@@ -177,6 +198,7 @@ class TextTable(object):
     ]
 
     """
+
     def __init__(self, content, header_ln=0, vheader=False, colsep='\s+'):
         self._table = [[ele for ele in re.split(colsep, l.strip()) if ele]
                        for l in content.splitlines() if l.strip()]
@@ -287,6 +309,38 @@ class TextTableRow(object):
         return self._parent.get_float(self._row_index, header, default)
 
 
+class YAMLConfig(object):
+    LOGGER = logging.getLogger('YAMLConfig')
+    EXP_RE = re.compile('\$\{.*\}')
+
+    def __init__(self, url, config=None):
+        if config is not None:
+            self._url = url
+            self._config = config
+        else:
+            if not os.path.isfile(url):
+                raise ConfigError('config file %s not found.', url)
+            self._url = url
+            self._config = None
+            import yaml
+            with open(self._url) as s:
+                self._config = yaml.load(s)
+            self.LOGGER.info('config %s loaded.')
+
+    def __getitem__(self, item):
+        v = self._config[item]
+        if type(v) in [dict, list]:
+            return YAMLConfig(self._url, v)
+        else:
+            return interpret_str(v, os.environ)
+
+    def __setitem__(self, key, value):
+        raise ConfigError('config is immutable.')
+
+    def __str__(self):
+        return self._config.__str__()
+
+
 def ostype():
     if "win" in sys.platform:
         return OSType.WIN
@@ -312,6 +366,7 @@ def is_sunos():
 
 def dump_json(obj):
     """customized json encoder function to support datetime, date, time object"""
+
     def dt_converter(o):
         if isinstance(o, datetime):
             return o.strftime(DATETIME_FMT)
@@ -321,6 +376,7 @@ def dump_json(obj):
             return o.strftime(TIME_FMT)
         else:
             raise TypeError('Object %s not support by JSON encoder', o)
+
     return json.dumps(obj, default=dt_converter)
 
 

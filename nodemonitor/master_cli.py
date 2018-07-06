@@ -14,9 +14,8 @@ import sys
 import socket
 import logging
 import getopt
-import yaml
 from multiprocessing import Process
-from common import SetupError, OSType
+from common import YAMLConfig, SetupError, OSType
 _VALID_PY = ['Python 2.4', 'Python 2.5', 'Python 2.6', 'Python 2.7']
 _INSTALL_PY27 = True
 _FILE_OF_PY27 = 'Python-2.7.14.tgz'
@@ -203,11 +202,7 @@ if __name__ == '__main__':
     basepath = os.path.dirname(sys.path[0])
     cfgpath = os.path.join(basepath, 'conf', 'master.yaml')
     logging.info('starting master cli from %s with cfg=%s', basepath, cfgpath)
-    if not os.path.isfile(cfgpath):
-        logging.error('mater config %s not exist', cfgpath)
-        exit(1)
-    with open(cfgpath) as f:
-        config = yaml.load(f)
+    config = YAMLConfig(cfgpath)
     logging.info('config loaded from %s', cfgpath)
 
     try:

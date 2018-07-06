@@ -79,6 +79,7 @@ class ReportModelTest(unittest.TestCase):
 class ModelTest(unittest.TestCase):
 
     class ModelA(model.Model):
+        _TABLE = 'tablea'
         _FIELDS = ['id', 'a1', 'a2', 'a3']
 
     def test_model(self):
@@ -88,13 +89,13 @@ class ModelTest(unittest.TestCase):
     def test_model_invalidfield(self):
         with self.assertRaises(model.InvalidFieldError) as cm:
             ModelTest.ModelA(a4=1)
-            self.assertEqual('a4', cm.exception.msg)
+        self.assertEqual('a4', cm.exception.message)
         with self.assertRaises(model.InvalidFieldError) as cm:
             ModelTest.ModelA().non_exist_field1
-            self.assertEqual('field a non_exist_field1 not defined.', cm.exception.msg)
+        self.assertEqual('field "tablea.non_exist_field1" not defined.', cm.exception.message)
         with self.assertRaises(model.InvalidFieldError) as cm:
             ModelTest.ModelA().non_exist_field2 = 1
-            self.assertEqual('field a non_exist_field2 not defined.', cm.exception.msg)
+        self.assertEqual('field "tablea.non_exist_field2" not defined.', cm.exception.message)
 
     def test_astuple(self):
         ma = ModelTest.ModelA()
