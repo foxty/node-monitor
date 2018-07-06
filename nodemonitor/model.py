@@ -31,9 +31,12 @@ def init_db(dbconfig, schema):
     if dbfolder and not os.path.exists(dbfolder):
         logging.warn('create folder for database file %s', dbfolder)
         os.makedirs(dbfolder)
-    logging.info('initialize db schemas for %s', dburl)
+    if os.path.exists(dburl):
+        logging.info('db already created, exit initialization.')
+        return
     with sqlite3.connect(dburl, detect_types=sqlite3.PARSE_DECLTYPES|sqlite3.PARSE_COLNAMES) as conn:
         c = conn.cursor()
+        logging.info('create db schemas for %s', dburl)
         with open(schema, 'r') as f:
             c.executescript(f.read())
         conn.commit()
@@ -285,13 +288,7 @@ class TSDModel(dict):
             upd = []
         return upd
 
-    @dao('tsd')
-    def save(self, dburl):
-        """
-        save current model to opentsdb
-        """
-        logging.debug('saving model %s to %s', self, dburl)
-        logging.info('save tsd model %s', self._METRIC_PREFIX)
+    def gen_metrics(self):
         values = []
         for metric in self._METRICS:
             value = dict()
@@ -300,6 +297,16 @@ class TSDModel(dict):
             value['value'] = self[metric]
             value['tags'] = {t: self[t] for t in self._TAGS}
             values.append(value)
+        return values
+
+    @dao('tsd')
+    def save(self, dburl):
+        """
+        save current model to opentsdb
+        """
+        logging.debug('saving model %s to %s', self, dburl)
+        logging.info('save tsd model %s', self._METRIC_PREFIX)
+        values = self.gen_metrics()
         logging.debug('metrics %s will post to remote tsdb %s', values, dburl)
         r = requests.post(dburl + '/api/put?detail', json=values)
         rj = r.json()
@@ -309,17 +316,11 @@ class TSDModel(dict):
 
     @classmethod
     @dao('tsd')
-    def save_all(cls, l, dburl):
-        records = [m.as_tuple() for m in l]
-        logging.info('save all records %s to tsdb %s', l, dburl)
-
-    @classmethod
-    @dao('tsd')
-    def query(cls, agg=None, tags=None, downsample=None, dburl=None):
+    def query(cls, start, end=None, agg=None, tags=None, downsample=None, dburl=None):
         """
         query data form tsdb
         """
-        logging.info('query data from %s', dburl)
+        logging.info('query ts data from %s', dburl)
 
 
 class AgentChronoModel(object):
