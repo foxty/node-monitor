@@ -34,33 +34,28 @@ class BaseDBTest(unittest.TestCase):
     def tearDown(self):
         model.Agent.delete()
         model.NMetric.delete()
-        model.NCPUReport.delete()
-        model.NMemoryReport.delete()
-        model.NDiskReport.delete()
-        model.NSystemReport.delete()
         model.SMetric.delete()
         model.SInfo.delete()
         model.SInfoHistory.delete()
-        model.SJstatGCReport.delete()
-        model.SPidstatReport.delete()
 
 
 class ReportModelTest(unittest.TestCase):
     def test_mem_report(self):
-        memrep = model.NMemoryReport(total_mem=1000, used_mem=100, free_mem=900)
+        ct = datetime.now()
+        memrep = model.NMemoryReport(timestamp=ct, total_mem=1000, used_mem=100, free_mem=900)
         self.assertEqual(100*100/1000, memrep.used_util)
         self.assertEqual(900*100/1000, memrep.free_util)
 
-        memrep = model.NMemoryReport(total_mem=1100, used_mem=100, free_mem=900)
+        memrep = model.NMemoryReport(timestamp=ct, total_mem=1100, used_mem=100, free_mem=900)
         self.assertEqual(100*100/1100, memrep.used_util)
         self.assertEqual(900*100/1100, memrep.free_util)
 
-        memrep = model.NMemoryReport(total_mem=None, used_mem=100, free_mem=900)
+        memrep = model.NMemoryReport(timestamp=ct, total_mem=None, used_mem=100, free_mem=900)
         self.assertEqual(None, memrep.used_util)
         self.assertEqual(None, memrep.free_util)
 
     def test_cpu_report(self):
-        cpurep = model.NCPUReport(us=None, sy=100)
+        cpurep = model.NCPUReport(timestamp=datetime.now(), us=None, sy=100)
         self.assertEqual(None, cpurep.used_util)
 
         cpurep.us=1
@@ -172,32 +167,53 @@ class TSDModelTest(BaseDBTest):
 
     def test_save(self):
         with mock.patch('requests.Response') as resp:
+            ts = datetime.now()
             resp.status_code = 400
             resp.json = mock.MagicMock(retrn_value={})
             requests.post = mock.Mock(return_value=resp)
-            tm = TSDModelTest.TSDModelA(timestamp=12345, m1=1.1, m2=1.2, m3=1.3, tag1='t1', tag2='t2')
+            tm = TSDModelTest.TSDModelA(timestamp=ts, m1=1.1, m2=1.2, m3=1.3, tag1='t1', tag2='t2')
             re = tm.save()
+            exp_ts = (ts - model._EPOC).total_seconds()
             tags = {'tag1': 't1', 'tag2': 't2'}
             expdata = [{
-                'timestamp': 12345,
+                'timestamp': exp_ts,
                 'metric': 'test.prefix.m1',
                 'value': 1.1,
                 'tags': tags
             }, {
-                'timestamp': 12345,
+                'timestamp': exp_ts,
                 'metric': 'test.prefix.m2',
                 'value': 1.2,
                 'tags': tags
             }, {
-                'timestamp': 12345,
+                'timestamp': exp_ts,
                 'metric': 'test.prefix.m3',
                 'value': 1.3,
                 'tags': tags
             }]
 
-            requests.post.assert_called_with('http://localhost:4242/api/put?detail', json=expdata)
+            requests.post.assert_called_with('http://localhost:4242/api/put?details', json=expdata)
             requests.post.assert_called_once()
             self.assertFalse(re)
+
+    def test_build_query_body(self):
+        body = TSDModelTest.TSDModelA.build_query_body(start=123,
+                                                       end=456,
+                                                       agg=model.TSDAgg.AVG,
+                                                       metrics=['m1', 'm2'],
+                                                       tags={'tag1': '111', 'tag2': '222'},
+                                                       downsample='5m-avg',
+                                                       rateops=None)
+        self.assertEqual({'end': 456,
+                          'queries': [{'aggregator': 'avg',
+                                       'downsample': '5m-avg',
+                                       'metric': 'test.prefix.m1',
+                                       'tags': {'tag1': '111', 'tag2': '222'}},
+                                      {'aggregator': 'avg',
+                                       'downsample': '5m-avg',
+                                       'metric': 'test.prefix.m2',
+                                       'tags': {'tag1': '111', 'tag2': '222'}}],
+                          'start': 123}, body)
 
 
 class AgentTest(BaseDBTest):
@@ -325,46 +341,24 @@ class SPidstatReportTest(BaseDBTest):
     def test_base(self):
         ctime = datetime.now()
         id = uuid4().hex
-        r = model.SPidstatReport(aid='1', service_id=id, collect_at=ctime)
+        r = model.SPidstatReport(timestamp=ctime, aid='1', service_id=id)
         r.save()
         self.assertEqual('1', r.aid)
         self.assertEqual(id, r.service_id)
-        self.assertEqual(ctime, r.collect_at)
-
-    def test_chrono(self):
-        sid = uuid4().hex
-        now = datetime.now()
-        prev_hour = now - timedelta(hours=1)
-        next_hour = now + timedelta(hours=1)
-        r1 = model.SPidstatReport(aid='1', service_id=sid, collect_at=prev_hour, tid=1, cpu_us=10, recv_at=next_hour)
-        r1.save()
-        r2 = model.SPidstatReport(aid='1', service_id=sid, collect_at=now, tid=1, cpu_us=20, recv_at=now)
-        r2.save()
-        r3 = model.SPidstatReport(aid='1', service_id=sid, collect_at=next_hour, tid=1, cpu_us=30, recv_at=prev_hour)
-        r3.save()
-
-        l1 = model.SPidstatReport.query_by_ctime(sid, now - timedelta(hours=1.5), now)
-        self.assertEqual(2, len(l1))
-        self.assertEqual(prev_hour, l1[0].collect_at)
-        self.assertEqual(now, l1[1].collect_at)
-
-        l1 = model.SPidstatReport.query_by_rtime(sid, now - timedelta(hours=1.5), now)
-        self.assertEqual(2, len(l1))
-        self.assertEqual(now, l1[0].collect_at)
-        self.assertEqual(next_hour, l1[1].collect_at)
+        self.assertEqual(ctime, r.timestamp)
 
 
 class SJstatReportTest(unittest.TestCase):
 
     def test_calc(self):
-        rep = model.SJstatGCReport(ts=100, ygc=3, ygct=15.0, fgc=2, fgct=5.0, gct=20.0)
+        rep = model.SJstatGCReport(timestamp=datetime.now(), ts=100, ygc=3, ygct=15.0, fgc=2, fgct=5.0, gct=20.0)
         self.assertEqual(5, rep.avg_ygct())
         self.assertEqual(2.5, rep.avg_fgct())
         self.assertEqual(0.8, rep.throughput())
 
     def test_to_gcstat(self):
         ctime = datetime.now()
-        rep = model.SJstatGCReport(ts=100, service_id='sid', collect_at=ctime,
+        rep = model.SJstatGCReport(timestamp=datetime.now(), ts=100, service_id='sid',
                                    ygc=3, ygct=15.0, fgc=2, fgct=5.0, gct=20.0)
         gcstat = rep.to_gcstat('test')
         self.assertEqual(model.JavaGCStat(category='test', start_at=ctime - timedelta(seconds=100), end_at=ctime,
@@ -372,82 +366,18 @@ class SJstatReportTest(unittest.TestCase):
                                           throughput=0.8), gcstat)
 
     def test_sub(self):
-        rep1 = model.SJstatGCReport(ts=100, ygc=3, ygct=15.0, fgc=2, fgct=5.0, gct=20.0)
-        rep2 = model.SJstatGCReport(ts=20, ygc=1, ygct=10.0, fgc=1, fgct=3.0, gct=15.0)
+        now = timestamp=datetime.now()
+        rep1 = model.SJstatGCReport(timestamp=now, ts=100, ygc=3, ygct=15.0, fgc=2, fgct=5.0, gct=20.0)
+        rep2 = model.SJstatGCReport(timestamp=now, ts=20, ygc=1, ygct=10.0, fgc=1, fgct=3.0, gct=15.0)
         sub = rep1 - rep2
-        self.assertEqual(model.SJstatGCReport(ts=80, ygc=2, ygct=5.0, fgc=1, fgct=2.0, gct=5.0), sub)
+        self.assertEqual(model.SJstatGCReport(timestamp=now, ts=80, ygc=2, ygct=5.0, fgc=1, fgct=2.0, gct=5.0), sub)
 
     def test_add(self):
-        rep1 = model.SJstatGCReport(ts=100, ygc=3, ygct=15.0, fgc=2, fgct=5.0, gct=20.0)
-        rep2 = model.SJstatGCReport(ts=20, ygc=1, ygct=10.0, fgc=1, fgct=3.0, gct=15.0)
+        now = timestamp=datetime.now(),
+        rep1 = model.SJstatGCReport(timestamp=now, ts=100, ygc=3, ygct=15.0, fgc=2, fgct=5.0, gct=20.0)
+        rep2 = model.SJstatGCReport(timestamp=now, ts=20, ygc=1, ygct=10.0, fgc=1, fgct=3.0, gct=15.0)
         add = rep1 + rep2
-        self.assertEqual(model.SJstatGCReport(ts=120, ygc=4, ygct=25.0, fgc=3, fgct=8.0, gct=35.0), add)
-
-
-class MasterDAOTest(BaseDBTest):
-
-    def test_add_nmemory(self):
-        mem = model.NMemoryReport(aid='12345678', collect_at=datetime.now(),
-                               total_mem=100, used_mem=50, cache_mem=10, free_mem=50,
-                               total_swap=100, used_swap=20, free_swap=80)
-        mem.save()
-
-        mems = model.NMemoryReport.query_by_ctime('12345678',
-                                               datetime.now() - timedelta(days=1),
-                                               datetime.now() + timedelta(days=1))
-        self.assertEqual(1, len(mems))
-        self.assertEqual(mem, mems[0])
-
-    def test_add_sysreport(self):
-        sys = model.NSystemReport(aid='123', collect_at=datetime.now(),
-                               uptime=12345, users=5, load1=1, load5=5, load15=15,
-                               procs_r=1, procs_b=2, sys_in=1, sys_cs=2)
-        sys.save()
-        reports = model.NSystemReport.query_by_ctime('123', datetime.now() - timedelta(hours=1),
-                                                  datetime.now() + timedelta(hours=1))
-        self.assertEqual(1, len(reports))
-        self.assertEqual(sys, reports[0])
-
-    def test_add_cpureport(self):
-        cpu = model.NCPUReport(aid='123', collect_at=datetime.now(),
-                            us=2, sy=18, id=80, wa=0, st=0)
-        cpu.save()
-        cpus = model.NCPUReport.query_by_ctime('123', datetime.now() - timedelta(hours=1),
-                                            datetime.now() + timedelta(hours=1))
-        self.assertEqual(1, len(cpus))
-        self.assertEqual(cpu, cpus[0])
-
-    def test_cpu_chrono(self):
-        now = datetime.now()
-        prev_hour = now - timedelta(hours=1)
-        cpu1 = model.NCPUReport(aid='123', collect_at=prev_hour, us=1, recv_at=now)
-        cpu1.save()
-        cpu2 = model.NCPUReport(aid='123', collect_at=now, us=2, recv_at=prev_hour)
-        cpu2. save()
-
-        cpus = model.NCPUReport.query()
-        self.assertEqual(2, len(cpus))
-
-        cpus = model.NCPUReport.query_by_ctime('123', start=prev_hour-timedelta(minutes=30), end=prev_hour+timedelta(minutes=30))
-        self.assertEqual(1, len(cpus))
-        self.assertEqual(cpu1, cpus[0])
-
-        cpus = model.NCPUReport.query_by_rtime('123', start=now-timedelta(minutes=30), end=now+timedelta(minutes=30))
-        self.assertEqual(1, len(cpus))
-        self.assertEqual(cpu1, cpus[0])
-
-    def test_add_diskreports(self):
-        dr1 = model.NDiskReport(aid='123', collect_at=datetime.now(),
-                             fs="/", size=1024, used=256, available=768, used_util='25%', mount_point="/root")
-        dr2 = model.NDiskReport(aid='123', collect_at=datetime.now(),
-                             fs="/abc", size=1024, used=256, available=768, used_util='25%', mount_point="/var")
-        drs = [dr1, dr2]
-        model.NDiskReport.save_all(drs)
-        reports = model.NDiskReport.query_by_ctime('123', datetime.now() - timedelta(hours=1),
-                                                datetime.now() + timedelta(hours=1))
-        self.assertEqual(2, len(reports))
-        self.assertEqual(dr1, reports[0])
-        self.assertEqual(dr2, reports[1])
+        self.assertEqual(model.SJstatGCReport(timestamp=now, ts=120, ygc=4, ygct=25.0, fgc=3, fgct=8.0, gct=35.0), add)
 
 
 if __name__ == '__main__':

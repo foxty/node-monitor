@@ -21,13 +21,13 @@ class ContentParserTest(unittest.TestCase):
 
     def test_parse_w_solaris(self):
         ctime = datetime.now()
-        r = content_parser.parse_w('2', collect_time=ctime, content='''
+        r = content_parser.parse_w('2', ctime, content='''
         9:11pm  up 43 day(s),  8:52,  11 user,  load average: 2.38, 2.41, 2.41
         User     tty           login@  idle   JCPU   PCPU  what
         root     pts/4        27Dec17           18         -bash
         ''')
         self.assertEqual('2', r.aid)
-        self.assertEqual(ctime, r.collect_at)
+        self.assertEqual(ctime, r.timestamp)
         self.assertEqual(0, r.uptime)
         self.assertEqual(11, r.users)
         self.assertEqual(2.38, r.load1)
@@ -37,11 +37,10 @@ class ContentParserTest(unittest.TestCase):
         self.assertIsNone(r.procs_b)
         self.assertIsNone(r.sys_in)
         self.assertIsNone(r.sys_cs)
-        self.assertIsNotNone(r.recv_at)
 
     def test_parse_w_linux(self):
         ctime = datetime.now()
-        r = content_parser.parse_w('2', collect_time=ctime, content='''
+        r = content_parser.parse_w('2', ctime, content='''
         21:26:13 up  3:32,  3 users,  load average: 0.00, 0.03, 0.00
         USER     TTY      FROM              LOGIN@   IDLE   JCPU   PCPU WHAT
         root     pts/2    pc-llou.arrs.arr 17:53    3:32m  0.00s  0.00s -bash
@@ -49,7 +48,7 @@ class ContentParserTest(unittest.TestCase):
         root     pts/0    pc-itian.arrs.ar 21:20    3:18   0.01s  0.01s -bash
         ''')
         self.assertEqual('2', r.aid)
-        self.assertEqual(ctime, r.collect_at)
+        self.assertEqual(ctime, r.timestamp)
         self.assertEqual(0, r.uptime)
         self.assertEqual(3, r.users)
         self.assertEqual(0.00, r.load1)
@@ -59,7 +58,6 @@ class ContentParserTest(unittest.TestCase):
         self.assertIsNone(r.procs_b)
         self.assertIsNone(r.sys_in)
         self.assertIsNone(r.sys_cs)
-        self.assertIsNotNone(r.recv_at)
 
     def test_parse_vmstat_linux(self):
         ctime = datetime.now()
@@ -70,7 +68,7 @@ class ContentParserTest(unittest.TestCase):
          10  5      0 13540532 161232 2972956    0    0     0    48  310  550  0  0 99  1  0
         ''')
         self.assertEqual('1', r.aid)
-        self.assertEqual(ctime, r.collect_at)
+        self.assertEqual(ctime, r.timestamp)
         self.assertEqual(0, r.us)
         self.assertEqual(0, r.sy)
         self.assertEqual(99, r.id)
@@ -80,7 +78,6 @@ class ContentParserTest(unittest.TestCase):
         self.assertEqual(5, procs_b)
         self.assertEqual(310, sys_in)
         self.assertEqual(550, sys_cs)
-        self.assertIsNotNone(r.recv_at)
 
     def test_parse_vmstat_solaris(self):
         ctime = datetime.now()
@@ -91,7 +88,7 @@ class ContentParserTest(unittest.TestCase):
          1 2 0 37758804 2545032 14 53 0 0  0  0  0  0  0  1  0 2236 1625 2002  1  1 98
         ''')
         self.assertEqual('1', r.aid)
-        self.assertEqual(ctime, r.collect_at)
+        self.assertEqual(ctime, r.timestamp)
         self.assertEqual(1, r.us)
         self.assertEqual(1, r.sy)
         self.assertEqual(98, r.id)
@@ -101,7 +98,6 @@ class ContentParserTest(unittest.TestCase):
         self.assertEqual(2, procs_b)
         self.assertEqual(2236, sys_in)
         self.assertEqual(2002, sys_cs)
-        self.assertIsNotNone(r.recv_at)
 
     def test_parse_free(self):
         ctime = datetime.now()
@@ -112,7 +108,7 @@ class ContentParserTest(unittest.TestCase):
         Swap:        10063          0      10063
         ''')
         self.assertEqual('1', r.aid)
-        self.assertEqual(ctime, r.collect_at)
+        self.assertEqual(ctime, r.timestamp)
         self.assertEqual(19991, r.total_mem)
         self.assertEqual(6428, r.used_mem)
         self.assertEqual(13562, r.free_mem)
@@ -120,7 +116,6 @@ class ContentParserTest(unittest.TestCase):
         self.assertEqual(10063, r.total_swap)
         self.assertEqual(0, r.used_swap)
         self.assertEqual(10063, r.free_swap)
-        self.assertIsNotNone(r.recv_at)
 
         r = content_parser.parse_free('1', collect_time=ctime, content='''
                       total        used        free      shared  buff/cache   available
@@ -128,7 +123,7 @@ class ContentParserTest(unittest.TestCase):
         Swap:          2047           0        2047
         ''')
         self.assertEqual('1', r.aid)
-        self.assertEqual(ctime, r.collect_at)
+        self.assertEqual(ctime, r.timestamp)
         self.assertEqual(1839, r.total_mem)
         self.assertEqual(408, r.used_mem)
         self.assertEqual(568, r.free_mem)
@@ -136,18 +131,16 @@ class ContentParserTest(unittest.TestCase):
         self.assertEqual(2047, r.total_swap)
         self.assertEqual(0, r.used_swap)
         self.assertEqual(2047, r.free_swap)
-        self.assertIsNotNone(r.recv_at)
 
     def _assert_dr(self, aid, ctime, fs, size, used, avai, used_util, mount, dr):
         self.assertEqual(aid, dr.aid)
-        self.assertEqual(ctime, dr.collect_at)
+        self.assertEqual(ctime, dr.timestamp)
         self.assertEqual(fs, dr.fs)
         self.assertEqual(size, dr.size)
         self.assertEqual(used, dr.used)
         self.assertEqual(avai, dr.available)
         self.assertEqual(used_util, dr.used_util)
         self.assertEqual(mount, dr.mount_point)
-        self.assertIsNotNone(dr.recv_at)
 
     def test_parse_invalid_df(self):
         content = '''
@@ -171,10 +164,10 @@ class ContentParserTest(unittest.TestCase):
         tmpfs                  188412       0    188412   0% /run/user/0
         '''
         ctime = datetime.now()
-        drs = content_parser.parse_df('1', collect_time=ctime, content=content)
+        drs = content_parser.parse_df('1', ctime, content=content)
         self.assertEqual(8, len(drs))
-        self._assert_dr('1', ctime, '/dev/mapper/cl-root', '52403200', '3294392', '49108808', '7%', '/', drs[0])
-        self._assert_dr('1', ctime, 'tmpfs', '188412', '0', '188412', '0%', '/run/user/0', drs[-1])
+        self._assert_dr('1', ctime, '/dev/mapper/cl-root', 52403200, 3294392, 49108808,  7, '/', drs[0])
+        self._assert_dr('1', ctime, 'tmpfs', 188412, 0, 188412, 0, '/run/user/0', drs[-1])
 
     def test_parse_df_solaris(self):
         content = '''
@@ -198,8 +191,8 @@ class ContentParserTest(unittest.TestCase):
         ctime = datetime.now()
         drs = content_parser.parse_df('1', collect_time=ctime, content=content)
         self.assertEqual(14, len(drs))
-        self._assert_dr('1', ctime, '/', '369884093', '25200224', '344683869', '7%', '/', drs[0])
-        self._assert_dr('1', ctime, 'swap', '1326292', '24', '1326268', '1%', '/var/run', drs[-1])
+        self._assert_dr('1', ctime, '/', 369884093, 25200224, 344683869, 7, '/', drs[0])
+        self._assert_dr('1', ctime, 'swap', 1326292, 24, 1326268, 1, '/var/run', drs[-1])
 
     def test_parse_dstat_sys(self):
         content = """
@@ -212,7 +205,7 @@ class ContentParserTest(unittest.TestCase):
         sys = content_parser.parse_dstat_sys('1', ctime, content)
         self.assertIsNotNone(sys)
         self.assertEqual('1', sys.aid)
-        self.assertEqual(ctime, sys.collect_at)
+        self.assertEqual(ctime, sys.timestamp)
         self.assertEqual(0.05, sys.load1)
         self.assertEqual(0.18, sys.load5)
         self.assertEqual(0.09, sys.load15)
@@ -220,7 +213,6 @@ class ContentParserTest(unittest.TestCase):
         self.assertEqual(707, sys.sys_cs)
         self.assertEqual(0, sys.procs_r)
         self.assertEqual(0, sys.procs_b)
-        self.assertIsNotNone(sys.recv_at)
 
     def test_parse_dstat_cpu(self):
         c = """
@@ -234,13 +226,12 @@ class ContentParserTest(unittest.TestCase):
         cpu = content_parser.parse_dstat_cpu('1', ctime, c)
         self.assertIsNotNone(cpu)
         self.assertEqual('1', cpu.aid)
-        self.assertEqual(ctime, cpu.collect_at)
+        self.assertEqual(ctime, cpu.timestamp)
         self.assertEqual(1, cpu.us)
         self.assertEqual(2, cpu.sy)
         self.assertEqual(95, cpu.id)
         self.assertEqual(2, cpu.wa)
         self.assertEqual(None, cpu.st)
-        self.assertIsNotNone(cpu.recv_at)
 
     def test_conv_to_mega(self):
         self.assertEqual(1536, content_parser.conv_to_mega('1.5G'))
@@ -265,7 +256,7 @@ class ContentParserTest(unittest.TestCase):
         mem = content_parser.parse_dstat_mem('1', ctime, c)
         self.assertIsNotNone(mem)
         self.assertEqual('1', mem.aid)
-        self.assertEqual(ctime, mem.collect_at)
+        self.assertEqual(ctime, mem.timestamp)
         self.assertEqual(9.80*1024+6096+3666, mem.total_mem)
         self.assertEqual(3666, mem.used_mem)
         self.assertEqual(9.8*1024, mem.cache_mem)
@@ -273,7 +264,6 @@ class ContentParserTest(unittest.TestCase):
         self.assertEqual(10*1024, mem.total_swap)
         self.assertEqual(0, mem.used_swap)
         self.assertEqual(10*1024, mem.free_swap)
-        self.assertIsNotNone(mem.recv_at)
 
     def test_parse_pidstat(self):
         c = '''Linux 2.6.32-431.el6.x86_64 (cycad) 	02/11/2018 	_x86_64_	(4 CPU)
@@ -287,9 +277,7 @@ class ContentParserTest(unittest.TestCase):
         ctime = datetime.now()
         pidrep = content_parser.parse_pidstat('1', ctime, 'serv1', c)
         self.assertIsNotNone(pidrep)
-        self.assertIsNotNone(pidrep.recv_at)
-        del pidrep['recv_at']
-        self.assertEqual(model.SPidstatReport('1', service_id='serv1', collect_at=ctime, tid=0,
+        self.assertEqual(model.SPidstatReport(aid='1', service_id='serv1', timestamp=ctime, tid=0,
                                            cpu_us=0.13, cpu_sy=0.02, cpu_gu=0.0, cpu_util=0.15,
                                            mem_minflt=1.47, mem_majflt=0.0, mem_vsz=8529320,
                                            mem_rss=2109020, mem_util=10.30,
@@ -308,9 +296,7 @@ class ContentParserTest(unittest.TestCase):
         ctime = datetime.now()
         pidrep = content_parser.parse_pidstat('1', ctime, 'serv1', c)
         self.assertIsNotNone(pidrep)
-        self.assertIsNotNone(pidrep.recv_at)
-        del pidrep['recv_at']
-        self.assertEqual(model.SPidstatReport('1', service_id='serv1', collect_at=ctime, tid=0,
+        self.assertEqual(model.SPidstatReport(aid='1', service_id='serv1', timestamp=ctime, tid=0,
                                               cpu_us=0.13, cpu_sy=0.02, cpu_gu=0.0, cpu_util=0.15,
                                               mem_minflt=0.47, mem_majflt=0.10, mem_vsz=160052,
                                               mem_rss=8800, mem_util=0.23,
@@ -325,13 +311,11 @@ class ContentParserTest(unittest.TestCase):
         ctime = datetime.now()
         statgc_rep = content_parser.parse_jstatgc('1', ctime, 'serv1', c)
         self.assertIsNotNone(statgc_rep)
-        self.assertIsNotNone(statgc_rep.recv_at)
-        del statgc_rep['recv_at']
-        self.assertEqual(model.SJstatGCReport('1', service_id='serv1', collect_at=ctime, ts=13939.4,
-                                           s0c=0.0, s1c=30720.0, s0u=0.0, s1u=30720.0,
-                                           ec=342016.0, eu=243712.0, oc=4345856.0, ou=776192.2,
-                                           mc=66896.0, mu=65355.5, ccsc=8060.0, ccsu=7777.3,
-                                           ygc=119, ygct=40.678, fgc=2, fgct=2.1, gct=40.678),
+        self.assertEqual(model.SJstatGCReport(aid='1', service_id='serv1', timestamp=ctime, ts=13939.4,
+                                              s0c=0.0, s1c=30720.0, s0u=0.0, s1u=30720.0,
+                                              ec=342016.0, eu=243712.0, oc=4345856.0, ou=776192.2,
+                                              mc=66896.0, mu=65355.5, ccsc=8060.0, ccsu=7777.3,
+                                              ygc=119, ygct=40.678, fgc=2, fgct=2.1, gct=40.678),
                          statgc_rep)
 
     def test_parse_prstat(self):
@@ -342,9 +326,7 @@ Total: 1 processes, 51 lwps, load averages: 6.75, 4.85, 3.50
         ctime = datetime.now()
         rep = content_parser.parse_prstat('1', ctime, 'serv1', c)
         self.assertIsNotNone(rep)
-        self.assertIsNotNone(rep.recv_at)
-        del rep['recv_at']
-        self.assertEqual(model.SPidstatReport('1', service_id='serv1', collect_at=ctime, tid=11023,
+        self.assertEqual(model.SPidstatReport(aid='1', service_id='serv1', timestamp=ctime, tid=11023,
                                               mem_vsz=192*1024, mem_rss=154*1024, cpu_util=15.9),
                          rep)
 
@@ -423,40 +405,8 @@ class MasterTest(model_test.BaseDBTest):
         nmmsg.set_header(nmmsg.H_COLLECT_AT, ctime)
         re = m.handle_msg(nmmsg, None)
         self.assertTrue(re)
-
-        start = datetime.now() - timedelta(hours=1)
-        end = datetime.now() + timedelta(hours=1)
-        memreports = model.NMemoryReport.query_by_ctime(agent.aid, start, end)
-        self.assertEqual(1, len(memreports))
-        self.assertIsNotNone(memreports[0].recv_at)
-        del memreports[0]['recv_at']
-        self.assertEqual(model.NMemoryReport(aid=agent.aid, collect_at=ctime.replace(microsecond=0),
-                                          total_mem=1839, used_mem=408, free_mem=566, cache_mem=None,
-                                          total_swap=2047, used_swap=0, free_swap=2047),
-                         memreports[0])
-
-        cpureports = model.NCPUReport.query_by_ctime(agent.aid, start, end)
-        self.assertEqual(1, len(cpureports))
-        self.assertIsNotNone(cpureports[0].recv_at)
-        del cpureports[0]['recv_at']
-        self.assertEqual(model.NCPUReport(aid=agent.aid, collect_at=ctime.replace(microsecond=0), us=86, sy=14, id=0, wa=0, st=0),
-                         cpureports[0])
-
-        sysreports = model.NSystemReport.query_by_ctime(agent.aid, start, end)
-        self.assertEqual(1, len(sysreports))
-        self.assertIsNotNone(sysreports[0].recv_at)
-        del sysreports[0]['recv_at']
-        self.assertEqual(model.NSystemReport(aid=agent.aid, collect_at=ctime.replace(microsecond=0),
-                                          uptime=0, users=1, load1=2.11, load5=2.54, load15=2.77,
-                                          procs_r=1, procs_b=0, sys_in=1091, sys_cs=404),
-                         sysreports[0])
-
         agents = model.Agent.query()
         self.assertEqual(1, len(agents))
-        self.assertEqual(memreports[0].used_util, agents[0].last_mem_util)
-        self.assertEqual(cpureports[0].used_util, agents[0].last_cpu_util)
-        self.assertEqual(sysreports[0].load1, agents[0].last_sys_load1)
-        self.assertEqual(sysreports[0].sys_cs, agents[0].last_sys_cs)
 
     def test_handle_smetrics(self):
         aid = '2'

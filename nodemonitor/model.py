@@ -13,9 +13,11 @@ import logging
 import os
 import sqlite3
 import requests
+from enum import Enum
 from datetime import datetime, timedelta
 
 DB_CONFIG = None
+_EPOC = datetime(1970, 1, 1)
 
 
 def init_db(dbconfig, schema):
@@ -91,6 +93,10 @@ class InvalidFieldError(Exception):
 
 
 class NoPKError(Exception):
+    pass
+
+
+class InvalidAggError(Exception):
     pass
 
 
@@ -252,6 +258,39 @@ class Model(dict):
         return cls._MAPPINGS[tablename]
 
 
+class TSDAgg(Enum):
+    AVG = 'avg'
+    COUNT = 'count'
+    DEV = 'dev'
+    EP50R3 = 'ep50r3'
+    EP50R7 = 'ep50r7'
+    EP75R3 = 'ep75r3'
+    EP75R7 = 'ep75r7'
+    EP90R3 = 'ep90r3'
+    EP90R7 = 'ep90r7'
+    EP95R3 = 'ep95r3'
+    EP95R7 = 'ep95r7'
+    EP99R3 = 'ep99r3'
+    EP99R7 = 'ep99r7'
+    EP999R3 = 'ep999r'
+    EP999R7 = 'ep999r'
+    FIRST = 'first'
+    LAST = 'last'
+    MIMMIN = 'mimmin'
+    MIMMAX = 'mimmax'
+    MIN = 'min'
+    MAX = 'max'
+    NONE = 'none'
+    P50 = 'p50'
+    P75 = 'p75'
+    P90 = 'p90'
+    P95 = 'p95'
+    P99 = 'p99'
+    P999 = 'p999'
+    SUM = 'sum'
+    ZIMSUM = 'zimsum'
+
+
 class TSDModel(dict):
     _METRIC_PREFIX = 'model'
     _METRICS = []
@@ -288,12 +327,16 @@ class TSDModel(dict):
             upd = []
         return upd
 
-    def gen_metrics(self):
+    def build_save_content(self):
         values = []
         for metric in self._METRICS:
+            fullmetric = self._METRIC_PREFIX + '.' + metric
+            if self.get(metric, None) is None:
+                logging.info('metric %s is none for tags %s ', fullmetric, self._TAGS)
+                continue
             value = dict()
-            value['metric'] = self._METRIC_PREFIX + '.' + metric
-            value['timestamp'] = self.timestamp
+            value['metric'] = fullmetric
+            value['timestamp'] = (self.timestamp - _EPOC).total_seconds()
             value['value'] = self[metric]
             value['tags'] = {t: self[t] for t in self._TAGS}
             values.append(value)
@@ -305,22 +348,71 @@ class TSDModel(dict):
         save current model to opentsdb
         """
         logging.debug('saving model %s to %s', self, dburl)
-        logging.info('save tsd model %s', self._METRIC_PREFIX)
-        values = self.gen_metrics()
+        values = self.build_save_content()
         logging.debug('metrics %s will post to remote tsdb %s', values, dburl)
-        r = requests.post(dburl + '/api/put?detail', json=values)
-        rj = r.json()
-        logging.info('metrics %s saved to tsdb with %s success, %s failed, errors=%s',
-                     rj.success, rj.failed, rj.errors)
-        return r.status_code == 204
+        try:
+            resp = requests.post(dburl + '/api/put?details', json=values)
+            rj = resp.json()
+            logging.info('metrics of %s saved to tsdb with %s success, %s failed, errors=%s',
+                        self._METRIC_PREFIX, rj['success'], rj['failed'], rj['errors'])
+            re = resp.status_code == 204
+        except Exception:
+            logging.exception('save metrics for %s failed.', self._METRIC_PREFIX)
+            re = False
+        return re
+
+    @classmethod
+    def save_all(cls, records):
+        return [re.save() for re in records]
+
+    @classmethod
+    def build_query_body(cls, start, end, agg, metrics, tags, downsample, rateops):
+        content = {'start': start, 'queries': []}
+        if end is not None:
+            content['end'] = end
+        if type(agg) is not TSDAgg:
+            raise InvalidAggError(agg)
+        qs = content['queries']
+        if metrics is None:
+            metrics = cls._METRICS
+        elif not isinstance(metrics, list):
+            metrics = [metrics]
+        for m in metrics:
+            q = {
+                'aggregator': agg.value,
+                'metric': cls._METRIC_PREFIX + '.' + m
+            }
+            if tags is not None:
+                q['tags'] = tags
+            if downsample is not None:
+                q['downsample'] = downsample
+            if rateops is not None:
+                q['rate'] = True
+                q['rateoption'] = rateops
+            qs.append(q)
+            logging.debug('new q %s added', q)
+        return content
 
     @classmethod
     @dao('tsd')
-    def query(cls, start, end=None, agg=None, tags=None, downsample=None, dburl=None):
-        """
-        query data form tsdb
-        """
-        logging.info('query ts data from %s', dburl)
+    def query(cls, start, end=None, agg=TSDAgg.NONE, metrics=None, tags=None,
+              downsample=None, rateops=None, dburl=None):
+        body = cls.build_query_body(start, end, agg, metrics, tags, downsample, rateops)
+        metrics_data = {}
+        try:
+            resp = requests.post(dburl + '/api/query', json=body)
+            resp_json = resp.json()
+            if resp.status_code == 200:
+                for m in resp_json:
+                    mname = m['metric']
+                    if mname not in metrics_data:
+                        metrics_data[mname] = []
+                    metrics_data[mname].append(m)
+            else:
+                logging.error('query of %s from %s failed, resp=%s', body, dburl, resp_json)
+        except Exception:
+            logging.exception('query of %s from %s failed.', body, dburl)
+        return metrics_data
 
 
 class AgentChronoModel(object):
@@ -369,10 +461,10 @@ class NMetric(Model, AgentChronoModel):
     _FIELDS = ['aid', 'collect_at', 'category', 'content', 'recv_at']
 
 
-class NMemoryReport(Model, AgentChronoModel):
-    _TABLE = 'node_memory_report'
-    _FIELDS = ['aid', 'collect_at', 'total_mem', 'used_mem', 'free_mem',
-              'cache_mem', 'total_swap', 'used_swap', 'free_swap', 'recv_at']
+class NMemoryReport(TSDModel):
+    _METRIC_PREFIX = 'node.memory'
+    _METRICS = ['total_mem', 'used_mem', 'free_mem', 'cache_mem', 'total_swap', 'used_swap', 'free_swap']
+    _TAGS = ['aid']
 
     @property
     def used_util(self):
@@ -383,31 +475,32 @@ class NMemoryReport(Model, AgentChronoModel):
         return self.free_mem*100/self.total_mem if self.free_mem and self.total_mem else None
 
 
-class NCPUReport(Model, AgentChronoModel):
-    _TABLE = 'node_cpu_report'
-    _FIELDS = ['aid', 'collect_at', 'us', 'sy', 'id', 'wa', 'st', 'recv_at']
+class NCPUReport(TSDModel):
+    _METRIC_PREFIX = 'node.cpu'
+    _METRICS = ['us', 'sy', 'id', 'wa', 'st']
+    _TAGS = ['aid']
 
     @property
     def used_util(self):
         return self.us + self.sy if self.us is not None and self.sy is not None else None
 
 
-class NSystemReport(Model, AgentChronoModel):
-    _TABLE = 'node_system_report'
-    _FIELDS = ['aid', 'collect_at', 'uptime', 'users', 'load1', 'load5',
-              'load15', 'procs_r', 'procs_b', 'sys_in', 'sys_cs', 'recv_at']
+class NSystemReport(TSDModel):
+    _METRIC_PREFIX = 'node.system'
+    _METRICS = ['uptime', 'users', 'load1', 'load5',
+                'load15', 'procs_r', 'procs_b', 'sys_in', 'sys_cs']
+    _TAGS = ['aid']
 
 
-class NDiskReport(Model, AgentChronoModel):
-    _TABLE = 'node_disk_report'
-    _FIELDS = ['aid', 'collect_at', 'fs', 'size', 'used',
-              'available', 'used_util', 'mount_point', 'recv_at']
+class NDiskReport(TSDModel):
+    _METRIC_PREFIX = 'node.disk'
+    _METRICS = ['size', 'used', 'available', 'used_util']
+    _TAGS = ['aid', 'fs', 'mount_point']
 
 
 class SMetric(Model, AgentChronoModel):
     _TABLE = 'service_metric_raw'
-    _FIELDS = ['aid', 'collect_at', 'name', 'pid',
-              'category', 'content', 'recv_at']
+    _FIELDS = ['aid', 'collect_at', 'name', 'pid', 'category', 'content', 'recv_at']
 
 
 class SInfo(Model):
@@ -451,31 +544,27 @@ class SInfoHistory(Model, ServiceChronoModel):
     _FIELDS = ['aid','service_id', 'pid', 'collect_at', 'recv_at']
 
 
-class SPidstatReport(Model, ServiceChronoModel):
-    _TABLE = 'service_pidstat_report'
-    _FIELDS = ['aid', 'service_id', 'collect_at', 'tid', 'cpu_us', 'cpu_sy', 'cpu_gu', 'cpu_util',
-              'mem_minflt', 'mem_majflt', 'mem_vsz', 'mem_rss', 'mem_util',
-              'disk_rd', 'disk_wr', 'disk_ccwr', 'recv_at']
-
-    @classmethod
-    def lst_report_by_aid(cls, aid, count):
-        return cls.query(where='aid=?', orderby='collect_at DESC', params=[aid], limit=count)
+class SPidstatReport(TSDModel):
+    _METRIC_PREFIX = 'service.pidstat'
+    _METRICS = ['cpu_us', 'cpu_sy', 'cpu_gu', 'cpu_util', 'mem_minflt', 'mem_majflt',
+                'mem_vsz', 'mem_rss', 'mem_util', 'disk_rd', 'disk_wr', 'disk_ccwr']
+    _TAGS = ['aid', 'service_id', 'tid']
 
 
-class SJstatGCReport(Model, ServiceChronoModel):
-    _TABLE = 'service_jstatgc_report'
-    _FIELDS = ['aid', 'service_id', 'collect_at',
-               'ts', 's0c', 's1c', 's0u', 's1u', 'ec', 'eu', 'oc', 'ou', 'mc', 'mu',
-               'ccsc', 'ccsu', 'ygc', 'ygct', 'fgc', 'fgct', 'gct', 'recv_at']
+class SJstatGCReport(TSDModel):
+    _METRIC_PREFIX = 'service.jstatgc'
+    _METRICS = ['ts', 's0c', 's1c', 's0u', 's1u', 'ec', 'eu', 'oc', 'ou', 'mc', 'mu',
+                'ccsc', 'ccsu', 'ygc', 'ygct', 'fgc', 'fgct', 'gct']
+    _TAGS = ['aid', 'service_id']
 
     def __sub__(self, other):
-        return SJstatGCReport(aid=self.aid, service_id=self.service_id, collect_at=self.collect_at,
+        return SJstatGCReport(aid=self.aid, service_id=self.service_id, timestamp=self.timestamp,
                               ts=self.ts - other.ts, ygc=self.ygc - other.ygc, ygct=self.ygct - other.ygct,
                               fgc=self.fgc - other.fgc, fgct=self.fgct - other.fgct, gct=self.gct - other.gct)
 
     def __add__(self, other):
-        collect_at = other.collect_at if other.collect_at > self.collect_at else self.collect_at
-        return SJstatGCReport(aid=self.aid, service_id=self.service_id, collect_at=collect_at,
+        timestamp = other.timestamp if other.timestamp > self.timestamp else self.timestamp
+        return SJstatGCReport(aid=self.aid, service_id=self.service_id, timestamp=timestamp,
                               ts=self.ts + other.ts, ygc=self.ygc + other.ygc, ygct=self.ygct + other.ygct,
                               fgc=self.fgc + other.fgc, fgct=self.fgct + other.fgct, gct=self.gct + other.gct)
 
@@ -489,8 +578,8 @@ class SJstatGCReport(Model, ServiceChronoModel):
         return 1 - self.gct/self.ts
 
     def to_gcstat(self, category):
-        start_at = self.collect_at - timedelta(seconds=self.ts)
-        return JavaGCStat(category=category, start_at=start_at, end_at=self.collect_at, samples=0,
+        start_at = self.timestamp - timedelta(seconds=self.ts)
+        return JavaGCStat(category=category, start_at=start_at, end_at=self.timestamp, samples=0,
                           ygc=self.ygc, ygct=self.ygct, avg_ygct=self.avg_ygct(),
                           fgc=self.fgc, fgct=self.fgct, avg_fgct=self.avg_fgct(),
                           throughput=self.throughput())

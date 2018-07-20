@@ -214,6 +214,5 @@ class YAMLConfigTest(unittest.TestCase):
         self.assertEqual('config is immutable.', ce.exception.message)
 
 
-
 if __name__ == '__main__':
     unittest.main()

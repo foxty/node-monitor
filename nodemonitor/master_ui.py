@@ -10,11 +10,10 @@ UI for master node
 import sys, os
 import logging
 import socket
-import yaml
 from datetime import datetime, timedelta
 from flask import Flask, request, render_template
 from common import YAMLConfig, dump_json, set_logging
-from model import Agent, NSystemReport, NCPUReport, NMemoryReport, NDiskReport, \
+from model import TSDAgg, Agent, NSystemReport, NCPUReport, NMemoryReport, NDiskReport, \
     SInfo, SInfoHistory, SPidstatReport, SJstatGCReport, init_db
 from master_cli import NodeConnector
 
@@ -29,9 +28,7 @@ _APP = Flask(__name__,
 def calc_daterange(req):
     start_at = float(req.args.get('start_at'))
     end_at = float(req.args.get('end_at'))
-    start = datetime.utcfromtimestamp(start_at/1000)
-    end = datetime.utcfromtimestamp(end_at/1000)
-    return start, end
+    return start_at/1000, end_at/1000
 
 
 @_APP.errorhandler(Exception)
@@ -111,32 +108,42 @@ def del_agent(aid):
 
 @_APP.route('/api/agents/<aid>/report/system', methods=['GET'])
 def get_agent_sysreports(aid):
-    reports = NSystemReport.query_by_rtime(aid, *calc_daterange(request))
+    start, end = calc_daterange(request)
+    reports = NSystemReport.query(start=start, end=end,
+                                  metrics=['users','load1', 'load5', 'load15', 'sys_in', 'sys_cs'],
+                                  tags={'aid': aid})
     return dump_json(reports)
 
 
 @_APP.route('/api/agents/<aid>/report/cpu', methods=['GET'])
 def get_agent_cpureports(aid):
-    reports = NCPUReport.query_by_rtime(aid, *calc_daterange(request))
+    start, end = calc_daterange(request)
+    reports = NCPUReport.query(start=start, end=end, tags={'aid': aid})
     return dump_json(reports)
 
 
 @_APP.route('/api/agents/<aid>/report/memory', methods=['GET'])
 def get_agent_memreports(aid):
-    reports = NMemoryReport.query_by_rtime(aid, *calc_daterange(request))
+    start, end = calc_daterange(request)
+    reports = NMemoryReport.query(start=start, end=end,
+                                  metrics=['used_mem', 'free_mem', 'used_swap', 'free_swap'],
+                                  tags={'aid': aid})
     return dump_json(reports)
 
 
 @_APP.route('/api/agents/<aid>/report/disk', methods=['GET'])
 def get_agent_diskreports(aid):
-    reports = NDiskReport.query_by_rtime(aid, *calc_daterange(request))
+    reports = NDiskReport.query(*calc_daterange(request),
+                                metrics=['used_util'],
+                                tags={'aid': aid})
     return dump_json(reports)
 
 
 @_APP.route('/api/agents/<string:aid>/services')
 def get_agent_services(aid):
     services = SInfo.query_by_aid(aid)
-    status_map = {report.service_id: report for report in SPidstatReport.lst_report_by_aid(aid, len(services))}
+    metrics = SPidstatReport.query(start='1m-ago', metrics=['cpu_util', 'mem_util'], tags={'aid': aid})
+    status_map = {}
     return dump_json({'services': services, 'services_status_map': status_map})
 
 
@@ -150,7 +157,8 @@ def get_service_info(aid, service_id):
 @_APP.route('/api/agents/<aid>/services/<service_id>/report/pidstat',
             methods=['GET'])
 def get_service_pidstats(aid, service_id):
-    reports = SPidstatReport.query_by_rtime(service_id, *calc_daterange(request))
+    reports = SPidstatReport.query(*calc_daterange(request),
+                                   tags={'aid': aid, 'service_id': service_id})
     return dump_json(reports)
 
 
@@ -158,24 +166,25 @@ def get_service_pidstats(aid, service_id):
             methods=['GET'])
 def get_service_jstatgc(aid, service_id):
     start, end = calc_daterange(request)
-    reports = SJstatGCReport.query_by_rtime(service_id, start, end)
+    reports = SJstatGCReport.query(start, end,
+                                   tags={'aid': aid, 'service_id': service_id})
     # shistory = SInfoHistory.query_by_rtime(service_id, start, end)
     # calculate gc stats and memory stats
 
     gcstat_recent, gcstat_range = None, None
-    if reports:
-        end_reps = []
-        for i, rep in enumerate(reports):
-            if i > 1 and rep.ts < reports[i-1].ts:
-                end_reps.append(reports[i-1])
-        end_reps.append(reports[-1])
-        # 1st end reprot - start report to remove data beyond the range
-        end_reps[0] = end_reps[0] - reports[0]
-
-        range_rep = reduce(lambda acc, r: acc + r, end_reps)
-        final_rep = reports[-1]
-        gcstat_range = range_rep.to_gcstat('range')
-        gcstat_recent = final_rep.to_gcstat('recent')
+    # if reports:
+    #     end_reps = []
+    #     for i, rep in enumerate(reports):
+    #         if i > 1 and rep.ts < reports[i-1].ts:
+    #             end_reps.append(reports[i-1])
+    #     end_reps.append(reports[-1])
+    #     # 1st end reprot - start report to remove data beyond the range
+    #     end_reps[0] = end_reps[0] - reports[0]
+    #
+    #     range_rep = reduce(lambda acc, r: acc + r, end_reps)
+    #     final_rep = reports[-1]
+    #     gcstat_range = range_rep.to_gcstat('range')
+    #     gcstat_recent = final_rep.to_gcstat('recent')
     return dump_json({'reports': reports, 'gcstats': [gcstat_range, gcstat_recent]})
 
 

@@ -11,8 +11,12 @@ const parseJson = function(text) {
     })
 }
 
+const convertBytes = function(value, from, to) {
+    
+}
+
 /**Echarts**/
-const genChartOption = function (title, data, cateProp, seriesPropsMapping, options) {
+const genChartOption = function (title, data, seriesMapping, options) {
     options = options || {}
     options.stack = options.stack || false
     options.yAxisFmt = options.yAxisFmt || '{value}'
@@ -20,41 +24,33 @@ const genChartOption = function (title, data, cateProp, seriesPropsMapping, opti
     //options.yAxisMax
     console.log('options for graph ' + title + ': ' + JSON.stringify(options))
 
-    var category = []
-    var seriesMap = {}
-    var legends = []
-    data.forEach(function (d) {
-        var serieCategory = d[cateProp]
-        serieCategory = typeof serieCategory == 'string' && DATETIME_RE.test(serieCategory)
-            ? new Date(serieCategory)
-            : serieCategory
-
-        category.push(serieCategory)
-        for (var serieName in seriesPropsMapping) {
-            var serie = seriesMap[serieName];
-            if (!serie) {
-                serie = {
-                    name: serieName,
-                    type: 'line',
-                    showSymbol: false,
-                    data: []
-                };
-                if (options.stack) {
-                    serie.stack = true;
-                    serie.areaStyle = {normal: {}};
-                }
-                serie.markLine = options.markLine
-                seriesMap[serieName] = serie;
-            }
-            var serieDataProp = seriesPropsMapping[serieName];
-            var serieDataValue = d[serieDataProp]
-            serie.data.push([serieCategory, serieDataValue])
+    let legends = []
+    let series = []
+    for (let serieName in seriesMapping) {
+        legends.push(serieName)
+        let serieKey = seriesMapping[serieName]
+        let metric = data[serieKey]
+        if (!metric || metric.length ==0) {
+            console.warn('no metric data for ' + serieKey)
+            continue
         }
-    })
-    var series = [];
-    for (var serieName in seriesMap) {
-        legends.push(serieName);
-        series.push(seriesMap[serieName]);
+        let dps = metric[0].dps
+        let serieData = []
+        for (let ts in dps) {
+            serieData.push([new Date(ts*1000), Math.round(dps[ts]*100)/100])
+        }
+        let serie = {
+            name: serieName,
+            type: 'line',
+            showSymbol: false,
+            data: serieData
+        };
+        if (options.stack) {
+            serie.stack = true;
+            serie.areaStyle = {normal: {}};
+        }
+        serie.markLine = options.markLine
+        series.push(serie)
     }
 
     let go = {
@@ -92,6 +88,7 @@ const genChartOption = function (title, data, cateProp, seriesPropsMapping, opti
         ],
         series: series
     }
+    console.log(go)
     return go;
 }
 
