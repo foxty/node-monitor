@@ -91,6 +91,10 @@
                     {stack:true, yAxisFmt:"{value}M"});
             },
             diskReports: function(n, o) {
+                if (!n || Object.keys(n).length == 0) {
+                    console.warn('no data from disk report.')
+                    return
+                }
                 var reportsMap = {}
                 var spMapping = {}
                 n['node.disk.used_util'].forEach(x => {

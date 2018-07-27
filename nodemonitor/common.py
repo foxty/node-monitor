@@ -325,7 +325,7 @@ class YAMLConfig(object):
             import yaml
             with open(self._url) as s:
                 self._config = yaml.load(s)
-            self.LOGGER.info('config %s loaded.')
+            self.LOGGER.info('config %s loaded.', url)
 
     def __getitem__(self, item):
         v = self._config[item]

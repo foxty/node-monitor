@@ -22,14 +22,30 @@ spec:
       labels: {app: node-monitor}
     spec:
       containers:
-      - image: registry.cn-shenzhen.aliyuncs.com/foxty/node-monitor:1.0.0-SNAPSHOT
+      - image: registry.cn-shenzhen.aliyuncs.com/foxty/node-monitor-master:1.0.0-SNAPSHOT
         imagePullPolicy: Always
-        name: node-monitor
+        name: node-monitor-master
         ports:
         - {containerPort: 30079}
+        volumeMounts:
+        - {mountPath: /opt/node-monitor/db, name: node-monitor-storage}
+      - image: registry.cn-shenzhen.aliyuncs.com/foxty/node-monitor-ui:1.0.0-SNAPSHOT
+        imagePullPolicy: Always
+        name: node-monitor-ui
+        ports:
         - {containerPort: 30080}
         volumeMounts:
         - {mountPath: /opt/node-monitor/db, name: node-monitor-storage}
+      - image: registry.cn-shenzhen.aliyuncs.com/foxty/open-tsdb:2.3.1
+        ports:
+        - {containerPort: 4242}
+        volumeMounts:
+        - {mountPath: /data/hbase, name: opentsdb-data}
+        - {mountPath: /tmp, name: opentsdb-tmp}
       volumes:
       - glusterfs: {endpoints: ep-glusterfs, path: gv-node-monitor}
         name: node-monitor-storage
+      - glusterfs: {endpoints: ep-glusterfs, path: gv-opentsdb-data}
+        name: opentsdb-data
+      - glusterfs: {endpoints: ep-glusterfs, path: gv-opentsdb-tmp}
+        name: opentsdb-tmp

@@ -17,7 +17,8 @@ from subprocess import check_call, check_output, CalledProcessError
 
 BASE_PATH = sys.path[0]
 VERSION = '1.0.0-%s'
-DOCKER_IMG_TAG = 'registry.cn-shenzhen.aliyuncs.com/foxty/node-monitor:%s'
+MASTER_DOCKER_IMG_TAG = 'registry.cn-shenzhen.aliyuncs.com/foxty/node-monitor-master'
+UI_DOCKER_IMG_TAG = 'registry.cn-shenzhen.aliyuncs.com/foxty/node-monitor-ui'
 
 
 def run_cmd(title, cmd):
@@ -54,7 +55,9 @@ def build_ui():
     ret = run_cmd('[ui] webpack build', ['cd', 'web', '&&', 'npm', 'run', 'build']) if ret else False
 
     # step 3 build docker image for UI
-    # TODO
+    tag = UI_DOCKER_IMG_TAG + ':' + VERSION
+    ret = run_cmd('[ui] build docker image %s' % tag,
+                  ['docker', 'build', '-f', 'Dockerfile.UI', '-t', tag, '.'])
     logging.info('')
     return ret
 
@@ -64,16 +67,19 @@ def build_master():
     Build master with Docker
     :return:
     """
+    tag = MASTER_DOCKER_IMG_TAG + ':' + VERSION
     logging.info('[master] build master')
-    ret = run_cmd('[master] build docker image %s' % DOCKER_IMG_TAG,
-                  ['docker', 'build', '-t', DOCKER_IMG_TAG, '.'])
-
-    ret = run_cmd('push docker image %s'% DOCKER_IMG_TAG, ['docker', 'push', DOCKER_IMG_TAG]) if ret else False
+    ret = run_cmd('[master] build docker image %s' % tag,
+                  ['docker', 'build', '-f', 'Dockerfile.Master', '-t', tag, '.'])
     logging.info('')
     return ret
 
 
 def update_k8s_deployer():
+    """
+    Deprecated
+    :return:
+    """
     cfgpath = os.path.join(sys.path[0], 'deploy', 'node-monitor.yaml')
     logging.info('replace DOCKER_IMAGE_TAG in %s', cfgpath)
     cfgs = []
@@ -81,7 +87,7 @@ def update_k8s_deployer():
         cfg = yaml.load_all(k8scfg)
         for c in cfg:
             if c['kind'] == 'Deployment':
-                c['spec']['template']['spec']['containers'][0]['image'] = DOCKER_IMG_TAG
+                #c['spec']['template']['spec']['containers'][0]['image'] = DOCKER_IMG_TAG
                 c['spec']['template']['spec']['containers'][0]['imagePullPolicy'] = 'Always' \
                     if VERSION.endswith('SNAPSHOT') else 'IfNotPresent'
             cfgs.append(c)
@@ -90,14 +96,23 @@ def update_k8s_deployer():
     return True
 
 
+def push_img():
+    tag = MASTER_DOCKER_IMG_TAG + ':' + VERSION
+    logging.info('push image:%s', tag)
+    ret = run_cmd('push docker image %s' % tag, ['docker', 'push', tag])
+    logging.info('push image:%s - [%s]', tag, 'SUCC' if ret else 'FAIL')
+    tag = UI_DOCKER_IMG_TAG + ':' + VERSION
+    logging.info('push image:%s', tag)
+    ret = run_cmd('push docker image %s'% tag, ['docker', 'push', tag])
+    logging.info('push image:%s - [%s]', tag, 'SUCC' if ret else 'FAIL')
+    logging.info('')
+
+
 if __name__ == '__main__':
     if '--prod' in sys.argv or '--production' in sys.argv:
         VERSION = VERSION % datetime.now().strftime('%Y%m%d%H%M%S')
-        DOCKER_IMG_TAG = DOCKER_IMG_TAG % VERSION
     else:
         VERSION = VERSION % 'SNAPSHOT'
-        DOCKER_IMG_TAG = DOCKER_IMG_TAG % VERSION
-
     logging.basicConfig(level=logging.INFO)
     start = datetime.now()
     logging.info('start build node-monitor@%s...', VERSION)
