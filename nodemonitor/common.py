@@ -44,7 +44,7 @@ def set_logging(filename, when='d', backupCount=7):
     logging.root.addHandler(trh)
 
 
-VAR_PATTERN = re.compile('\${([\w_:]+)}')
+VAR_PATTERN = re.compile('\${([\w_:-]+)}')
 
 
 def interpret_str(content, context={}):
@@ -60,6 +60,8 @@ def interpret_str(content, context={}):
         value = context.get(k, d)
         if value is not None:
             content = content.replace('${%s}' % key, str(value))
+        else:
+            content = d
     return content
 
 
@@ -323,8 +325,11 @@ class YAMLConfig(object):
             self._url = url
             self._config = None
             import yaml
-            with open(self._url) as s:
+            s = open(self._url)
+            try:
                 self._config = yaml.load(s)
+            finally:
+                s.close()
             self.LOGGER.info('config %s loaded.', url)
 
     def __getitem__(self, item):

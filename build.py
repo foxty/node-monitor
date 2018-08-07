@@ -116,7 +116,7 @@ if __name__ == '__main__':
     logging.basicConfig(level=logging.INFO)
     start = datetime.now()
     logging.info('start build node-monitor@%s...', VERSION)
-    res = build_ui() and build_master() and update_k8s_deployer()
+    res = build_ui() and build_master() and push_img()
     logging.info('node-monitor@%s build %s, take %s seconds',
                  VERSION,
                  'succeed' if res else 'failed.',

@@ -11,7 +11,7 @@ dao and model for master
 
 import logging
 import os
-import sqlite3
+import psycopg2
 import requests
 from enum import Enum
 from datetime import datetime, timedelta
@@ -28,19 +28,16 @@ def init_db(dbconfig, schema):
     global DB_CONFIG
     DB_CONFIG = dbconfig
     logging.info('init db with config: %s', dbconfig)
-    dburl = dbconfig['info']['url']
-    dbfolder = os.path.dirname(dburl)
-    if dbfolder and not os.path.exists(dbfolder):
-        logging.warn('create folder for database file %s', dbfolder)
-        os.makedirs(dbfolder)
-    if os.path.exists(dburl):
-        logging.info('db already created, exit initialization.')
-        return
-    with sqlite3.connect(dburl, detect_types=sqlite3.PARSE_DECLTYPES|sqlite3.PARSE_COLNAMES) as conn:
+    infodb = DB_CONFIG['info']
+    dbhost = infodb['host']
+    dbname = infodb['name']
+    user = infodb['user']
+    password = infodb['password']
+    with psycopg2.connect(host=dbhost, database=dbname, user=user, password=password) as conn:
         c = conn.cursor()
-        logging.info('create db schemas for %s', dburl)
+        logging.info('init schema for %s', dbhost)
         with open(schema, 'r') as f:
-            c.executescript(f.read())
+            c.execute(f.read())
         conn.commit()
         c.close()
 
@@ -48,8 +45,12 @@ def init_db(dbconfig, schema):
 def dao(db):
     def db_info(f):
         def dao_decorator(*kargs, **kdargs):
-            with sqlite3.connect(DB_CONFIG['info']['url'],
-                                 detect_types=sqlite3.PARSE_DECLTYPES|sqlite3.PARSE_COLNAMES) as conn:
+            infodb = DB_CONFIG['info']
+            dbhost = infodb['host']
+            dbname = infodb['name']
+            user = infodb['user']
+            password = infodb['password']
+            with psycopg2.connect(host=dbhost, database=dbname, user=user, password=password) as conn:
                 c = conn.cursor()
                 kdargs['cursor'] = c
                 r = f(*kargs, **kdargs)
@@ -73,18 +74,13 @@ def dao(db):
 
 @dao
 def _drop_schema(cursor):
-    cursor.executescript("""
+    logging.info('drop schema.')
+    cursor.execute("""
     DROP TABLE agent;
     DROP TABLE node_metric_raw;
-    DROP TABLE node_memory_report;
-    DROP TABLE node_cpu_report;
-    DROP TABLE node_disk_report;
-    DROP TABLE node_system_report;
     DROP TABLE service_metric_raw;
     DROP TABLE service;
     DROP TABLE service_history;
-    DROP TABLE service_pidstat_report;
-    DROP TABLE service_jstatgc_report;
     """)
 
 
@@ -166,6 +162,7 @@ class Model(dict):
         wherephrase = ' AND '.join(['%s=?' % pk for pk in self._PK])
         pkvalues = tuple([self.get(pk) for pk in self._PK])
         sql = 'DELETE FROM %s WHERE %s' % (self._TABLE, wherephrase)
+        sql = sql.replace('?', '%s')
         params = pkvalues
         logging.debug('%s : %s', sql, params)
         cursor.execute(sql, params)
@@ -190,6 +187,7 @@ class Model(dict):
             wherephrase = ' AND '.join(['%s=?' % pk for pk in self._PK])
             pkvalues = tuple([self.get(pk) for pk in self._PK])
             sql = 'UPDATE %s SET %s WHERE %s' % (self._TABLE, setphrase, wherephrase)
+            sql = sql.replace('?', '%s')
             params = values + pkvalues
             logging.debug('%s : %s', sql, params)
             cursor.execute(sql, params)
@@ -199,6 +197,7 @@ class Model(dict):
     def isql(cls):
         if not cls._ISQL:
             cls._ISQL = 'INSERT INTO %s (%s) VALUES(%s)' % (cls._TABLE, ','.join(cls._FIELDS), ','.join('?' * len(cls._FIELDS)))
+            cls._ISQL = cls._ISQL.replace('?', '%s')
         return cls._ISQL
 
     @classmethod
@@ -222,7 +221,7 @@ class Model(dict):
         """
         sql = 'SELECT %s FROM %s %s %s %s %s' % (','.join(cls._FIELDS),
                                                  cls._TABLE,
-                                                 'WHERE %s' % where if where else '',
+                                                 'WHERE %s' % where.replace('?', '%s') if where else '',
                                                  'ORDER BY %s' % orderby if orderby else '',
                                                  'LIMIT %d' % limit if limit is not None else '',
                                                  'OFFSET %d' % offset if offset is not None else '')
@@ -242,13 +241,14 @@ class Model(dict):
         :return: deleted count
         """
         sql = 'DELETE FROM %s %s' % (cls._TABLE, 'WHERE %s' % where if where else '')
+        sql = sql.replace('?', '%s')
         logging.debug('%s : %s', sql, params)
         cursor.execute(sql, params if params else [])
 
     @classmethod
     @dao
     def count(cls, where=None, params=None, cursor=None):
-        cursor.execute('SELECT COUNT(1) FROM %s %s' % (cls._TABLE, 'WHERE ' + where if where else ''),
+        cursor.execute('SELECT COUNT(1) FROM %s %s' % (cls._TABLE, 'WHERE ' + where.replace('?', '%s') if where else ''),
                        params if params else ())
         r = cursor.fetchone()
         return r[0] if r else 0
@@ -453,7 +453,7 @@ class Agent(Model):
 
     @classmethod
     def query_by_load1(cls, count=10):
-        return cls.query(orderby='last_sys_load1 DESC LIMIT ?', params=[count])
+        return cls.query(orderby='last_sys_load1 DESC', limit=count)
 
 
 class NMetric(Model, AgentChronoModel):

@@ -274,7 +274,7 @@ class Master(object):
             ser = services[sname]
             logging.debug('refreshing service %s', ser)
             ser.set(last_report_at=collect_at, status=model.SInfo.STATUS_ACT)
-            if ser.pid != spid:
+            if ser.pid != int(spid):
                 logging.info('service [%s] pid change detected: %s -> %s', sname, ser.pid, spid)
                 ser.chgpid(spid, collect_at)
 

@@ -20,8 +20,10 @@ class BaseDBTest(unittest.TestCase):
         dbconfig = {
             'info': {
                 'type': 'sqlite',
-                'url': 'test.sqlite3',
-                'user': 'root'
+                'host': '192.168.99.100',
+                'name': 'node-monitor',
+                'user': 'node-monitor',
+                'password': 'node-monitor'
             },
             'tsd': {
                 'type': 'opentsdb',
@@ -321,15 +323,15 @@ class SInfoTest(BaseDBTest):
     def test_chgpid(self):
         ct = datetime.now()
         id = uuid4().hex
-        sinfo = model.SInfo(id=id, aid='1', name='serv', pid='123', last_report_at=datetime.now())
+        sinfo = model.SInfo(id=id, aid='1', name='serv', pid=123, last_report_at=datetime.now())
         sinfo.save()
         self.assertEqual('1', sinfo.aid)
         self.assertEqual('serv', sinfo.name)
-        sinfo.chgpid('456', ct)
+        sinfo.chgpid(456, ct)
 
         sinfo1 = sinfo.query_by_aid('1')[0]
         self.assertEqual(sinfo, sinfo1)
-        self.assertEqual('456', sinfo1.pid)
+        self.assertEqual(456, sinfo1.pid)
 
         history = model.SInfoHistory.query()
         self.assertEqual(1, len(history))

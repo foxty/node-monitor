@@ -199,6 +199,7 @@ class YAMLConfigTest(unittest.TestCase):
         self.assertEqual(30079, cfg['master']['server']['port'])
         self.assertEqual('localhost', cfg['master']['database']['tsd']['host'])
         self.assertEqual('4242', cfg['master']['database']['tsd']['port'])
+        self.assertEqual('node-monitor', cfg['master']['database']['info']['name'])
 
     def test_get_exp(self):
         cfg = self._cfg

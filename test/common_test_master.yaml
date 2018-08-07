@@ -4,10 +4,11 @@ master:
     port: 30079
   database:
     info:
-      type: sqlite
-      url: /opt/node-monitor/db/info.sqlite3
-      user: root
-      password:
+      type: postgres
+      host: ${INFO_HOST:localhost}
+      name: ${DB_NAME:node-monitor}
+      user: node-monitor
+      password: node-monitor
     tsd:
       type: opentsdb
       host: ${TSDB_HOST:localhost}

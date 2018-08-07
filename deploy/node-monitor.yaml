@@ -37,6 +37,7 @@ spec:
         volumeMounts:
         - {mountPath: /opt/node-monitor/db, name: node-monitor-storage}
       - image: registry.cn-shenzhen.aliyuncs.com/foxty/open-tsdb:2.3.1
+        name: open-tsdb
         ports:
         - {containerPort: 4242}
         volumeMounts:
