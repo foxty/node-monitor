@@ -15,6 +15,12 @@ const convertBytes = function(value, from, to) {
     
 }
 
+const tsFormatter = function(ts) {
+    let d = new Date(ts)
+    return (d.getMonth() + 1) + "/" + d.getDate() + " "
+        + d.getHours() + ":" + d.getMinutes()
+}
+
 /**Echarts**/
 const genChartOption = function (title, data, seriesMapping, options) {
     options = options || {}
@@ -37,7 +43,7 @@ const genChartOption = function (title, data, seriesMapping, options) {
         let dps = metric[0].dps
         let serieData = []
         for (let ts in dps) {
-            serieData.push([new Date(ts*1000), Math.round(dps[ts]*100)/100])
+            serieData.push([ts*1000, Math.round(dps[ts]*100)/100])
         }
         let serie = {
             name: serieName,
@@ -56,7 +62,20 @@ const genChartOption = function (title, data, seriesMapping, options) {
     let go = {
         title: {text: title},
         tooltip: {
-            trigger: 'axis'
+            trigger: 'axis',
+            formatter: function (params) {
+                let label =  tsFormatter(params[0].axisValue)
+                label += '<ul style="list-style-type:square; margin:0;padding-left:20px">'
+                params.forEach( param => {
+                    label += '<li style="color:'+param.color+'">'
+                        + '<span style="color:white">'
+                        + param.seriesName
+                        + ' : '
+                        + param.value[1]
+                        + '</span></li>'
+                })
+                return label + '</ul>'
+            }
         },
         legend: {
             data: legends
@@ -65,10 +84,7 @@ const genChartOption = function (title, data, seriesMapping, options) {
             type: 'category',
             boundaryGap: false,
             axisLabel: {
-                formatter: function(value, index) {
-                    return (value.getMonth() + 1) + "/" + value.getDate() + " "
-                    + value.getHours() + ":" + value.getMinutes()
-                }
+                formatter: tsFormatter
             }
         },
         yAxis: {
@@ -88,7 +104,7 @@ const genChartOption = function (title, data, seriesMapping, options) {
         ],
         series: series
     }
-    console.log(go)
+    console.debug(go)
     return go;
 }
 

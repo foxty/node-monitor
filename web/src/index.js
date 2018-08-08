@@ -102,7 +102,6 @@ moment.locale('cn', {
 
 Vue.http.headers.common['Content-Type'] = 'application/json';
 Vue.http.interceptors.push(function(request) {
-    console.log(app)
     app.incAjax()
     // return response callback
     return function(response) {

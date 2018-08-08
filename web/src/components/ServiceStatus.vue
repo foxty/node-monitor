@@ -98,7 +98,7 @@
                 var startAt = self.startAt.valueOf()
                 var endAt = self.endAt.valueOf()
                 var q = `start_at=${startAt}&end_at=${endAt}`
-                var markerLines = []
+                var markerLines = {}
                 new Promise(function(resolve){
                     // Load service history at begin
                     self.$http.get(`/api/agents/${aid}/services/${sid}?${q}`).then(resp => {
@@ -114,14 +114,14 @@
                         return resp.json()
                     }).then(reports => {
                         self.pidstatReports = reports
-                        self.genPidstatReports(reports, markerLines)
+                        self.genPidstatReports(self.pidstatReports, markerLines)
                     })
                     self.$http.get(`/api/agents/${aid}/services/${sid}/report/jstatgc?${q}`).then(resp => {
                         return resp.json()
                     }).then(resp => {
                         self.jstatgcReports = resp.reports
                         self.jstatgcStats = resp.gcstats
-                        self.genJstatgcReports(resp.reports, markerLines)
+                        self.genJstatgcReports(self.jstatgcReports, markerLines)
                     })
                 })
 
@@ -130,7 +130,7 @@
             genRestartMarkerConfig: function(serviceHistory) {
                 var markers = []
                 serviceHistory.forEach(function(sh) {
-                    markers.push({xAxis: sh.collect_at || sh.recv_at})
+                    markers.push({xAxis: new Date(sh.collect_at).getTime() + ''})
                 })
                 return {
                     label: {formatter: 'R'},

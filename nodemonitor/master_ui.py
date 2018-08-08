@@ -26,8 +26,8 @@ _APP = Flask(__name__,
 
 
 def calc_daterange(req):
-    start_at = float(req.args.get('start_at'))
-    end_at = float(req.args.get('end_at'))
+    start_at = int(req.args.get('start_at'))
+    end_at = int(req.args.get('end_at'))
     return start_at/1000, end_at/1000
 
 
@@ -150,7 +150,8 @@ def get_agent_services(aid):
 @_APP.route('/api/agents/<string:aid>/services/<string:service_id>')
 def get_service_info(aid, service_id):
     service = SInfo.byid(service_id)
-    service_history = SInfoHistory.query_by_rtime(service_id, *calc_daterange(request))
+    startts, endts = calc_daterange(request)
+    service_history = SInfoHistory.query_by_rtime(service_id, datetime.utcfromtimestamp(startts), datetime.utcfromtimestamp(endts))
     return dump_json({'service': service, 'service_history': service_history})
 
 
@@ -158,6 +159,7 @@ def get_service_info(aid, service_id):
             methods=['GET'])
 def get_service_pidstats(aid, service_id):
     reports = SPidstatReport.query(*calc_daterange(request),
+                                   agg=TSDAgg.SUM,
                                    tags={'aid': aid, 'service_id': service_id})
     return dump_json(reports)
 

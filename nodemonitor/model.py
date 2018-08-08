@@ -515,7 +515,7 @@ class SInfo(Model):
         return '[SInfo: aid=%s, name=%s, pid=%s]' % (self.aid, self.name, self.pid)
 
     def add_history(self, collect_at):
-        SInfoHistory(aid=self.aid, service_id=self.id, pid=self.pid, collect_at=collect_at, recv_at=datetime.now()).save()
+        SInfoHistory(aid=self.aid, service_id=self.id, pid=self.pid, collect_at=collect_at, recv_at=datetime.utcnow()).save()
 
     def chgpid(self, newpid, collect_at):
         self.set(pid=newpid)
