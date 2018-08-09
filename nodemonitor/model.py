@@ -408,6 +408,7 @@ class TSDModel(dict):
                     if mname not in metrics_data:
                         metrics_data[mname] = []
                     metrics_data[mname].append(m)
+                metrics_data['downsample'] = downsample is not None
             else:
                 logging.error('query of %s from %s failed, resp=%s', body, dburl, resp_json)
         except Exception:

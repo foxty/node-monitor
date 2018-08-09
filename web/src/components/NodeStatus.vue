@@ -78,17 +78,19 @@
                     {"IN":"node.system.sys_in", "CS":"node.system.sys_cs"});
             },
             cpuReports: function(n, o) {
+                let stack = false == n.downsample
                 this.cpuChart = genChartOption("CPU", n,
                     {"User":"node.cpu.us","System":"node.cpu.sy", "Wait":"node.cpu.wa","Stolen":"node.cpu.st"},
-                    {stack:true, yAxisFmt: "{value}%", yAxisMax:100,});
+                    {stack:stack, yAxisFmt: "{value}%", yAxisMax:100,});
             },
             memReports: function(n, o) {
+                let stack = false == n.downsample
                 this.memoryChart = genChartOption("Memory", n,
                     {"Used":"node.memory.used_mem", "Free":"node.memory.free_mem"},
-                    {stack:true, yAxisFmt:"{value}M"});
+                    {stack:stack, yAxisFmt:"{value}M"});
                 this.swapChart = genChartOption("Swap", n,
                     {"Used":"node.memory.used_swap", "Free":"node.memory.free_swap"},
-                    {stack:true, yAxisFmt:"{value}M"});
+                    {stack:stack, yAxisFmt:"{value}M"});
             },
             diskReports: function(n, o) {
                 if (!n || Object.keys(n).length == 0) {

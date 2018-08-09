@@ -31,6 +31,24 @@ def calc_daterange(req):
     return start_at/1000, end_at/1000
 
 
+_SAMPLE_INTERVAL = [120, 300, 600, 900, 1800, 3600, 2*3600, 6*3600, 12*3600, 24*3600]
+
+
+def calc_downsample(start, end, agg, samples=60):
+    """
+    Calculate downsample for ts series
+    :param start: in seconds
+    :param end: in seconds
+    :param agg: aggregation algo for down sample
+    :param samples:
+    :return:
+    """
+    expect_interval = (end - start)/samples
+    candidate_intervals = filter(lambda x: x < expect_interval, _SAMPLE_INTERVAL)
+    interval = candidate_intervals[-1] if len(candidate_intervals) > 0 else None
+    return '%ds-%s' % (interval, agg.value) if interval is not None else None
+
+
 @_APP.errorhandler(Exception)
 def exception_handler(error):
     logging.exception('unexpected error occurs')
@@ -109,33 +127,41 @@ def del_agent(aid):
 @_APP.route('/api/agents/<aid>/report/system', methods=['GET'])
 def get_agent_sysreports(aid):
     start, end = calc_daterange(request)
+    downsample = calc_downsample(start, end, TSDAgg.MAX)
     reports = NSystemReport.query(start=start, end=end,
                                   metrics=['users','load1', 'load5', 'load15', 'sys_in', 'sys_cs'],
-                                  tags={'aid': aid})
+                                  tags={'aid': aid},
+                                  downsample=downsample)
     return dump_json(reports)
 
 
 @_APP.route('/api/agents/<aid>/report/cpu', methods=['GET'])
 def get_agent_cpureports(aid):
     start, end = calc_daterange(request)
-    reports = NCPUReport.query(start=start, end=end, tags={'aid': aid})
+    downsample = calc_downsample(start, end, TSDAgg.MAX)
+    reports = NCPUReport.query(start=start, end=end, tags={'aid': aid}, downsample=downsample)
     return dump_json(reports)
 
 
 @_APP.route('/api/agents/<aid>/report/memory', methods=['GET'])
 def get_agent_memreports(aid):
     start, end = calc_daterange(request)
+    downsample = calc_downsample(start, end, TSDAgg.MAX)
     reports = NMemoryReport.query(start=start, end=end,
                                   metrics=['used_mem', 'free_mem', 'used_swap', 'free_swap'],
-                                  tags={'aid': aid})
+                                  tags={'aid': aid},
+                                  downsample=downsample)
     return dump_json(reports)
 
 
 @_APP.route('/api/agents/<aid>/report/disk', methods=['GET'])
 def get_agent_diskreports(aid):
-    reports = NDiskReport.query(*calc_daterange(request),
+    start, end = calc_daterange(request)
+    downsample = calc_downsample(start, end, TSDAgg.MAX)
+    reports = NDiskReport.query(start, end,
                                 metrics=['used_util'],
-                                tags={'aid': aid})
+                                tags={'aid': aid},
+                                downsample=downsample)
     return dump_json(reports)
 
 
@@ -158,9 +184,12 @@ def get_service_info(aid, service_id):
 @_APP.route('/api/agents/<aid>/services/<service_id>/report/pidstat',
             methods=['GET'])
 def get_service_pidstats(aid, service_id):
-    reports = SPidstatReport.query(*calc_daterange(request),
+    start, end = calc_daterange(request)
+    downsample = calc_downsample(start, end, TSDAgg.MAX)
+    reports = SPidstatReport.query(start=start, end=end,
                                    agg=TSDAgg.SUM,
-                                   tags={'aid': aid, 'service_id': service_id})
+                                   tags={'aid': aid, 'service_id': service_id},
+                                   downsample=downsample)
     return dump_json(reports)
 
 
@@ -168,7 +197,7 @@ def get_service_pidstats(aid, service_id):
             methods=['GET'])
 def get_service_jstatgc(aid, service_id):
     start, end = calc_daterange(request)
-    reports = SJstatGCReport.query(start, end,
+    reports = SJstatGCReport.query(start=start, end=end,
                                    tags={'aid': aid, 'service_id': service_id})
     # shistory = SInfoHistory.query_by_rtime(service_id, start, end)
     # calculate gc stats and memory stats
