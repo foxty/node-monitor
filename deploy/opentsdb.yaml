@@ -1,0 +1,34 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: svc-opentsdb
+spec:
+  ports:
+  - {name: opentsdb, port: 4242, protocol: TCP}
+  selector: {app: opentsdb}
+  type: ClusterIP
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata: {name: dep-opentsdb}
+spec:
+  selector:
+    matchLabels: {app: opentsdb}
+  strategy: {type: Recreate}
+  template:
+    metadata:
+      labels: {app: opentsdb}
+    spec:
+      containers:
+      - image: registry.cn-shenzhen.aliyuncs.com/foxty/open-tsdb:2.3.1
+        name: open-tsdb
+        ports:
+        - {containerPort: 4242}
+        volumeMounts:
+        - {mountPath: /data/hbase, name: opentsdb-data}
+        - {mountPath: /tmp, name: opentsdb-tmp}
+      volumes:
+      - glusterfs: {endpoints: ep-glusterfs, path: gv-opentsdb-data}
+        name: opentsdb-data
+      - glusterfs: {endpoints: ep-glusterfs, path: gv-opentsdb-tmp}
+        name: opentsdb-tmp

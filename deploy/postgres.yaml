@@ -1,0 +1,31 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: svc-postgres
+spec:
+  ports:
+  - {name: postgres, port: 5432, protocol: TCP}
+  selector: {app: postgres}
+  type: ClusterIP
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata: {name: dep-postgres}
+spec:
+  selector:
+    matchLabels: {app: postgres}
+  strategy: {type: Recreate}
+  template:
+    metadata:
+      labels: {app: postgres}
+    spec:
+      containers:
+      - image:postgres:10
+        name: postgres10
+        ports:
+        - {containerPort: 4242}
+        volumeMounts:
+        - {mountPath: /var/lib/postgresql/data, name: postgres-data}
+      volumes:
+      - glusterfs: {endpoints: ep-glusterfs, path: gv-postgres-data}
+        name: postgres-data
