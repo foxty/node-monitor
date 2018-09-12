@@ -28,8 +28,6 @@ spec:
         env:
           - name: TSDB_HOST
             value: svc-opentsdb
-          - name: TSDB_PORT
-            value: 34242
           - name: INFO_HOST
             value: svc-postgres
         ports:
@@ -42,8 +40,6 @@ spec:
         env:
           - name: TSDB_HOST
             value: svc-opentsdb
-          - name: TSDB_PORT
-            value: 34242
           - name: INFO_HOST
             value: svc-postgres
         ports:
