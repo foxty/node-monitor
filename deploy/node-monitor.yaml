@@ -32,8 +32,6 @@ spec:
             value: svc-postgres
         ports:
         - {containerPort: 30079}
-        volumeMounts:
-        - {mountPath: /opt/node-monitor/db, name: node-monitor-storage}
       - image: registry.cn-shenzhen.aliyuncs.com/foxty/node-monitor-ui:1.0.0-SNAPSHOT
         imagePullPolicy: Always
         name: node-monitor-ui
@@ -44,8 +42,3 @@ spec:
             value: svc-postgres
         ports:
         - {containerPort: 30080}
-        volumeMounts:
-        - {mountPath: /opt/node-monitor/db, name: node-monitor-storage}
-      volumes:
-      - glusterfs: {endpoints: ep-glusterfs, path: gv-node-monitor}
-        name: node-monitor-storage
