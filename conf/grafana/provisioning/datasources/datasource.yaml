@@ -1,0 +1,29 @@
+# config file version
+apiVersion: 1
+datasources:
+- name: opentsdb
+  type: opentsdb
+  access: proxy
+  orgId: 1
+  url: http://opentsdb-host:4242
+  isDefault: true
+  jsonData:
+    tsdbVersion: 3
+    tsdbResolution: 1
+  version: 1
+  editable: true
+
+- name: postgres
+  type: postgres
+  orgId: 1
+  url: postgres-host
+  database: node-monitor
+  user: node-monitor
+  jsonData:
+    sslmode: disable
+    postgresVersion: 1000
+    timescaledb: false
+  secureJsonData:
+    password: node-monitor
+  version: 1
+  editable: true

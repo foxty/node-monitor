@@ -5,14 +5,14 @@ master:
   database:
     info:
       type: postgres
-      host: ${INFO_HOST:localhost}
+      host: ${POSTGRES_HOST:localhost}
       name: ${DB_NAME:node-monitor}
       user: node-monitor
       password: node-monitor
     tsd:
       type: opentsdb
-      host: ${TSDB_HOST:localhost}
-      port: ${TSDB_PORT:4242}
+      host: ${OPENTSDB_HOST:localhost}
+      port: ${OPENTSDB_PORT:4242}
   data_retention:
     interval: 86400 # seconds
     policy: # days

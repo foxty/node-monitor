@@ -49,10 +49,10 @@ def build_ui():
     """
     logging.info('[ui] build ui component')
     # step 1 install js libs
-    ret = run_cmd('[ui] install javascript libs',
-                  ["cd", "web", "&&", "npm", "install", "--production"])
+    # ret = run_cmd('[ui] install javascript libs',
+    #              ["cd", "web", "&&", "npm", "install", "--production"])
     # step 2 webpack build
-    ret = run_cmd('[ui] webpack build', ['cd', 'web', '&&', 'npm', 'run', 'build']) if ret else False
+    #ret = run_cmd('[ui] webpack build', ['cd', 'web', '&&', 'npm', 'run', 'build']) if ret else False
 
     # step 3 build docker image for UI
     tag = UI_DOCKER_IMG_TAG + ':' + VERSION
@@ -106,6 +106,7 @@ def push_img():
     ret = run_cmd('push docker image %s'% tag, ['docker', 'push', tag])
     logging.info('push image:%s - [%s]', tag, 'SUCC' if ret else 'FAIL')
     logging.info('')
+    return ret
 
 
 if __name__ == '__main__':
@@ -116,7 +117,14 @@ if __name__ == '__main__':
     logging.basicConfig(level=logging.INFO)
     start = datetime.now()
     logging.info('start build node-monitor@%s...', VERSION)
-    res = build_ui() and build_master() and push_img()
+    if 'ui' in sys.argv:
+        res = build_ui()
+    elif 'master' in sys.argv:
+        res= build_master()
+    elif 'push' in sys.argv:
+        push_img()
+    else:
+        res = build_ui() and build_master() and push_img()
     logging.info('node-monitor@%s build %s, take %s seconds',
                  VERSION,
                  'succeed' if res else 'failed.',

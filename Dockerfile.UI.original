@@ -1,4 +1,4 @@
-# Master
+# UI
 FROM python:2-slim
 LABEL maintainer="foxty@163.com"
 ENV APP_BASE=/opt/node-monitor
@@ -7,10 +7,11 @@ WORKDIR /opt/node-monitor
 COPY requirements.txt ./
 COPY conf ./conf
 COPY nodemonitor ./nodemonitor
+COPY web/dist ./web/dist
 
 RUN pip install -r requirements.txt
-RUN chmod +x ./nodemonitor/master.py
+RUN chmod +x ./nodemonitor/master_ui.py
 
-EXPOSE 30079
+EXPOSE 30080
 VOLUME /opt/node-monitor/db
-CMD [ "python", "./nodemonitor/master.py"]
+CMD [ "python", "./nodemonitor/master_ui.py"]

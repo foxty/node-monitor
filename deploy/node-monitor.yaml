@@ -26,9 +26,9 @@ spec:
         imagePullPolicy: Always
         name: node-monitor-master
         env:
-          - name: TSDB_HOST
+          - name: OPENTSDB_HOST
             value: svc-opentsdb
-          - name: INFO_HOST
+          - name: POSTGRES_HOST
             value: svc-postgres
         ports:
         - {containerPort: 30079}
@@ -36,9 +36,9 @@ spec:
         imagePullPolicy: Always
         name: node-monitor-ui
         env:
-          - name: TSDB_HOST
+          - name: OPENTSDB_HOST
             value: svc-opentsdb
-          - name: INFO_HOST
+          - name: POSTGRES_HOST
             value: svc-postgres
         ports:
         - {containerPort: 30080}

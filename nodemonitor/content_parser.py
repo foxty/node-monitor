@@ -41,7 +41,7 @@ def parse_w(aid, collect_time, content):
                              load1=load1, load5=load5, load15=load15,
                              procs_r=None, procs_b=None, sys_in=None, sys_cs=None)
     else:
-        logging.warn('invalid content of `w`: %s', content)
+        logging.warn('invalid content of `w` from %s: %s', aid, content)
         return None
 
 
@@ -69,7 +69,7 @@ def parse_free(aid, collect_time, content):
                              free_mem=free_mem, cache_mem=None, total_swap=total_swap,
                              used_swap=use_swap, free_swap=free_swap)
     else:
-        logging.warn('invalid content of`free`: %s', content)
+        logging.warn('invalid content of `free` from %s: %s', aid, content)
         return None
 
 
@@ -262,10 +262,10 @@ def parse_pidstat(aid, collect_time, service_id, content):
                              mem_minflt=mem_minflt, mem_majflt=mem_majflt,
                              mem_vsz=mem_vsz, mem_rss=mem_rss, mem_util=mem_util,
                              disk_rd=disk_rd, disk_wr=disk_wr, disk_ccwr=disk_ccwr)
-        logging.debug('get pidsat report %s', rep)
+        logging.debug('get pidsat report from %s(%s) : %s', aid, service_id, rep)
         return rep
     else:
-        logging.warn('invalid content of `pidstat` : %s', content)
+        logging.warn('invalid content of `pidstat` from %s(%s) : %s', aid, service_id, content)
         return None
 
 
@@ -291,10 +291,10 @@ def parse_prstat(aid, collect_time, service_id, content):
         mem_vsz, mem_rss = conv_to_kilo(prow.get('SIZE')), conv_to_kilo(prow.get('RSS')),
         rep = SPidstatReport(aid=aid, service_id=service_id, timestamp=collect_time, tid=tid,
                              cpu_util=cpu_util, mem_vsz=mem_vsz, mem_rss=mem_rss)
-        logging.debug('get prstat report %s', rep)
+        logging.debug('get prstat report from %s(%s) : %s', aid, service_id, rep)
         return rep
     else:
-        logging.warn('invalid content of `prstat` : %s', content)
+        logging.warn('invalid content of `prstat` from %s(%s) : %s', aid, service_id, content)
         return None
 
 
@@ -316,8 +316,8 @@ def parse_jstatgc(aid, collect_time, service_id, content):
                              ec=EC, eu=EU, oc=OC, ou=OU,
                              mc=MC, mu=MU, ccsc=CCSC, ccsu=CCSU,
                              ygc=YGC, ygct=YGCT, fgc=FGC, fgct=FGCT, gct=GCT)
-        logging.debug('get jstat-gc report %s', rep)
+        logging.debug('get jstat-gc report from %s(%s): %s', aid, service_id, rep)
         return rep
     else:
-        logging.warn('invalid content of `jstat-gc` : %s', content)
+        logging.warn('invalid content of `jstat-gc` from %s(%s) : %s', aid, service_id, content)
         return None
