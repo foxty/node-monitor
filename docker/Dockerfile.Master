@@ -2,6 +2,7 @@
 FROM python:2-slim
 LABEL maintainer="foxty@163.com"
 ENV APP_BASE=/opt/node-monitor
+ENV MASTER_HOST=''
 WORKDIR /opt/node-monitor
 
 COPY requirements.txt ./

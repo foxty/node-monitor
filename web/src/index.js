@@ -39,7 +39,7 @@ Vue.filter('decimal', function(number, precision) {
 const router = new VueRouter({
     routes: [
         // 动态路径参数 以冒号开头
-        {path: '/', redirect: {name: 'dashboard'}},
+        {path: '/', redirect: {name: 'nodes'}},
         {path: '/dashboard', name: 'dashboard', component: Dashboard},
         {path: '/nodes', component: Nodes},
         {path: '/nodes/:aid', name:'node', component: Node, props:true, children: [
