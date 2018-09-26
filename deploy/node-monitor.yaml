@@ -5,9 +5,9 @@ metadata:
   name: svc-node-monitor
 spec:
   ports:
-  - {name: ui, nodePort: 30080, port: 30080, protocol: TCP}
-  - {name: master, nodePort: 30078, port: 30078, protocol: TCP}
-  - {name: master, nodePort: 30079, port: 30079, protocol: TCP}
+  - {name: http-ui, nodePort: 30080, port: 30080, protocol: TCP}
+  - {name: http-master-mgr, nodePort: 30078, port: 30078, protocol: TCP}
+  - {name: tcp-master, nodePort: 30079, port: 30079, protocol: TCP}
   selector: {app: node-monitor}
   type: LoadBalancer
 ---
