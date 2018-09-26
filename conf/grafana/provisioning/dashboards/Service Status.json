@@ -16,7 +16,7 @@
   "gnetId": null,
   "graphTooltip": 0,
   "id": 5,
-  "iteration": 1537532637712,
+  "iteration": 1537959698546,
   "links": [],
   "panels": [
     {
@@ -29,7 +29,8 @@
         "#d44a3a"
       ],
       "datasource": "postgres",
-      "format": "none",
+      "decimals": null,
+      "format": "short",
       "gauge": {
         "maxValue": 100,
         "minValue": 0,
@@ -97,7 +98,7 @@
       "valueMaps": [
         {
           "op": "=",
-          "text": "N/A",
+          "text": "0",
           "value": "null"
         }
       ],
@@ -306,6 +307,7 @@
         {
           "alias": "",
           "dateFormat": "YYYY-MM-DD HH:mm:ss",
+          "link": false,
           "pattern": "last_report_at",
           "type": "date"
         },
@@ -334,7 +336,8 @@
           "downsampleAggregator": "avg",
           "downsampleFillPolicy": "none",
           "format": "table",
-          "rawSql": "SELECT s.id, s.name service_name, a.aid, a.name node_name, s.type, s.last_report_at, s.status, s.pid from service s, agent a where s.aid=a.aid and s.id='$service_id'",
+          "hide": false,
+          "rawSql": "SELECT s.id, s.name service_name, a.aid, a.name node_name, s.type, s.status, s.pid, s.last_report_at from service s, agent a where s.aid=a.aid and s.id='$service_id'",
           "refId": "A"
         }
       ],
@@ -557,7 +560,7 @@
       "fill": 1,
       "gridPos": {
         "h": 5,
-        "w": 24,
+        "w": 12,
         "x": 0,
         "y": 11
       },
@@ -673,6 +676,134 @@
         "align": false,
         "alignLevel": null
       }
+    },
+    {
+      "aliasColors": {},
+      "bars": false,
+      "dashLength": 10,
+      "dashes": false,
+      "datasource": "opentsdb",
+      "fill": 1,
+      "gridPos": {
+        "h": 5,
+        "w": 12,
+        "x": 12,
+        "y": 11
+      },
+      "id": 11,
+      "legend": {
+        "alignAsTable": false,
+        "avg": false,
+        "current": false,
+        "hideEmpty": false,
+        "hideZero": false,
+        "max": false,
+        "min": false,
+        "rightSide": false,
+        "show": true,
+        "total": false,
+        "values": false
+      },
+      "lines": true,
+      "linewidth": 1,
+      "links": [],
+      "nullPointMode": "null",
+      "percentage": false,
+      "pointradius": 2,
+      "points": true,
+      "renderer": "flot",
+      "seriesOverrides": [],
+      "spaceLength": 10,
+      "stack": false,
+      "steppedLine": false,
+      "targets": [
+        {
+          "aggregator": "max",
+          "alias": "Disk Read",
+          "currentFilterGroupBy": false,
+          "currentFilterKey": "",
+          "currentFilterType": "literal_or",
+          "currentFilterValue": "",
+          "currentTagKey": "",
+          "currentTagValue": "",
+          "disableDownsampling": false,
+          "downsampleAggregator": "max",
+          "downsampleFillPolicy": "null",
+          "downsampleInterval": "",
+          "explicitTags": false,
+          "filters": [],
+          "hide": false,
+          "metric": "service.pidstat.disk_rd",
+          "refId": "A",
+          "shouldComputeRate": false,
+          "tags": {
+            "service_id": "${service_id}"
+          }
+        },
+        {
+          "aggregator": "max",
+          "alias": "Disk Write",
+          "currentFilterGroupBy": false,
+          "currentFilterKey": "",
+          "currentFilterType": "literal_or",
+          "currentFilterValue": "",
+          "currentTagKey": "",
+          "currentTagValue": "",
+          "disableDownsampling": false,
+          "downsampleAggregator": "max",
+          "downsampleFillPolicy": "null",
+          "downsampleInterval": "",
+          "explicitTags": false,
+          "filters": [],
+          "hide": false,
+          "metric": "service.pidstat.disk_wr",
+          "refId": "B",
+          "shouldComputeRate": false,
+          "tags": {
+            "service_id": "${service_id}"
+          }
+        }
+      ],
+      "thresholds": [],
+      "timeFrom": null,
+      "timeShift": null,
+      "title": "Disk Read/Write",
+      "tooltip": {
+        "shared": true,
+        "sort": 0,
+        "value_type": "individual"
+      },
+      "type": "graph",
+      "xaxis": {
+        "buckets": null,
+        "mode": "time",
+        "name": null,
+        "show": true,
+        "values": []
+      },
+      "yaxes": [
+        {
+          "decimals": null,
+          "format": "KBs",
+          "label": "",
+          "logBase": 1,
+          "max": null,
+          "min": null,
+          "show": true
+        },
+        {
+          "format": "short",
+          "label": null,
+          "logBase": 1,
+          "max": null,
+          "min": null,
+          "show": false
+        }
+      ],
+      "yaxis": {
+        "align": false,
+        "alignLevel": null
+      }
     }
   ],
   "refresh": false,
@@ -684,9 +815,9 @@
       {
         "allValue": null,
         "current": {
-          "tags": [],
-          "text": "sanguo",
-          "value": "sanguo"
+          "selected": false,
+          "text": "putuo",
+          "value": "putuo"
         },
         "datasource": "postgres",
         "hide": 0,
@@ -696,7 +827,7 @@
         "name": "aid",
         "options": [
           {
-            "selected": true,
+            "selected": false,
             "text": "590a5c10",
             "value": "590a5c10"
           },
@@ -711,7 +842,7 @@
             "value": "sanguo"
           },
           {
-            "selected": false,
+            "selected": true,
             "text": "putuo",
             "value": "putuo"
           },
@@ -751,12 +882,12 @@
         "name": "service_id",
         "options": [
           {
-            "selected": true,
+            "selected": false,
             "text": "e8542caf1f194ebabd86118e181d8557",
             "value": "e8542caf1f194ebabd86118e181d8557"
           },
           {
-            "selected": false,
+            "selected": true,
             "text": "406414fadb08450a963443b2c66f820a",
             "value": "406414fadb08450a963443b2c66f820a"
           },
@@ -810,5 +941,5 @@
   "timezone": "",
   "title": "Service Status",
   "uid": "kG1moUomk",
-  "version": 16
+  "version": 18
 }

@@ -401,6 +401,7 @@
       "targets": [
         {
           "aggregator": "max",
+          "alias": "",
           "currentFilterGroupBy": false,
           "currentFilterKey": "",
           "currentFilterType": "literal_or",
@@ -413,8 +414,10 @@
           "downsampleInterval": "",
           "explicitTags": false,
           "filters": [],
+          "format": "time_series",
           "hide": false,
           "metric": "node.system.load1",
+          "rawSql": "SELECT\n  $__time(time_column),\n  value1\nFROM\n  metric_table\nWHERE\n  $__timeFilter(time_column)\n",
           "refId": "A",
           "shouldComputeRate": false,
           "tags": {
@@ -908,5 +911,5 @@
   "timezone": "",
   "title": "Nodes",
   "uid": "naD17ETmz",
-  "version": 38
+  "version": 39
 }

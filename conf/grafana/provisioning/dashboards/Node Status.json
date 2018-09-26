@@ -16,7 +16,7 @@
   "gnetId": null,
   "graphTooltip": 0,
   "id": 3,
-  "iteration": 1537532617778,
+  "iteration": 1537963123823,
   "links": [],
   "panels": [
     {
@@ -384,7 +384,7 @@
       "scroll": true,
       "showHeader": true,
       "sort": {
-        "col": 0,
+        "col": 5,
         "desc": true
       },
       "styles": [
@@ -1172,7 +1172,7 @@
       {
         "allValue": null,
         "current": {
-          "tags": [],
+          "selected": true,
           "text": "590a5c10",
           "value": "590a5c10"
         },
@@ -1259,5 +1259,5 @@
   "timezone": "",
   "title": "Node Status",
   "uid": "tT-zVETmk",
-  "version": 26
+  "version": 27
 }
