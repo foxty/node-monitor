@@ -44,20 +44,13 @@ def run_cmd(title, cmd):
 
 def build_ui():
     """
-    Build ui component by using webpack and nodejs
+    Build ui base on grafana
     :return:
     """
-    logging.info('[ui] build ui component')
-    # step 1 install js libs
-    # ret = run_cmd('[ui] install javascript libs',
-    #              ["cd", "web", "&&", "npm", "install", "--production"])
-    # step 2 webpack build
-    #ret = run_cmd('[ui] webpack build', ['cd', 'web', '&&', 'npm', 'run', 'build']) if ret else False
-
-    # step 3 build docker image for UI
+    logging.info('[ui] build report ui ')
     tag = UI_DOCKER_IMG_TAG + ':' + VERSION
     ret = run_cmd('[ui] build docker image %s' % tag,
-                  ['docker', 'build', '-f', 'Dockerfile.UI', '-t', tag, '.'])
+                  ['docker', 'build', '-f', os.path.join('docker', 'Dockerfile.UI'), '-t', tag, '.'])
     logging.info('')
     return ret
 
@@ -69,8 +62,14 @@ def build_master():
     """
     tag = MASTER_DOCKER_IMG_TAG + ':' + VERSION
     logging.info('[master] build master')
+    # step 1 install js libs
+    ret = run_cmd('[master] install javascript libs',
+                  ["cd", "web", "&&", "npm", "install", "--production"])
+    # step 2 webpack build
+    ret = run_cmd('[master] webpack build', ['cd', 'web', '&&', 'npm', 'run', 'build']) if ret else False
     ret = run_cmd('[master] build docker image %s' % tag,
-                  ['docker', 'build', '-f', 'Dockerfile.Master', '-t', tag, '.'])
+                  ['docker', 'build', '-f', os.path.join('docker', 'Dockerfile.Master'), '-t', tag,
+                   '.']) if ret else False
     logging.info('')
     return ret
 
@@ -120,7 +119,7 @@ if __name__ == '__main__':
     if 'ui' in sys.argv:
         res = build_ui()
     elif 'master' in sys.argv:
-        res= build_master()
+        res = build_master()
     elif 'push' in sys.argv:
         push_img()
     else:

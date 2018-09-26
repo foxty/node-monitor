@@ -6,6 +6,7 @@ metadata:
 spec:
   ports:
   - {name: ui, nodePort: 30080, port: 30080, protocol: TCP}
+  - {name: master, nodePort: 30078, port: 30078, protocol: TCP}
   - {name: master, nodePort: 30079, port: 30079, protocol: TCP}
   selector: {app: node-monitor}
   type: LoadBalancer
@@ -32,6 +33,7 @@ spec:
             value: svc-postgres
         ports:
         - {containerPort: 30079}
+        - {containerPort: 30078}
       - image: registry.cn-shenzhen.aliyuncs.com/foxty/node-monitor-ui:1.0.0-SNAPSHOT
         imagePullPolicy: Always
         name: node-monitor-ui
