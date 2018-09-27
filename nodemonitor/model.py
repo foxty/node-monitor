@@ -20,7 +20,7 @@ DB_CONFIG = None
 _EPOC = datetime(1970, 1, 1)
 
 
-def init_db(dbconfig, schema):
+def init_db(dbconfig, schema = None):
     """
     setup database by sqlite3
     :return:
@@ -28,18 +28,9 @@ def init_db(dbconfig, schema):
     global DB_CONFIG
     DB_CONFIG = dbconfig
     logging.info('init db with config: %s', dbconfig)
-    infodb = DB_CONFIG['info']
-    dbhost = infodb['host']
-    dbname = infodb['name']
-    user = infodb['user']
-    password = infodb['password']
-    with psycopg2.connect(host=dbhost, database=dbname, user=user, password=password) as conn:
-        c = conn.cursor()
-        logging.info('init schema for %s', dbhost)
-        with open(schema, 'r') as f:
-            c.execute(f.read())
-        conn.commit()
-        c.close()
+    if schema is not None:
+        logging.info('creating schema for %s', DB_CONFIG['info'])
+        _create_schema(schema)
 
 
 def dao(db):
@@ -50,13 +41,20 @@ def dao(db):
             dbname = infodb['name']
             user = infodb['user']
             password = infodb['password']
-            with psycopg2.connect(host=dbhost, database=dbname, user=user, password=password) as conn:
-                c = conn.cursor()
-                kdargs['cursor'] = c
-                r = f(*kargs, **kdargs)
-                conn.commit()
-                c.close()
-            return r
+            # redo the operation until it success
+            retry = 0
+            while True:
+                try:
+                    with psycopg2.connect(host=dbhost, database=dbname, user=user, password=password) as conn:
+                        c = conn.cursor()
+                        kdargs['cursor'] = c
+                        result = f(*kargs, **kdargs)
+                        conn.commit()
+                        c.close()
+                        return result
+                except psycopg2.OperationalError as oe:
+                    retry += 1
+                    logging.error('error while connecting to postgres db, retry %d...', retry)
         return dao_decorator
 
     def db_tsd(f):
@@ -70,6 +68,12 @@ def dao(db):
         return db_info(db)
     else:
         return db_info if db == 'info' else db_tsd
+
+
+@dao
+def _create_schema(schema, cursor):
+    with open(schema, 'r') as f:
+        cursor.execute(f.read())
 
 
 @dao

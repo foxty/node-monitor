@@ -25,7 +25,7 @@ from base64 import standard_b64encode, standard_b64decode
 from datetime import datetime, date, time
 from struct import *
 
-LOGGING_FMT = '%(asctime)s-%(threadName)s:%(levelname)s:%(name)s:%(module)s.%(lineno)d:%(message)s'
+LOGGING_FMT = '%(asctime)s %(levelname)s %(process)d[%(threadName)s]:%(name)s:%(module)s[%(lineno)d]: %(message)s'
 DATETIME_FMT = '%Y-%m-%dT%H:%M:%SZ'
 DATETIME_RE = re.compile('^\\d{4}-\\d{1,2}-\\d{1,2}T\\d{2}:\\d{2}:\\d{2}Z$')
 DATE_FMT = '%Y-%m-%d'

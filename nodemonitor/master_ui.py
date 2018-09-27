@@ -221,11 +221,9 @@ def get_service_jstatgc(aid, service_id):
 
 def ui_main(config, debug=False):
     set_logging('ui.log')
-    logging.info('starting master ui...')
-    basepath = os.path.dirname(sys.path[0])
-    schemapath = os.path.join(basepath, 'conf', 'schema.sql')
+    logging.info('starting manger ui...')
     dbcfg = config['master']['database']
-    init_db(dbcfg, schemapath)
+    init_db(dbcfg)
     global _CONFIG
     _CONFIG = config
     _APP.jinja_env.variable_start_string = '{-'
