@@ -21,61 +21,11 @@ import re
 import Queue as Q
 import threading
 from datetime import datetime
-from subprocess import Popen, PIPE, call
-from common import Msg, InvalidMsgError, is_win, is_sunos, ostype, OSType, set_logging
+from subprocess import call
+from common import Msg, InvalidMsgError, is_win, is_sunos, ostype, OSType, set_logging, check_output, process_info, interpret_exp
 
 
 _MAX_BACKOFF_SECOND = 60  # in agent retry policy
-
-
-class CalledProcessError(Exception):
-    """This exception is raised when a process run by check_call() or
-    check_output() returns a non-zero exit status.
-
-    Attributes:
-      cmd, returncode, output
-    """
-    def __init__(self, returncode, cmd, output=None):
-        self.returncode = returncode
-        self.cmd = cmd
-        self.output = output
-
-
-    def __str__(self):
-        return "Command '%s' returned non-zero exit status %d" % (self.cmd, self.returncode)
-
-
-def check_output(*popenargs, **kwargs):
-    r"""Run command with arguments and return its output as a byte string.
-
-    If the exit code was non-zero it raises a CalledProcessError.  The
-    CalledProcessError object will have the return code in the returncode
-    attribute and output in the output attribute.
-
-    The arguments are the same as for the Popen constructor.  Example:
-
-    >>> check_output(["ls", "-l", "/dev/null"])
-    'crw-rw-rw- 1 root root 1, 3 Oct 18  2007 /dev/null\n'
-
-    The stdout argument is not allowed as it is used internally.
-    To capture standard error in the result, use stderr=STDOUT.
-
-    >>> check_output(["/bin/sh", "-c",
-    ...               "ls -l non_existent_file ; exit 0"],
-    ...              stderr=STDOUT)
-    'ls: non_existent_file: No such file or directory\n'
-    """
-    if 'stdout' in kwargs:
-        raise ValueError('stdout argument not allowed, it will be overridden.')
-    process = Popen(stdout=PIPE, *popenargs, **kwargs)
-    output, unused_err = process.communicate()
-    retcode = process.poll()
-    if retcode:
-        cmd = kwargs.get("args")
-        if cmd is None:
-            cmd = popenargs[0]
-        raise CalledProcessError(retcode, cmd, output=output)
-    return output
 
 
 def is_metric_valid(metric):
@@ -210,124 +160,69 @@ class AgentConfig(object):
                 "clocks": 6
             },
 
-            # SAPM.Reactor@Linux
+            # SAPM.Reactor
             {
-                "name": "SAPM.Reactor@Linux",
+                "name": "SAPM.Reactor",
                 "type": "java",
-                "lookup_keyword": "-Dreactor.home=/opt",
-                "env" : {
-                    "java_home": "/opt/arris/servassure/jdk1.8.0_40/",
-                    "log_home": "/opt/arris/servassure/log"
-                },
-                "log_pattern": ["reactor.*"],
-                "metrics": ["pidstat", "prstat", "jstat-gc"],
-                "clocks": 6
-            },
-
-            # SAPM.Reactor@Solaris
-            {
-                "name": "SAPM.Reactor@Solaris",
-                "type": "java",
-                "lookup_keyword": "-Dreactor.home=/export",
+                "lookup_keyword": "-Dprocess=Reactor",
                 "env": {
-                    "java_home": "/export/home/stargus/jdk1.8.0_40",
-                    "log_home": "/export/home/stargus/log/"
+                    "java_home": "${JAVA_HOME}",
+                    "log_home": "${STARGUS_HOME}/log"
                 },
                 "log_pattern": ["reactor.*"],
                 "metrics": ["pidstat", "prstat", "jstat-gc"],
                 "clocks": 6
             },
 
-            # SAPM.Collector@Linux
+            # SAPM.Collector
             {
-                "name": "SAPM.Collector@Linux",
+                "name": "SAPM.Collector",
                 "type": "java",
-                "lookup_keyword": "/opt/arris/servassure/jdk1.8.0_40/bin/java -Dprocess=Collector",
-                "env" : {
-                    "java_home": "/opt/arris/servassure/jdk1.8.0_40/",
-                    "log_home": "/opt/arris/servassure/log"
+                "lookup_keyword": "-Dprocess=Collector",
+                "env": {
+                    "java_home": "${JAVA_HOME}",
+                    "log_home": "${STARGUS_HOME}/log"
                 },
                 "log_pattern": ["collection_manager.log", "snmp_poller.log"],
                 "metrics": ["pidstat", "prstat", "jstat-gc"],
                 "clocks": 6
             },
 
-            # SAPM.Collector@Solaris
+            # SAPM.Controller
             {
-                "name": "SAPM.Collector@Solaris",
+                "name": "SAPM.Controller",
                 "type": "java",
-                "lookup_keyword": "/export/home/stargus/jdk1.8.0_40/bin/java -Dprocess=Collector",
-                "env" : {
-                    "java_home": "/export/home/stargus/jdk1.8.0_40",
-                    "log_home": "/export/home/stargus/log/"
-                },
-                "log_pattern": ["collection_manager.log", "snmp_poller.log"],
-                "metrics": ["pidstat", "prstat", "jstat-gc"],
-                "clocks": 6
-            },
-
-            # SAPM.Controller@Linux
-            {
-                "name": "SAPM.Controller@Linux",
-                "type": "java",
-                "lookup_keyword": "/opt/arris/servassure/jboss/bin/run.jar",
-                "env" : {
-                    "java_home": "/opt/arris/servassure/jdk1.6.0_30",
-                    "log_home": "/opt/arris/servassure/log"
+                "lookup_keyword": "jboss/bin/run.jar",
+                "env": {
+                    "java_home": "${JAVA_HOME}",
+                    "log_home": "${STARGUS_HOME}/log"
                 },
                 "log_pattern": ["jboss-*.log"],
                 "metrics": ["pidstat", "prstat", "jstat-gc"],
                 "clocks": 6
             },
 
-            # SAPM.Controller@Solaris
+            # SAPM.NodeReceiver
             {
-                "name": "SAPM.Controller@Solaris",
+                "name": "SAPM.NodeReceiver",
                 "type": "java",
-                "lookup_keyword": "/export/home/stargus/jboss/bin/run.jar",
-                "env" : {
-                    "java_home": "/export/home/stargus/jdk1.6.0_30",
-                    "log_home": "/export/home/stargus/log/"
-                },
-                "log_pattern": ["jboss_*.log"],
-                "metrics": ["pidstat", "prstat", "jstat-gc"],
-                "clocks": 6
-            },
-
-            # SAPM.NodeReceiver@Linux
-            {
-                "name": "SAPM.NodeReceiver@Linux",
-                "type": "java",
-                "lookup_keyword": "/opt/arris/servassure/node-receiver/conf/receiver.properties",
-                "env" : {
-                    "java_home": "/opt/arris/servassure/jdk1.6.0_30",
-                    "log_home": "/opt/arris/servassure/log"
+                "lookup_keyword": "/node-receiver/conf/receiver.properties",
+                "env": {
+                    "java_home": "${JAVA_HOME}",
+                    "log_home": "${STARGUS_HOME}/log"
                 },
                 "log_pattern": ["jboss-*.log"],
                 "metrics": ["pidstat", "jstat-gc"],
                 "clocks": 6
             },
 
-            # SAPM.NodeReceiver@Solaris
-            {
-                "name": "SAPM.NodeReceiver@Solaris",
-                "type": "java",
-                "lookup_keyword": "/export/home/stargus/node-receiver/conf/receiver.properties",
-                "env" : {
-                    "java_home": "/export/home/stargus/jdk1.6.0_30",
-                    "log_home": "/export/home/stargus/log/"
-                },
-                "log_pattern": ["jboss_*.log"],
-                "metrics": ["pidstat", "jstat-gc"],
-                "clocks": 6
-            },
 
             # Scaler
             {
                 "name": "SAPM.Scaler",
                 "type": "java",
                 "lookup_keyword": "com.arrisi.sa.scaler.Agent",
-                "env" : {
+                "env": {
                     "java_home": "/usr/java/latest"
                 },
                 "metrics": ["pidstat", "prstat", "jstat-gc"],
@@ -394,8 +289,6 @@ class AgentConfig(object):
 
 class NodeCollector(threading.Thread):
 
-    CMD_VAR_PATTERN = re.compile('\${([\w_]+)}')
-
     def __init__(self, agent, config):
         super(NodeCollector, self).__init__(target=self._collect, name='NodeCollector')
         self._agent = agent
@@ -434,11 +327,7 @@ class NodeCollector(threading.Thread):
         logging.debug('translate cmd=%s by context=%s', cmd, context)
         newcmd = []
         for c in cmd:
-            vars = self.CMD_VAR_PATTERN.findall(c)
-            for var in vars:
-                value = context.get(var, None)
-                if value is not None:
-                    c = c.replace('${%s}' % var, value)
+            c = interpret_exp(c, context)
             newcmd.append(c)
         return newcmd
 
@@ -450,8 +339,7 @@ class NodeCollector(threading.Thread):
         """
         result = 'NOT COLLECTED'
         try:
-            output = check_output(cmd)
-            result = output
+            result = check_output(cmd)
         except Exception:
             logging.exception('call cmd %s failed', cmd)
             result = 'call cmd %s failed.' % cmd
@@ -495,30 +383,35 @@ class NodeCollector(threading.Thread):
         name = service['name']
         stype = service.get('type', None)
         lookup = service['lookup_keyword']
-        puser, pid = self._find_service_info(name, lookup)
+        puser, pid, penvs = process_info(lookup)
         if not pid:
-            logging.info('can\'t find pid for [%s].', name)
+            logging.info('can not find process "%s" by "%s".', name, lookup)
             return
         metric_names = service['metrics']
         clocks = service['clocks']
         env = service.get('env', {})
+        # interpret configured env with process envs
+        for k, v in env.items():
+            env[k] = interpret_exp(v, penvs)
         env['pid'] = pid
         env['puser'] = puser
-        logging.info('collecting for service [%s(%s)]: metrics=%s, clocks=%s.',
+        logging.info('start to collect metrics for service [%s(%s)]: metrics=%s, clocks=%s.',
                      name, pid, metric_names, clocks)
         service_result = {'name': name, 'pid': pid, 'puser': puser, 'type': stype}
         service_metrics = {}
         for mname in metric_names:
             try:
                 metric = self._config.service_metrics[mname]
-                cmd = self._translate_cmd(metric['cmd'], env)
-                logging.info('collecting %s of [%s(%s)] by %s', mname, name, pid, cmd)
+                ocmd = metric['cmd']
+                logging.info('collect %s by %s', mname, ocmd)
+                cmd = self._translate_cmd(ocmd, env)
+                logging.info('command translated to %s', cmd)
                 if not is_metric_valid(metric):
-                    logging.debug('cmd %s is not a valid command', cmd[0])
+                    logging.info('cmd %s is not a valid command, try next', cmd[0])
                     continue
                 service_metrics[mname] = self._get_cmd_result(cmd)
             except Exception:
-                logging.exception('collect metrics %s for service %s failed: cmd=%s', mname, name, cmd)
+                logging.exception('collect metrics %s for service %s failed: cmd=%s', mname, name, ocmd)
         service_result['metrics'] = service_metrics
         # send message
         msg = Msg.create_msg(self._agentid, Msg.A_SERVICE_METRIC, service_result)
@@ -526,30 +419,6 @@ class NodeCollector(threading.Thread):
         self._agent.add_msg(msg)
         logging.info('%d metrics collected for %s.', len(service_metrics), name)
         return service_result
-
-    def _find_service_info(self, servname, lookup_keyword):
-        """
-        find the pid, puser of service by keyword, via `ps -ef`
-        :param servname:
-        :param lookup_keyword:
-        :return: (puser, pid) or (None, None) if not found
-        """
-        service_puser = None
-        service_pid = None
-        logging.info('lookup pid service=%s, keyworkd=%s', servname, lookup_keyword)
-        try:
-            pslist = check_output(['ps', '-ef'])
-            psinfo = [psinfo for psinfo in pslist.split('\n') if lookup_keyword in psinfo]
-            logging.debug('find psinfo of %s: %s', servname, psinfo)
-            if len(psinfo) == 1:
-                puser, pid = [e.strip() for e in psinfo[0].split(' ') if e][0:2]
-                if pid and pid.isdigit() and puser:
-                    service_puser = puser
-                    service_pid = pid
-            logging.debug('pid of service %s is %s', servname, service_pid)
-        except Exception:
-            logging.exception('look up service %s by %s failed', servname, lookup_keyword)
-        return service_puser, service_pid
 
 
 class NodeAgent:

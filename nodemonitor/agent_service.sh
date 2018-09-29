@@ -18,7 +18,8 @@ start() {
         return 127
     fi
     echo -n "starting ${pname}"
-    python ${nmhome}/agent.py master_addr> ${nmhome}/agent.log 2>&1 &
+    cd ${nmhome}
+    python agent.py master_addr > /dev/null 2>&1 &
     ret=$?
     if [ $ret -eq 0 ] ; then
         echo "[success]"

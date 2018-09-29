@@ -310,6 +310,7 @@ class Master(object):
         logging.info('master started and listening on %s', self._addr)
         SocketServer.ThreadingTCPServer.allow_reuse_address = True
         self._server = SocketServer.ThreadingTCPServer(self._addr, AgentRequestHandler)
+        self._server.request_queue_size = 64
         self._server.serve_forever()
 
     def handle_msg(self, msg, client_addr):

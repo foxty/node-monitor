@@ -14,13 +14,13 @@ import sys
 import os
 import re
 import logging
-
 try:
     import json, json.decoder
 except:
     pass
 import logging.handlers
 import pickle
+from subprocess import Popen, PIPE
 from base64 import standard_b64encode, standard_b64decode
 from datetime import datetime, date, time
 from struct import *
@@ -47,7 +47,7 @@ def set_logging(filename, when='d', backupCount=7):
 VAR_PATTERN = re.compile('\${([\w_:-]+)}')
 
 
-def interpret_str(content, context={}):
+def interpret_exp(content, context={}):
     if not isinstance(content, basestring):
         return content
     logging.debug('interpret content=%s by context=%s', content, context)
@@ -60,8 +60,6 @@ def interpret_str(content, context={}):
         value = context.get(k, d)
         if value is not None:
             content = content.replace('${%s}' % key, str(value))
-        else:
-            content = d
     return content
 
 
@@ -337,13 +335,63 @@ class YAMLConfig(object):
         if type(v) in [dict, list]:
             return YAMLConfig(self._url, v)
         else:
-            return interpret_str(v, os.environ)
+            return interpret_exp(v, os.environ)
 
     def __setitem__(self, key, value):
         raise ConfigError('config is immutable.')
 
     def __str__(self):
         return self._config.__str__()
+
+
+class CalledProcessError(Exception):
+    """This exception is raised when a process run by check_call() or
+    check_output() returns a non-zero exit status.
+
+    Attributes:
+      cmd, returncode, output
+    """
+    def __init__(self, returncode, cmd, output=None):
+        self.returncode = returncode
+        self.cmd = cmd
+        self.output = output
+
+
+    def __str__(self):
+        return "Command '%s' returned non-zero exit status %d" % (self.cmd, self.returncode)
+
+
+def check_output(*popenargs, **kwargs):
+    r"""Run command with arguments and return its output as a byte string.
+
+    If the exit code was non-zero it raises a CalledProcessError.  The
+    CalledProcessError object will have the return code in the returncode
+    attribute and output in the output attribute.
+
+    The arguments are the same as for the Popen constructor.  Example:
+
+    >>> check_output(["ls", "-l", "/dev/null"])
+    'crw-rw-rw- 1 root root 1, 3 Oct 18  2007 /dev/null\n'
+
+    The stdout argument is not allowed as it is used internally.
+    To capture standard error in the result, use stderr=STDOUT.
+
+    >>> check_output(["/bin/sh", "-c",
+    ...               "ls -l non_existent_file ; exit 0"],
+    ...              stderr=STDOUT)
+    'ls: non_existent_file: No such file or directory\n'
+    """
+    if 'stdout' in kwargs:
+        raise ValueError('stdout argument not allowed, it will be overridden.')
+    process = Popen(stdout=PIPE, *popenargs, **kwargs)
+    output, unused_err = process.communicate()
+    retcode = process.poll()
+    if retcode:
+        cmd = kwargs.get("args")
+        if cmd is None:
+            cmd = popenargs[0]
+        raise CalledProcessError(retcode, cmd, output=output)
+    return output
 
 
 def ostype():
@@ -367,6 +415,44 @@ def is_linux():
 
 def is_sunos():
     return ostype() == OSType.SUNOS
+
+
+def process_info(lookup_keyword):
+    """
+    1, Get all process info by 'ps -ef' and pickup target process by lookup_keywor.
+    2, Get (pid, puser, penvs) for finded process/
+    :param lookup_keyword:
+    :return: (puser, pid, penvs) or (None, None, None) if not found
+    """
+    puser = None
+    pid = None
+    penvs = {}
+    try:
+        pslist = check_output(['ps', '-ef'])
+        psinfo = [psinfo for psinfo in pslist.split('\n') if lookup_keyword in psinfo]
+        logging.debug('get psinfo %s of "%s"', psinfo, lookup_keyword)
+        if len(psinfo) == 1:
+            puser, pid = [e.strip() for e in psinfo[0].split(' ') if e][0:2]
+            if pid and pid.isdigit() and puser:
+                puser = puser
+                pid = pid
+                penvs = user_envs(puser)
+        else:
+            logging.info('get %s process(es) by "%s"', len(psinfo), lookup_keyword)
+    except Exception:
+        logging.exception('look up process by %s failed', lookup_keyword)
+    return puser, pid, penvs
+
+
+def user_envs(user):
+    envs = {}
+    try:
+        out = check_output(['su', '-', user, '-c', 'env'])
+        for kv in [line.split('=') for line in out.splitlines() if line.strip()]:
+            envs[kv[0].strip()] = kv[1].strip() if len(kv) == 2 else None
+    except CalledProcessError:
+        logging.exception('get env from user "%s" failed', user)
+    return envs
 
 
 def dump_json(obj):

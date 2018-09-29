@@ -6,11 +6,23 @@ Created on 2017-12-22
 @author: foxty
 """
 import unittest
-import pickle
+import mock
 from common import *
 
 
 class CommonTest(unittest.TestCase):
+
+    def test_user_env(self):
+         with mock.patch('common.check_output') as co:
+            co.return_value = ''
+            env = user_envs('itian')
+            self.assertEqual(0, len(env))
+
+            co.return_value = '''
+            HOME=/home/foxty
+            A=a'''
+            env = user_envs('itian')
+            self.assertEqual({'HOME': '/home/foxty', 'A': 'a'}, env)
 
     def test_dumpjson_date(self):
         dt = datetime(2018, 1, 8, 17, 26, 26, 999)
@@ -39,11 +51,13 @@ class CommonTest(unittest.TestCase):
             'var2': 'v2',
             'var3': 3.33
         }
-        self.assertEqual('1abc2', interpret_str('1abc2', context))
-        self.assertEqual('1', interpret_str('${var1}', context))
-        self.assertEqual('a1-bv2', interpret_str('a${var1}-b${var2}', context))
-        self.assertEqual('1v23.33', interpret_str('${var1}${var2}${var3}', context))
-        self.assertEqual('default', interpret_str('${v4:default}', context))
+        self.assertEqual('1abc2', interpret_exp('1abc2', context))
+        self.assertEqual('1', interpret_exp('${var1}', context))
+        self.assertEqual('a1-bv2', interpret_exp('a${var1}-b${var2}', context))
+        self.assertEqual('1v23.33', interpret_exp('${var1}${var2}${var3}', context))
+        self.assertEqual('default', interpret_exp('${v4:default}', context))
+        self.assertEqual('a${var4}', interpret_exp('a${var4}', context))
+        self.assertEqual('1/jstat -gc -t 3.33', interpret_exp('${var1}/jstat -gc -t ${var3}', context))
 
 
 class TextTableTest(unittest.TestCase):
@@ -207,7 +221,6 @@ class YAMLConfigTest(unittest.TestCase):
         os.environ['TSDB_PORT'] = '1234'
         self.assertEqual('test.tsdb.com', cfg['master']['database']['tsd']['host'])
         self.assertEqual('1234', cfg['master']['database']['tsd']['port'])
-
 
     def test_setconfig(self):
         with self.assertRaises(ConfigError) as ce:

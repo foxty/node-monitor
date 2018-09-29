@@ -16,7 +16,7 @@
   "gnetId": null,
   "graphTooltip": 0,
   "id": 3,
-  "iteration": 1537963123823,
+  "iteration": 1538205693656,
   "links": [],
   "panels": [
     {
@@ -440,6 +440,7 @@
           "downsampleAggregator": "avg",
           "downsampleFillPolicy": "none",
           "format": "table",
+          "hide": false,
           "rawSql": "SELECT * from service where aid='$aid'",
           "refId": "A"
         }
@@ -1172,9 +1173,9 @@
       {
         "allValue": null,
         "current": {
-          "selected": true,
-          "text": "590a5c10",
-          "value": "590a5c10"
+          "selected": false,
+          "text": "saa-sz-dev106",
+          "value": "saa-sz-dev106"
         },
         "datasource": "postgres",
         "hide": 0,
@@ -1189,7 +1190,7 @@
             "value": "rowan"
           },
           {
-            "selected": true,
+            "selected": false,
             "text": "590a5c10",
             "value": "590a5c10"
           },
@@ -1199,7 +1200,7 @@
             "value": "sanguo"
           },
           {
-            "selected": false,
+            "selected": true,
             "text": "saa-sz-dev106",
             "value": "saa-sz-dev106"
           },
@@ -1259,5 +1260,5 @@
   "timezone": "",
   "title": "Node Status",
   "uid": "tT-zVETmk",
-  "version": 27
+  "version": 28
 }
