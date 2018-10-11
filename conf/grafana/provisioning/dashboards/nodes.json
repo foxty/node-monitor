@@ -278,7 +278,7 @@
       "datasource": "postgres",
       "fontSize": "100%",
       "gridPos": {
-        "h": 7,
+        "h": 11,
         "w": 24,
         "x": 0,
         "y": 3
@@ -291,7 +291,7 @@
       "scroll": true,
       "showHeader": true,
       "sort": {
-        "col": 4,
+        "col": 8,
         "desc": true
       },
       "styles": [
@@ -327,6 +327,22 @@
           "type": "string",
           "unit": "short",
           "valueMaps": []
+        },
+        {
+          "alias": "",
+          "colorMode": null,
+          "colors": [
+            "rgba(245, 54, 54, 0.9)",
+            "rgba(237, 129, 40, 0.89)",
+            "rgba(50, 172, 45, 0.97)"
+          ],
+          "dateFormat": "YYYY-MM-DD HH:mm:ss",
+          "decimals": 2,
+          "mappingType": 1,
+          "pattern": "last_sys_load1",
+          "thresholds": [],
+          "type": "number",
+          "unit": "short"
         }
       ],
       "targets": [
@@ -354,7 +370,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 10
+        "y": 14
       },
       "id": 6,
       "panels": [],
@@ -372,7 +388,7 @@
         "h": 7,
         "w": 12,
         "x": 0,
-        "y": 11
+        "y": 15
       },
       "id": 8,
       "legend": {
@@ -410,7 +426,7 @@
           "currentTagValue": "",
           "disableDownsampling": false,
           "downsampleAggregator": "max",
-          "downsampleFillPolicy": "null",
+          "downsampleFillPolicy": "none",
           "downsampleInterval": "",
           "explicitTags": false,
           "filters": [],
@@ -486,7 +502,7 @@
         "h": 7,
         "w": 12,
         "x": 12,
-        "y": 11
+        "y": 15
       },
       "id": 9,
       "legend": {
@@ -521,7 +537,7 @@
           "currentTagValue": "",
           "disableDownsampling": false,
           "downsampleAggregator": "max",
-          "downsampleFillPolicy": "null",
+          "downsampleFillPolicy": "none",
           "downsampleInterval": "",
           "explicitTags": false,
           "filters": [],
@@ -585,7 +601,7 @@
         "h": 7,
         "w": 12,
         "x": 0,
-        "y": 18
+        "y": 22
       },
       "id": 10,
       "legend": {
@@ -620,7 +636,7 @@
           "currentTagValue": "",
           "disableDownsampling": false,
           "downsampleAggregator": "sum",
-          "downsampleFillPolicy": "null",
+          "downsampleFillPolicy": "none",
           "downsampleInterval": "",
           "explicitTags": false,
           "filters": [],
@@ -684,7 +700,7 @@
         "h": 7,
         "w": 12,
         "x": 12,
-        "y": 18
+        "y": 22
       },
       "id": 11,
       "legend": {
@@ -719,7 +735,7 @@
           "currentTagValue": "",
           "disableDownsampling": false,
           "downsampleAggregator": "sum",
-          "downsampleFillPolicy": "null",
+          "downsampleFillPolicy": "none",
           "downsampleInterval": "",
           "explicitTags": false,
           "filters": [],
@@ -783,7 +799,7 @@
         "h": 7,
         "w": 12,
         "x": 0,
-        "y": 25
+        "y": 29
       },
       "id": 12,
       "legend": {
@@ -818,7 +834,7 @@
           "currentTagValue": "",
           "disableDownsampling": false,
           "downsampleAggregator": "max",
-          "downsampleFillPolicy": "null",
+          "downsampleFillPolicy": "none",
           "downsampleInterval": "",
           "explicitTags": false,
           "filters": [],
@@ -911,5 +927,5 @@
   "timezone": "",
   "title": "Nodes",
   "uid": "naD17ETmz",
-  "version": 39
+  "version": 44
 }

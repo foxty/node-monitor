@@ -11,7 +11,7 @@ import logging
 import re
 from datetime import datetime
 from common import TextTable
-from model import NSystemReport, NCPUReport, NMemoryReport, NDiskReport, \
+from model import NSystemReport, NCPUReport, NMemoryReport, NDiskReport, NNetworkReport, \
     SPidstatReport, SJstatGCReport
 
 
@@ -320,4 +320,32 @@ def parse_jstatgc(aid, collect_time, service_id, content):
         return rep
     else:
         logging.warn('invalid content of `jstat-gc` from %s(%s) : %s', aid, service_id, content)
+        return None
+
+
+def parse_iplinkstat(aid, collect_time, content):
+    """parse output of `ip -s link` command get network traffic information:
+
+    :param aid: agentid
+    :param collect_time: collect time from node
+    :param content: output of `ip -s link`
+    :return: NTrafficReport
+    """
+    lines = [line.strip() for line in content.splitlines() if line.strip()]
+    if len(lines) % 6 == 0:
+        reports = []
+        for i in range(0, len(lines)/6):
+
+            ifcontent = lines[i*6: (i+1)*6]
+            ifname = re.split(':', ifcontent[0])[1].strip()
+            rx, tx = re.split('\s+', ifcontent[3]), re.split('\s+', ifcontent[5])
+            report = NNetworkReport(timestamp=collect_time, aid=aid, interface=ifname,
+                                    rx_bytes=int(rx[0]), rx_packets=int(rx[1]), rx_errors=int(rx[2]),
+                                    rx_dropped=int(rx[3]), rx_overrun=int(rx[4]), rx_mcast=int(rx[5]),
+                                    tx_bytes=int(tx[0]), tx_packets=int(tx[1]), tx_errors=int(tx[2]),
+                                    tx_dropped=int(tx[3]), tx_carrier=int(tx[4]), tx_collsns=int(tx[5]))
+            reports.append(report)
+        return reports
+    else:
+        logging.warn('invalid content of `ip -s linek` from %s: %s', aid, content)
         return None

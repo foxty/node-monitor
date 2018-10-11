@@ -16,9 +16,86 @@
   "gnetId": null,
   "graphTooltip": 0,
   "id": 5,
-  "iteration": 1538203908181,
+  "iteration": 1538995039013,
   "links": [],
   "panels": [
+    {
+      "columns": [],
+      "datasource": "postgres",
+      "fontSize": "100%",
+      "gridPos": {
+        "h": 3,
+        "w": 24,
+        "x": 0,
+        "y": 0
+      },
+      "id": 2,
+      "links": [],
+      "pageSize": null,
+      "scroll": true,
+      "showHeader": true,
+      "sort": {
+        "col": 1,
+        "desc": true
+      },
+      "styles": [
+        {
+          "alias": "",
+          "dateFormat": "YYYY-MM-DD HH:mm:ss",
+          "link": false,
+          "pattern": "last_report_at",
+          "type": "date"
+        },
+        {
+          "alias": "",
+          "colorMode": null,
+          "colors": [
+            "rgba(245, 54, 54, 0.9)",
+            "rgba(237, 129, 40, 0.89)",
+            "rgba(50, 172, 45, 0.97)"
+          ],
+          "decimals": 2,
+          "link": true,
+          "linkTooltip": "Go to node status for ${__cell_3}",
+          "linkUrl": "d/tT-zVETmk/node-status?var-aid=${__cell_2}",
+          "pattern": "node_name",
+          "thresholds": [],
+          "type": "string",
+          "unit": "short"
+        },
+        {
+          "alias": "",
+          "colorMode": null,
+          "colors": [
+            "rgba(245, 54, 54, 0.9)",
+            "rgba(237, 129, 40, 0.89)",
+            "rgba(50, 172, 45, 0.97)"
+          ],
+          "dateFormat": "YYYY-MM-DD HH:mm:ss",
+          "decimals": 2,
+          "mappingType": 1,
+          "pattern": "id",
+          "thresholds": [],
+          "type": "hidden",
+          "unit": "short"
+        }
+      ],
+      "targets": [
+        {
+          "aggregator": "sum",
+          "alias": "",
+          "downsampleAggregator": "avg",
+          "downsampleFillPolicy": "none",
+          "format": "table",
+          "hide": false,
+          "rawSql": "SELECT s.id, s.name service_name, a.aid, a.name node_name, s.type, s.status, s.pid, s.last_report_at from service s, agent a where s.aid=a.aid and s.id='$service_id'",
+          "refId": "A"
+        }
+      ],
+      "title": "Service Info",
+      "transform": "table",
+      "type": "table"
+    },
     {
       "cacheTimeout": null,
       "colorBackground": false,
@@ -42,7 +119,7 @@
         "h": 3,
         "w": 8,
         "x": 0,
-        "y": 0
+        "y": 3
       },
       "id": 8,
       "interval": null,
@@ -78,7 +155,7 @@
         "lineColor": "rgb(31, 120, 193)",
         "show": false
       },
-      "tableColumn": "",
+      "tableColumn": "time",
       "targets": [
         {
           "aggregator": "sum",
@@ -126,7 +203,7 @@
         "h": 3,
         "w": 8,
         "x": 8,
-        "y": 0
+        "y": 3
       },
       "id": 9,
       "interval": null,
@@ -216,7 +293,7 @@
         "h": 3,
         "w": 8,
         "x": 16,
-        "y": 0
+        "y": 3
       },
       "id": 21,
       "interval": null,
@@ -285,67 +362,6 @@
       "valueName": "current"
     },
     {
-      "columns": [],
-      "datasource": "postgres",
-      "fontSize": "100%",
-      "gridPos": {
-        "h": 3,
-        "w": 24,
-        "x": 0,
-        "y": 3
-      },
-      "id": 2,
-      "links": [],
-      "pageSize": null,
-      "scroll": true,
-      "showHeader": true,
-      "sort": {
-        "col": 1,
-        "desc": true
-      },
-      "styles": [
-        {
-          "alias": "",
-          "dateFormat": "YYYY-MM-DD HH:mm:ss",
-          "link": false,
-          "pattern": "last_report_at",
-          "type": "date"
-        },
-        {
-          "alias": "",
-          "colorMode": null,
-          "colors": [
-            "rgba(245, 54, 54, 0.9)",
-            "rgba(237, 129, 40, 0.89)",
-            "rgba(50, 172, 45, 0.97)"
-          ],
-          "decimals": 2,
-          "link": true,
-          "linkTooltip": "Go to node status for ${__cell_3}",
-          "linkUrl": "d/tT-zVETmk/node-status?var-aid=${__cell_2}",
-          "pattern": "node_name",
-          "thresholds": [],
-          "type": "string",
-          "unit": "short"
-        }
-      ],
-      "targets": [
-        {
-          "aggregator": "sum",
-          "alias": "",
-          "downsampleAggregator": "avg",
-          "downsampleFillPolicy": "none",
-          "format": "table",
-          "hide": false,
-          "rawSql": "SELECT s.id, s.name service_name, a.aid, a.name node_name, s.type, s.status, s.pid, s.last_report_at from service s, agent a where s.aid=a.aid and s.id='$service_id'",
-          "refId": "A"
-        }
-      ],
-      "title": "Service Info",
-      "transform": "table",
-      "type": "table"
-    },
-    {
       "aliasColors": {},
       "bars": false,
       "dashLength": 10,
@@ -401,7 +417,7 @@
           "format": "time_series",
           "hide": false,
           "metric": "service.pidstat.cpu_util",
-          "rawSql": "SELECT\n  $__time(collect_at),\n  1\nFROM\n  service_history\nWHERE\n  $__timeFilter(collect_at)\n",
+          "rawSql": "SELECT $__time(collect_at), 1\nFROM service_history\nWHERE service_id='${service_id}' and $__timeFilter(collect_at)\n",
           "refId": "A",
           "shouldComputeRate": false,
           "tags": {
@@ -1497,8 +1513,7 @@
       {
         "allValue": null,
         "current": {
-          "selected": false,
-          "tags": [],
+          "selected": true,
           "text": "saa-sz-dev106",
           "value": "saa-sz-dev106"
         },
@@ -1553,7 +1568,7 @@
       {
         "allValue": null,
         "current": {
-          "tags": [],
+          "selected": false,
           "text": "35b19b67025b48ee916a4d9eee050301",
           "value": "35b19b67025b48ee916a4d9eee050301"
         },
@@ -1603,8 +1618,8 @@
     ]
   },
   "time": {
-    "from": "2018-09-29T07:06:23.015Z",
-    "to": "2018-09-29T07:15:07.623Z"
+    "from": "now-6h",
+    "to": "now"
   },
   "timepicker": {
     "refresh_intervals": [
@@ -1634,5 +1649,5 @@
   "timezone": "",
   "title": "Service Status",
   "uid": "kG1moUomk",
-  "version": 22
+  "version": 25
 }

@@ -330,6 +330,39 @@ Total: 1 processes, 51 lwps, load averages: 6.75, 4.85, 3.50
                                               mem_vsz=192*1024, mem_rss=154*1024, cpu_util=15.9),
                          rep)
 
+    def test_parse_iplinkstat(self):
+        aid = '1'
+        ctime = datetime.now()
+        content = '''
+        1: lo: <LOOPBACK,UP,LOWER_UP> mtu 16436 qdisc noqueue state UNKNOWN
+            link/loopback 00:00:00:00:00:00 brd 00:00:00:00:00:00
+            RX: bytes  packets  errors  dropped overrun mcast
+            1781983109 13777738 1       2       3       4
+            TX: bytes  packets  errors  dropped carrier collsns
+            1781983109 13777738 0       0       0       0
+        2: eth0: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 qdisc mq state UP qlen 1000
+            link/ether 00:0c:29:42:7c:d3 brd ff:ff:ff:ff:ff:ff
+            RX: bytes  packets  errors  dropped overrun mcast
+            3071151682 9787917  0       0       0       162936
+            TX: bytes  packets  errors  dropped carrier collsns
+            2002149697 6364079  0       0       0       0
+        '''
+        reps = content_parser.parse_iplinkstat(aid, ctime, content)
+        self.assertEqual(2, len(reps))
+        self.assertEqual(model.NNetworkReport(timestamp=ctime, aid=aid,
+                                              interface='lo',
+                                              rx_bytes=1781983109, rx_packets=13777738, rx_errors=1,
+                                              rx_dropped=2, rx_overrun=3, rx_mcast=4,
+                                              tx_bytes=1781983109, tx_packets=13777738, tx_errors=0,
+                                              tx_dropped=0, tx_carrier=0, tx_collsns=0),
+                         reps[0])
+        self.assertEqual(model.NNetworkReport(timestamp=ctime, aid=aid,
+                                              interface='eth0',
+                                              rx_bytes=3071151682, rx_packets=9787917, rx_errors=0,
+                                              rx_dropped=0, rx_overrun=0, rx_mcast=162936,
+                                              tx_bytes=2002149697, tx_packets=6364079, tx_errors=0,
+                                              tx_dropped=0, tx_carrier=0, tx_collsns=0), reps[1])
+
 
 class MasterTest(model_test.BaseDBTest):
 

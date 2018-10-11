@@ -212,6 +212,7 @@ class Master(object):
         return True
 
     def _agent_nmetrics(self, msg):
+        logging.debug('parsing node metrics message %s', msg)
         aid = msg.agentid
         agent = self._agents.get(aid)
         body = msg.body
@@ -240,6 +241,9 @@ class Master(object):
             dfreps = content_parser.parse_df(aid, collect_time, body['df'])
             if dfreps:
                 model.NDiskReport.save_all(dfreps)
+        if 'ip-link' in body:
+            traffreps = content_parser.parse_iplinkstat(aid, collect_time, body['ip-link'])
+            model.NNetworkReport.save_all(traffreps) if traffreps else None
         last_cpu_util = cpurep.used_util if cpurep else None
         last_mem_util = memrep.used_util if memrep else None
         last_sys_load1, last_sys_cs = (sysrep.load1, sysrep.sys_cs) if sysrep else (None, None)

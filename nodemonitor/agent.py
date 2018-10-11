@@ -113,6 +113,20 @@ class AgentConfig(object):
                 "cmd": ["netstat", "-s"],
                 "clocks": 6
             },
+            # ifconfig (network traffic )
+            {
+                "name": "ifconfig",
+                "cmd": ["ifconfig", "-a"],
+                "clocks": 6
+            },
+            # ip -s link
+            {
+                "name": "ip-link",
+                "os": "LINUX",
+                "cmd": ["ip", "-s", "link"],
+                "clocks": 6
+
+            },
             # df solaris
             {
                 "name": "df",
@@ -155,7 +169,10 @@ class AgentConfig(object):
                 "name": "agent",
                 "type": "python",
                 "lookup_keyword": "agent.py",
-                "log_pattern": ["agent.log"],
+                "env": {
+                  "log_home": "${HOME}/node-monitor"
+                },
+                "log_pattern": ["agent.log.*"],
                 "metrics": ["pidstat", "prstat"],
                 "clocks": 6
             },

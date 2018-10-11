@@ -357,8 +357,8 @@ class TSDModel(dict):
         try:
             resp = requests.post(dburl + '/api/put?details', json=values)
             rj = resp.json()
-            logging.info('metrics of %s saved to tsdb with %s success, %s failed, errors=%s',
-                        self._METRIC_PREFIX, rj['success'], rj['failed'], rj['errors'])
+            logging.info('%s saved to tsdb with %s success, %s fail, %s error',
+                         self._METRIC_PREFIX, rj['success'], rj['failed'], rj['errors'])
             re = resp.status_code == 204
         except Exception:
             logging.exception('save metrics for %s failed.', self._METRIC_PREFIX)
@@ -501,6 +501,13 @@ class NDiskReport(TSDModel):
     _METRIC_PREFIX = 'node.disk'
     _METRICS = ['size', 'used', 'available', 'used_util']
     _TAGS = ['aid', 'fs', 'mount_point']
+
+
+class NNetworkReport(TSDModel):
+    _METRIC_PREFIX = "node.network"
+    _METRICS = ['rx_bytes','rx_packets', 'rx_errors', 'rx_dropped', 'rx_overrun', 'rx_mcast',
+                'tx_bytes', 'tx_packets', 'tx_errors', 'tx_dropped', 'tx_carrier', 'tx_collsns']
+    _TAGS = ['aid', 'interface']
 
 
 class SMetric(Model, AgentChronoModel):

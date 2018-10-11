@@ -16,7 +16,7 @@
   "gnetId": null,
   "graphTooltip": 0,
   "id": 3,
-  "iteration": 1538205693656,
+  "iteration": 1539163780355,
   "links": [],
   "panels": [
     {
@@ -498,7 +498,7 @@
           "currentTagValue": "",
           "disableDownsampling": false,
           "downsampleAggregator": "max",
-          "downsampleFillPolicy": "null",
+          "downsampleFillPolicy": "none",
           "downsampleInterval": "",
           "explicitTags": false,
           "filters": [],
@@ -630,7 +630,7 @@
           "currentTagValue": "",
           "disableDownsampling": false,
           "downsampleAggregator": "sum",
-          "downsampleFillPolicy": "null",
+          "downsampleFillPolicy": "none",
           "downsampleInterval": "",
           "explicitTags": false,
           "filters": [],
@@ -747,7 +747,7 @@
           "currentTagValue": "",
           "disableDownsampling": false,
           "downsampleAggregator": "max",
-          "downsampleFillPolicy": "null",
+          "downsampleFillPolicy": "none",
           "downsampleInterval": "",
           "explicitTags": false,
           "filters": [],
@@ -991,7 +991,7 @@
           "currentTagValue": "",
           "disableDownsampling": false,
           "downsampleAggregator": "max",
-          "downsampleFillPolicy": "null",
+          "downsampleFillPolicy": "none",
           "downsampleInterval": "",
           "explicitTags": false,
           "filters": [],
@@ -1162,6 +1162,220 @@
         "align": false,
         "alignLevel": null
       }
+    },
+    {
+      "aliasColors": {},
+      "bars": false,
+      "dashLength": 10,
+      "dashes": false,
+      "datasource": "opentsdb",
+      "decimals": null,
+      "fill": 1,
+      "gridPos": {
+        "h": 6,
+        "w": 12,
+        "x": 0,
+        "y": 27
+      },
+      "id": 17,
+      "legend": {
+        "alignAsTable": false,
+        "avg": false,
+        "current": false,
+        "hideEmpty": false,
+        "max": false,
+        "min": false,
+        "rightSide": false,
+        "show": true,
+        "total": false,
+        "values": false
+      },
+      "lines": true,
+      "linewidth": 1,
+      "links": [],
+      "nullPointMode": "null",
+      "percentage": false,
+      "pointradius": 2,
+      "points": true,
+      "renderer": "flot",
+      "seriesOverrides": [],
+      "spaceLength": 10,
+      "stack": false,
+      "steppedLine": false,
+      "targets": [
+        {
+          "aggregator": "max",
+          "alias": "",
+          "currentFilterGroupBy": false,
+          "currentFilterKey": "",
+          "currentFilterType": "literal_or",
+          "currentFilterValue": "",
+          "currentTagKey": "",
+          "currentTagValue": "",
+          "disableDownsampling": false,
+          "downsampleAggregator": "max",
+          "downsampleFillPolicy": "none",
+          "downsampleInterval": "",
+          "explicitTags": false,
+          "filters": [],
+          "hide": false,
+          "isCounter": false,
+          "metric": "node.network.tx_bytes",
+          "refId": "A",
+          "shouldComputeRate": true,
+          "tags": {
+            "aid": "${aid}",
+            "interface": "*"
+          }
+        }
+      ],
+      "thresholds": [],
+      "timeFrom": null,
+      "timeShift": null,
+      "title": "Outbound Network ($aid)",
+      "tooltip": {
+        "shared": true,
+        "sort": 0,
+        "value_type": "individual"
+      },
+      "type": "graph",
+      "xaxis": {
+        "buckets": null,
+        "mode": "time",
+        "name": null,
+        "show": true,
+        "values": []
+      },
+      "yaxes": [
+        {
+          "decimals": null,
+          "format": "Bps",
+          "label": "",
+          "logBase": 1,
+          "max": null,
+          "min": null,
+          "show": true
+        },
+        {
+          "format": "short",
+          "label": null,
+          "logBase": 1,
+          "max": null,
+          "min": null,
+          "show": false
+        }
+      ],
+      "yaxis": {
+        "align": false,
+        "alignLevel": null
+      }
+    },
+    {
+      "aliasColors": {},
+      "bars": false,
+      "dashLength": 10,
+      "dashes": false,
+      "datasource": "opentsdb",
+      "decimals": null,
+      "fill": 1,
+      "gridPos": {
+        "h": 6,
+        "w": 12,
+        "x": 12,
+        "y": 27
+      },
+      "id": 18,
+      "legend": {
+        "alignAsTable": false,
+        "avg": false,
+        "current": false,
+        "hideEmpty": false,
+        "max": false,
+        "min": false,
+        "rightSide": false,
+        "show": true,
+        "total": false,
+        "values": false
+      },
+      "lines": true,
+      "linewidth": 1,
+      "links": [],
+      "nullPointMode": "null",
+      "percentage": false,
+      "pointradius": 2,
+      "points": true,
+      "renderer": "flot",
+      "seriesOverrides": [],
+      "spaceLength": 10,
+      "stack": false,
+      "steppedLine": false,
+      "targets": [
+        {
+          "aggregator": "max",
+          "alias": "",
+          "currentFilterGroupBy": false,
+          "currentFilterKey": "",
+          "currentFilterType": "literal_or",
+          "currentFilterValue": "",
+          "currentTagKey": "",
+          "currentTagValue": "",
+          "disableDownsampling": false,
+          "downsampleAggregator": "max",
+          "downsampleFillPolicy": "none",
+          "downsampleInterval": "",
+          "explicitTags": false,
+          "filters": [],
+          "hide": false,
+          "isCounter": false,
+          "metric": "node.network.rx_bytes",
+          "refId": "A",
+          "shouldComputeRate": true,
+          "tags": {
+            "aid": "${aid}",
+            "interface": "*"
+          }
+        }
+      ],
+      "thresholds": [],
+      "timeFrom": null,
+      "timeShift": null,
+      "title": "Inbound Network ($aid)",
+      "tooltip": {
+        "shared": true,
+        "sort": 0,
+        "value_type": "individual"
+      },
+      "type": "graph",
+      "xaxis": {
+        "buckets": null,
+        "mode": "time",
+        "name": null,
+        "show": true,
+        "values": []
+      },
+      "yaxes": [
+        {
+          "decimals": null,
+          "format": "Bps",
+          "label": "",
+          "logBase": 1,
+          "max": null,
+          "min": null,
+          "show": true
+        },
+        {
+          "format": "short",
+          "label": null,
+          "logBase": 1,
+          "max": null,
+          "min": null,
+          "show": false
+        }
+      ],
+      "yaxis": {
+        "align": false,
+        "alignLevel": null
+      }
     }
   ],
   "refresh": false,
@@ -1174,8 +1388,9 @@
         "allValue": null,
         "current": {
           "selected": false,
-          "text": "saa-sz-dev106",
-          "value": "saa-sz-dev106"
+          "tags": [],
+          "text": "590a5c10",
+          "value": "590a5c10"
         },
         "datasource": "postgres",
         "hide": 0,
@@ -1190,7 +1405,7 @@
             "value": "rowan"
           },
           {
-            "selected": false,
+            "selected": true,
             "text": "590a5c10",
             "value": "590a5c10"
           },
@@ -1200,7 +1415,7 @@
             "value": "sanguo"
           },
           {
-            "selected": true,
+            "selected": false,
             "text": "saa-sz-dev106",
             "value": "saa-sz-dev106"
           },
@@ -1260,5 +1475,5 @@
   "timezone": "",
   "title": "Node Status",
   "uid": "tT-zVETmk",
-  "version": 28
+  "version": 30
 }
