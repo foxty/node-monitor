@@ -3,11 +3,7 @@ FROM grafana/grafana:5.2.4
 LABEL maintainer="foxty@163.com"
 
 COPY conf/grafana/provisioning /etc/grafana/provisioning
-
-ENV GF_INSTANCE_NAME="Node Monitor UI"
-ENV GF_SERVER_HTTP_PORT=30080
-ENV GF_SECURITY_ADMIN_USER=node-monitor
-ENV GF_SECURITY_ADMIN_PASSWORD=node-monitor
+COPY conf/grafana/custom.ini /etc/grafana/custom.ini
 
 EXPOSE 30080
-ENTRYPOINT [ "/run.sh" ]
+ENTRYPOINT [ "/run.sh", "--config", "/etc/grafana/custom.ini" ]

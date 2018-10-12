@@ -16,9 +16,24 @@
   "gnetId": null,
   "graphTooltip": 0,
   "id": 3,
-  "iteration": 1539163780355,
+  "iteration": 1539328111528,
   "links": [],
   "panels": [
+    {
+      "content": "<h1 style='text-decoration:underline'>Current Status</h1>",
+      "gridPos": {
+        "h": 2,
+        "w": 24,
+        "x": 0,
+        "y": 0
+      },
+      "id": 28,
+      "links": [],
+      "mode": "html",
+      "title": "",
+      "transparent": true,
+      "type": "text"
+    },
     {
       "cacheTimeout": null,
       "colorBackground": false,
@@ -41,7 +56,7 @@
         "h": 3,
         "w": 6,
         "x": 0,
-        "y": 0
+        "y": 2
       },
       "id": 11,
       "interval": null,
@@ -80,10 +95,11 @@
       "tableColumn": "",
       "targets": [
         {
-          "aggregator": "max",
+          "aggregator": "last",
           "currentTagKey": "",
           "currentTagValue": "",
-          "downsampleAggregator": "avg",
+          "disableDownsampling": true,
+          "downsampleAggregator": "last",
           "downsampleFillPolicy": "none",
           "downsampleInterval": "",
           "hide": false,
@@ -129,7 +145,7 @@
         "h": 3,
         "w": 6,
         "x": 6,
-        "y": 0
+        "y": 2
       },
       "id": 14,
       "interval": null,
@@ -171,7 +187,8 @@
           "aggregator": "last",
           "currentTagKey": "",
           "currentTagValue": "",
-          "downsampleAggregator": "avg",
+          "disableDownsampling": false,
+          "downsampleAggregator": "last",
           "downsampleFillPolicy": "none",
           "downsampleInterval": "",
           "hide": false,
@@ -217,7 +234,7 @@
         "h": 3,
         "w": 6,
         "x": 12,
-        "y": 0
+        "y": 2
       },
       "id": 16,
       "interval": null,
@@ -259,7 +276,7 @@
           "aggregator": "last",
           "currentTagKey": "",
           "currentTagValue": "",
-          "downsampleAggregator": "avg",
+          "downsampleAggregator": "last",
           "downsampleFillPolicy": "none",
           "downsampleInterval": "",
           "hide": false,
@@ -306,7 +323,7 @@
         "h": 3,
         "w": 6,
         "x": 18,
-        "y": 0
+        "y": 2
       },
       "id": 13,
       "interval": null,
@@ -376,7 +393,7 @@
         "h": 6,
         "w": 24,
         "x": 0,
-        "y": 3
+        "y": 5
       },
       "id": 2,
       "links": [],
@@ -427,9 +444,26 @@
           "linkTooltip": "Service ${__cell_2} Status",
           "linkUrl": "d/kG1moUomk/service-status?var-aid=${__cell_1}&var-service_id=${__cell_0}",
           "mappingType": 1,
-          "pattern": "name|id",
+          "pattern": "name",
           "thresholds": [],
           "type": "string",
+          "unit": "short"
+        },
+        {
+          "alias": "",
+          "colorMode": null,
+          "colors": [
+            "rgba(245, 54, 54, 0.9)",
+            "rgba(237, 129, 40, 0.89)",
+            "rgba(50, 172, 45, 0.97)"
+          ],
+          "dateFormat": "YYYY-MM-DD HH:mm:ss",
+          "decimals": 2,
+          "link": false,
+          "mappingType": 1,
+          "pattern": "id",
+          "thresholds": [],
+          "type": "hidden",
           "unit": "short"
         }
       ],
@@ -445,9 +479,24 @@
           "refId": "A"
         }
       ],
-      "title": "Services",
+      "title": "Discovered Service",
       "transform": "table",
       "type": "table"
+    },
+    {
+      "content": "<h1 style='text-decoration:underline'>System Health</h1>",
+      "gridPos": {
+        "h": 2,
+        "w": 24,
+        "x": 0,
+        "y": 11
+      },
+      "id": 30,
+      "links": [],
+      "mode": "html",
+      "title": "",
+      "transparent": true,
+      "type": "text"
     },
     {
       "aliasColors": {},
@@ -460,7 +509,7 @@
         "h": 6,
         "w": 12,
         "x": 0,
-        "y": 9
+        "y": 13
       },
       "id": 4,
       "legend": {
@@ -592,7 +641,7 @@
         "h": 6,
         "w": 12,
         "x": 12,
-        "y": 9
+        "y": 13
       },
       "id": 5,
       "legend": {
@@ -709,7 +758,7 @@
         "h": 6,
         "w": 12,
         "x": 0,
-        "y": 15
+        "y": 19
       },
       "id": 7,
       "legend": {
@@ -825,6 +874,21 @@
       }
     },
     {
+      "content": "<h1 style='text-decoration:underline'>Memory & Disk</h1>",
+      "gridPos": {
+        "h": 2,
+        "w": 24,
+        "x": 0,
+        "y": 25
+      },
+      "id": 31,
+      "links": [],
+      "mode": "html",
+      "title": "",
+      "transparent": true,
+      "type": "text"
+    },
+    {
       "aliasColors": {},
       "bars": false,
       "dashLength": 10,
@@ -835,8 +899,8 @@
       "gridPos": {
         "h": 6,
         "w": 12,
-        "x": 12,
-        "y": 15
+        "x": 0,
+        "y": 27
       },
       "id": 9,
       "legend": {
@@ -865,29 +929,6 @@
       "targets": [
         {
           "aggregator": "max",
-          "alias": "Used Swap",
-          "currentFilterGroupBy": false,
-          "currentFilterKey": "",
-          "currentFilterType": "literal_or",
-          "currentFilterValue": "",
-          "currentTagKey": "",
-          "currentTagValue": "",
-          "disableDownsampling": false,
-          "downsampleAggregator": "max",
-          "downsampleFillPolicy": "null",
-          "downsampleInterval": "",
-          "explicitTags": false,
-          "filters": [],
-          "hide": false,
-          "metric": "node.memory.used_swap",
-          "refId": "A",
-          "shouldComputeRate": false,
-          "tags": {
-            "aid": "${aid}"
-          }
-        },
-        {
-          "aggregator": "max",
           "alias": "Total Swap",
           "currentTagKey": "",
           "currentTagValue": "",
@@ -897,6 +938,29 @@
           "refId": "B",
           "tags": {
             "aid": "$aid"
+          }
+        },
+        {
+          "aggregator": "max",
+          "alias": "Used Swap",
+          "currentFilterGroupBy": false,
+          "currentFilterKey": "",
+          "currentFilterType": "literal_or",
+          "currentFilterValue": "",
+          "currentTagKey": "",
+          "currentTagValue": "",
+          "disableDownsampling": false,
+          "downsampleAggregator": "max",
+          "downsampleFillPolicy": "none",
+          "downsampleInterval": "",
+          "explicitTags": false,
+          "filters": [],
+          "hide": false,
+          "metric": "node.memory.used_swap",
+          "refId": "A",
+          "shouldComputeRate": false,
+          "tags": {
+            "aid": "${aid}"
           }
         }
       ],
@@ -952,8 +1016,8 @@
       "gridPos": {
         "h": 6,
         "w": 12,
-        "x": 0,
-        "y": 21
+        "x": 12,
+        "y": 27
       },
       "id": 8,
       "legend": {
@@ -975,11 +1039,26 @@
       "pointradius": 2,
       "points": true,
       "renderer": "flot",
-      "seriesOverrides": [],
+      "seriesOverrides": [
+        {}
+      ],
       "spaceLength": 10,
       "stack": false,
       "steppedLine": false,
       "targets": [
+        {
+          "aggregator": "max",
+          "alias": "Total Memory",
+          "currentTagKey": "",
+          "currentTagValue": "",
+          "downsampleAggregator": "max",
+          "downsampleFillPolicy": "none",
+          "metric": "node.memory.total_mem",
+          "refId": "B",
+          "tags": {
+            "aid": "$aid"
+          }
+        },
         {
           "aggregator": "max",
           "alias": "Used Memory",
@@ -1001,19 +1080,6 @@
           "shouldComputeRate": false,
           "tags": {
             "aid": "${aid}"
-          }
-        },
-        {
-          "aggregator": "max",
-          "alias": "Total Memory",
-          "currentTagKey": "",
-          "currentTagValue": "",
-          "downsampleAggregator": "max",
-          "downsampleFillPolicy": "none",
-          "metric": "node.memory.total_mem",
-          "refId": "B",
-          "tags": {
-            "aid": "$aid"
           }
         }
       ],
@@ -1069,8 +1135,8 @@
       "gridPos": {
         "h": 6,
         "w": 12,
-        "x": 12,
-        "y": 21
+        "x": 0,
+        "y": 33
       },
       "id": 15,
       "legend": {
@@ -1164,6 +1230,21 @@
       }
     },
     {
+      "content": "<h1 style='text-decoration:underline'>Network</h1>",
+      "gridPos": {
+        "h": 2,
+        "w": 24,
+        "x": 0,
+        "y": 39
+      },
+      "id": 32,
+      "links": [],
+      "mode": "html",
+      "title": "",
+      "transparent": true,
+      "type": "text"
+    },
+    {
       "aliasColors": {},
       "bars": false,
       "dashLength": 10,
@@ -1175,7 +1256,7 @@
         "h": 6,
         "w": 12,
         "x": 0,
-        "y": 27
+        "y": 41
       },
       "id": 17,
       "legend": {
@@ -1282,7 +1363,7 @@
         "h": 6,
         "w": 12,
         "x": 12,
-        "y": 27
+        "y": 41
       },
       "id": 18,
       "legend": {
@@ -1387,8 +1468,7 @@
       {
         "allValue": null,
         "current": {
-          "selected": false,
-          "tags": [],
+          "selected": true,
           "text": "590a5c10",
           "value": "590a5c10"
         },
@@ -1475,5 +1555,5 @@
   "timezone": "",
   "title": "Node Status",
   "uid": "tT-zVETmk",
-  "version": 30
+  "version": 38
 }
