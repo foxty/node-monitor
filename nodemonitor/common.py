@@ -449,7 +449,8 @@ def user_envs(user):
     try:
         out = check_output(['su', '-', user, '-c', 'env'])
         for kv in [line.split('=') for line in out.splitlines() if line.strip()]:
-            envs[kv[0].strip()] = kv[1].strip() if len(kv) == 2 else None
+            if len(kv) == 2:
+                envs[kv[0].strip()] = kv[1].strip()
     except CalledProcessError:
         logging.exception('get env from user "%s" failed', user)
     return envs
