@@ -252,7 +252,8 @@
         {
           "aggregator": "sum",
           "alias": "",
-          "downsampleAggregator": "avg",
+          "disableDownsampling": false,
+          "downsampleAggregator": "sum",
           "downsampleFillPolicy": "none",
           "format": "time_series",
           "hide": false,
@@ -278,8 +279,8 @@
       "datasource": "postgres",
       "fontSize": "100%",
       "gridPos": {
-        "h": 11,
-        "w": 24,
+        "h": 17,
+        "w": 12,
         "x": 0,
         "y": 3
       },
@@ -288,6 +289,112 @@
       "links": [],
       "pageSize": 20,
       "repeat": null,
+      "scroll": true,
+      "showHeader": true,
+      "sort": {
+        "col": 8,
+        "desc": true
+      },
+      "styles": [
+        {
+          "alias": "",
+          "dateFormat": "YYYY-MM-DD HH:mm:ss",
+          "link": false,
+          "linkTargetBlank": false,
+          "linkUrl": "",
+          "pattern": ".*_at",
+          "type": "date"
+        },
+        {
+          "alias": "",
+          "colorMode": null,
+          "colors": [
+            "rgba(50, 172, 45, 0.97)",
+            "#99440a",
+            "rgba(245, 54, 54, 0.9)"
+          ],
+          "dateFormat": "YYYY-MM-DD HH:mm:ss",
+          "decimals": 2,
+          "link": true,
+          "linkTargetBlank": false,
+          "linkTooltip": "Node Status",
+          "linkUrl": "d/tT-zVETmk/node-status?var-aid=${__cell_0} ",
+          "mappingType": 1,
+          "pattern": "name",
+          "thresholds": [
+            "10",
+            "100"
+          ],
+          "type": "string",
+          "unit": "short",
+          "valueMaps": []
+        },
+        {
+          "alias": "",
+          "colorMode": null,
+          "colors": [
+            "rgba(245, 54, 54, 0.9)",
+            "rgba(237, 129, 40, 0.89)",
+            "rgba(50, 172, 45, 0.97)"
+          ],
+          "dateFormat": "YYYY-MM-DD HH:mm:ss",
+          "decimals": 2,
+          "mappingType": 1,
+          "pattern": "last_sys_load1",
+          "thresholds": [],
+          "type": "number",
+          "unit": "short"
+        },
+        {
+          "alias": "",
+          "colorMode": null,
+          "colors": [
+            "rgba(245, 54, 54, 0.9)",
+            "rgba(237, 129, 40, 0.89)",
+            "rgba(50, 172, 45, 0.97)"
+          ],
+          "dateFormat": "YYYY-MM-DD HH:mm:ss",
+          "decimals": 2,
+          "mappingType": 1,
+          "pattern": "aid",
+          "thresholds": [],
+          "type": "hidden",
+          "unit": "short"
+        }
+      ],
+      "targets": [
+        {
+          "aggregator": "sum",
+          "alias": "",
+          "downsampleAggregator": "avg",
+          "downsampleFillPolicy": "none",
+          "format": "table",
+          "hide": false,
+          "rawSql": "SELECT aid, name, host, last_cpu_util, last_mem_util, last_sys_load1, last_sys_cs, status, last_msg_at from agent order by last_msg_at desc",
+          "refId": "A"
+        }
+      ],
+      "timeFrom": null,
+      "timeShift": null,
+      "title": "Node List",
+      "transform": "table",
+      "transparent": false,
+      "type": "table"
+    },
+    {
+      "columns": [],
+      "datasource": "postgres",
+      "fontSize": "100%",
+      "gridPos": {
+        "h": 17,
+        "w": 12,
+        "x": 12,
+        "y": 3
+      },
+      "hideTimeOverride": false,
+      "id": 17,
+      "links": [],
+      "pageSize": 20,
       "scroll": true,
       "showHeader": true,
       "sort": {
@@ -314,7 +421,7 @@
           ],
           "dateFormat": "YYYY-MM-DD HH:mm:ss",
           "decimals": 2,
-          "link": true,
+          "link": false,
           "linkTargetBlank": false,
           "linkTooltip": "Node Status",
           "linkUrl": "d/tT-zVETmk/node-status?var-aid=${__cell} ",
@@ -324,7 +431,7 @@
             "10",
             "100"
           ],
-          "type": "string",
+          "type": "hidden",
           "unit": "short",
           "valueMaps": []
         },
@@ -339,9 +446,28 @@
           "dateFormat": "YYYY-MM-DD HH:mm:ss",
           "decimals": 2,
           "mappingType": 1,
-          "pattern": "last_sys_load1",
+          "pattern": "id",
           "thresholds": [],
-          "type": "number",
+          "type": "hidden",
+          "unit": "short"
+        },
+        {
+          "alias": "",
+          "colorMode": null,
+          "colors": [
+            "rgba(245, 54, 54, 0.9)",
+            "rgba(237, 129, 40, 0.89)",
+            "rgba(50, 172, 45, 0.97)"
+          ],
+          "dateFormat": "YYYY-MM-DD HH:mm:ss",
+          "decimals": 2,
+          "link": true,
+          "linkTooltip": "${__cell}  Status",
+          "linkUrl": "d/kG1moUomk/service-status?var-aid=${__cell_1}&var-service_id=${__cell_3}",
+          "mappingType": 1,
+          "pattern": "service_name",
+          "thresholds": [],
+          "type": "string",
           "unit": "short"
         }
       ],
@@ -353,539 +479,16 @@
           "downsampleFillPolicy": "none",
           "format": "table",
           "hide": false,
-          "rawSql": "SELECT aid, name, host, last_cpu_util, last_mem_util, last_sys_load1, last_sys_cs, status, last_msg_at from agent order by last_msg_at desc",
+          "rawSql": "SELECT  a.aid, a.name node_name, s.id, s.name service_name, s.pid, s.type, s.last_report_at, s.status \nFROM service s, agent a \nWHERE s.aid = a.aid\nORDER BY s.last_report_at DESC",
           "refId": "A"
         }
       ],
       "timeFrom": null,
       "timeShift": null,
-      "title": "Node List",
+      "title": "Discovered Service",
       "transform": "table",
       "transparent": false,
       "type": "table"
-    },
-    {
-      "collapsed": false,
-      "gridPos": {
-        "h": 1,
-        "w": 24,
-        "x": 0,
-        "y": 14
-      },
-      "id": 6,
-      "panels": [],
-      "title": "System Metrics",
-      "type": "row"
-    },
-    {
-      "aliasColors": {},
-      "bars": false,
-      "dashLength": 10,
-      "dashes": false,
-      "datasource": "opentsdb",
-      "fill": 1,
-      "gridPos": {
-        "h": 7,
-        "w": 12,
-        "x": 0,
-        "y": 15
-      },
-      "id": 8,
-      "legend": {
-        "alignAsTable": false,
-        "avg": false,
-        "current": false,
-        "max": false,
-        "min": false,
-        "rightSide": false,
-        "show": true,
-        "total": false,
-        "values": false
-      },
-      "lines": true,
-      "linewidth": 1,
-      "links": [],
-      "nullPointMode": "null",
-      "percentage": false,
-      "pointradius": 2,
-      "points": true,
-      "renderer": "flot",
-      "seriesOverrides": [],
-      "spaceLength": 10,
-      "stack": false,
-      "steppedLine": false,
-      "targets": [
-        {
-          "aggregator": "max",
-          "alias": "",
-          "currentFilterGroupBy": false,
-          "currentFilterKey": "",
-          "currentFilterType": "literal_or",
-          "currentFilterValue": "",
-          "currentTagKey": "",
-          "currentTagValue": "",
-          "disableDownsampling": false,
-          "downsampleAggregator": "max",
-          "downsampleFillPolicy": "none",
-          "downsampleInterval": "",
-          "explicitTags": false,
-          "filters": [],
-          "format": "time_series",
-          "hide": false,
-          "metric": "node.system.load1",
-          "rawSql": "SELECT\n  $__time(time_column),\n  value1\nFROM\n  metric_table\nWHERE\n  $__timeFilter(time_column)\n",
-          "refId": "A",
-          "shouldComputeRate": false,
-          "tags": {
-            "aid": "*"
-          }
-        }
-      ],
-      "thresholds": [
-        {
-          "colorMode": "warning",
-          "fill": true,
-          "line": true,
-          "op": "gt",
-          "value": 5,
-          "yaxis": "left"
-        }
-      ],
-      "timeFrom": null,
-      "timeShift": null,
-      "title": "Load 1",
-      "tooltip": {
-        "shared": true,
-        "sort": 0,
-        "value_type": "individual"
-      },
-      "type": "graph",
-      "xaxis": {
-        "buckets": null,
-        "mode": "time",
-        "name": null,
-        "show": true,
-        "values": []
-      },
-      "yaxes": [
-        {
-          "decimals": null,
-          "format": "short",
-          "label": "",
-          "logBase": 1,
-          "max": null,
-          "min": null,
-          "show": true
-        },
-        {
-          "format": "short",
-          "label": null,
-          "logBase": 1,
-          "max": null,
-          "min": null,
-          "show": false
-        }
-      ],
-      "yaxis": {
-        "align": false,
-        "alignLevel": null
-      }
-    },
-    {
-      "aliasColors": {},
-      "bars": false,
-      "dashLength": 10,
-      "dashes": false,
-      "datasource": "opentsdb",
-      "fill": 1,
-      "gridPos": {
-        "h": 7,
-        "w": 12,
-        "x": 12,
-        "y": 15
-      },
-      "id": 9,
-      "legend": {
-        "avg": false,
-        "current": false,
-        "max": false,
-        "min": false,
-        "show": true,
-        "total": false,
-        "values": false
-      },
-      "lines": true,
-      "linewidth": 1,
-      "links": [],
-      "nullPointMode": "null",
-      "percentage": false,
-      "pointradius": 2,
-      "points": true,
-      "renderer": "flot",
-      "seriesOverrides": [],
-      "spaceLength": 10,
-      "stack": false,
-      "steppedLine": false,
-      "targets": [
-        {
-          "aggregator": "max",
-          "currentFilterGroupBy": false,
-          "currentFilterKey": "",
-          "currentFilterType": "literal_or",
-          "currentFilterValue": "",
-          "currentTagKey": "",
-          "currentTagValue": "",
-          "disableDownsampling": false,
-          "downsampleAggregator": "max",
-          "downsampleFillPolicy": "none",
-          "downsampleInterval": "",
-          "explicitTags": false,
-          "filters": [],
-          "hide": false,
-          "metric": "node.system.load5",
-          "refId": "A",
-          "shouldComputeRate": false,
-          "tags": {
-            "aid": "*"
-          }
-        }
-      ],
-      "thresholds": [],
-      "timeFrom": null,
-      "timeShift": null,
-      "title": "Load 5",
-      "tooltip": {
-        "shared": true,
-        "sort": 0,
-        "value_type": "individual"
-      },
-      "type": "graph",
-      "xaxis": {
-        "buckets": null,
-        "mode": "time",
-        "name": null,
-        "show": true,
-        "values": []
-      },
-      "yaxes": [
-        {
-          "format": "short",
-          "label": "",
-          "logBase": 1,
-          "max": null,
-          "min": null,
-          "show": true
-        },
-        {
-          "format": "short",
-          "label": null,
-          "logBase": 1,
-          "max": null,
-          "min": null,
-          "show": false
-        }
-      ],
-      "yaxis": {
-        "align": false,
-        "alignLevel": null
-      }
-    },
-    {
-      "aliasColors": {},
-      "bars": false,
-      "dashLength": 10,
-      "dashes": false,
-      "datasource": "opentsdb",
-      "fill": 1,
-      "gridPos": {
-        "h": 7,
-        "w": 12,
-        "x": 0,
-        "y": 22
-      },
-      "id": 10,
-      "legend": {
-        "avg": false,
-        "current": false,
-        "max": false,
-        "min": false,
-        "show": true,
-        "total": false,
-        "values": false
-      },
-      "lines": true,
-      "linewidth": 1,
-      "links": [],
-      "nullPointMode": "null",
-      "percentage": false,
-      "pointradius": 2,
-      "points": true,
-      "renderer": "flot",
-      "seriesOverrides": [],
-      "spaceLength": 10,
-      "stack": false,
-      "steppedLine": false,
-      "targets": [
-        {
-          "aggregator": "sum",
-          "currentFilterGroupBy": false,
-          "currentFilterKey": "",
-          "currentFilterType": "literal_or",
-          "currentFilterValue": "",
-          "currentTagKey": "",
-          "currentTagValue": "",
-          "disableDownsampling": false,
-          "downsampleAggregator": "sum",
-          "downsampleFillPolicy": "none",
-          "downsampleInterval": "",
-          "explicitTags": false,
-          "filters": [],
-          "hide": false,
-          "metric": "node.system.sys_cs",
-          "refId": "A",
-          "shouldComputeRate": false,
-          "tags": {
-            "aid": "*"
-          }
-        }
-      ],
-      "thresholds": [],
-      "timeFrom": null,
-      "timeShift": null,
-      "title": "Context Switch",
-      "tooltip": {
-        "shared": true,
-        "sort": 0,
-        "value_type": "individual"
-      },
-      "type": "graph",
-      "xaxis": {
-        "buckets": null,
-        "mode": "time",
-        "name": null,
-        "show": true,
-        "values": []
-      },
-      "yaxes": [
-        {
-          "format": "short",
-          "label": "",
-          "logBase": 1,
-          "max": null,
-          "min": null,
-          "show": true
-        },
-        {
-          "format": "short",
-          "label": null,
-          "logBase": 1,
-          "max": null,
-          "min": null,
-          "show": false
-        }
-      ],
-      "yaxis": {
-        "align": false,
-        "alignLevel": null
-      }
-    },
-    {
-      "aliasColors": {},
-      "bars": false,
-      "dashLength": 10,
-      "dashes": false,
-      "datasource": "opentsdb",
-      "fill": 1,
-      "gridPos": {
-        "h": 7,
-        "w": 12,
-        "x": 12,
-        "y": 22
-      },
-      "id": 11,
-      "legend": {
-        "avg": false,
-        "current": false,
-        "max": false,
-        "min": false,
-        "show": true,
-        "total": false,
-        "values": false
-      },
-      "lines": true,
-      "linewidth": 1,
-      "links": [],
-      "nullPointMode": "null",
-      "percentage": false,
-      "pointradius": 2,
-      "points": true,
-      "renderer": "flot",
-      "seriesOverrides": [],
-      "spaceLength": 10,
-      "stack": false,
-      "steppedLine": false,
-      "targets": [
-        {
-          "aggregator": "sum",
-          "currentFilterGroupBy": false,
-          "currentFilterKey": "",
-          "currentFilterType": "literal_or",
-          "currentFilterValue": "",
-          "currentTagKey": "",
-          "currentTagValue": "",
-          "disableDownsampling": false,
-          "downsampleAggregator": "sum",
-          "downsampleFillPolicy": "none",
-          "downsampleInterval": "",
-          "explicitTags": false,
-          "filters": [],
-          "hide": false,
-          "metric": "node.system.sys_in",
-          "refId": "A",
-          "shouldComputeRate": false,
-          "tags": {
-            "aid": "*"
-          }
-        }
-      ],
-      "thresholds": [],
-      "timeFrom": null,
-      "timeShift": null,
-      "title": "System Interrupt",
-      "tooltip": {
-        "shared": true,
-        "sort": 0,
-        "value_type": "individual"
-      },
-      "type": "graph",
-      "xaxis": {
-        "buckets": null,
-        "mode": "time",
-        "name": null,
-        "show": true,
-        "values": []
-      },
-      "yaxes": [
-        {
-          "format": "short",
-          "label": "",
-          "logBase": 1,
-          "max": null,
-          "min": null,
-          "show": true
-        },
-        {
-          "format": "short",
-          "label": null,
-          "logBase": 1,
-          "max": null,
-          "min": null,
-          "show": false
-        }
-      ],
-      "yaxis": {
-        "align": false,
-        "alignLevel": null
-      }
-    },
-    {
-      "aliasColors": {},
-      "bars": false,
-      "dashLength": 10,
-      "dashes": false,
-      "datasource": "opentsdb",
-      "fill": 1,
-      "gridPos": {
-        "h": 7,
-        "w": 12,
-        "x": 0,
-        "y": 29
-      },
-      "id": 12,
-      "legend": {
-        "avg": false,
-        "current": false,
-        "max": false,
-        "min": false,
-        "show": true,
-        "total": false,
-        "values": false
-      },
-      "lines": true,
-      "linewidth": 1,
-      "links": [],
-      "nullPointMode": "null",
-      "percentage": false,
-      "pointradius": 2,
-      "points": true,
-      "renderer": "flot",
-      "seriesOverrides": [],
-      "spaceLength": 10,
-      "stack": false,
-      "steppedLine": false,
-      "targets": [
-        {
-          "aggregator": "max",
-          "currentFilterGroupBy": false,
-          "currentFilterKey": "",
-          "currentFilterType": "literal_or",
-          "currentFilterValue": "",
-          "currentTagKey": "",
-          "currentTagValue": "",
-          "disableDownsampling": false,
-          "downsampleAggregator": "max",
-          "downsampleFillPolicy": "none",
-          "downsampleInterval": "",
-          "explicitTags": false,
-          "filters": [],
-          "hide": false,
-          "metric": "node.memory.used_mem",
-          "refId": "A",
-          "shouldComputeRate": false,
-          "tags": {
-            "aid": "*"
-          }
-        }
-      ],
-      "thresholds": [],
-      "timeFrom": null,
-      "timeShift": null,
-      "title": "Memory",
-      "tooltip": {
-        "shared": true,
-        "sort": 0,
-        "value_type": "individual"
-      },
-      "type": "graph",
-      "xaxis": {
-        "buckets": null,
-        "mode": "time",
-        "name": null,
-        "show": true,
-        "values": []
-      },
-      "yaxes": [
-        {
-          "format": "decmbytes",
-          "label": "",
-          "logBase": 1,
-          "max": null,
-          "min": null,
-          "show": true
-        },
-        {
-          "format": "short",
-          "label": null,
-          "logBase": 1,
-          "max": null,
-          "min": null,
-          "show": false
-        }
-      ],
-      "yaxis": {
-        "align": false,
-        "alignLevel": null
-      }
     }
   ],
   "refresh": false,
@@ -927,5 +530,5 @@
   "timezone": "",
   "title": "Nodes",
   "uid": "naD17ETmz",
-  "version": 44
+  "version": 53
 }

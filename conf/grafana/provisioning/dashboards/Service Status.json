@@ -16,7 +16,7 @@
   "gnetId": null,
   "graphTooltip": 0,
   "id": 5,
-  "iteration": 1539250360720,
+  "iteration": 1539671730063,
   "links": [],
   "panels": [
     {
@@ -1515,9 +1515,8 @@
       {
         "allValue": null,
         "current": {
-          "selected": true,
-          "text": "saa-sz-dev106",
-          "value": "saa-sz-dev106"
+          "text": "sanguo",
+          "value": "sanguo"
         },
         "datasource": "postgres",
         "hide": 0,
@@ -1525,40 +1524,9 @@
         "label": "Node ID",
         "multi": false,
         "name": "aid",
-        "options": [
-          {
-            "selected": false,
-            "text": "590a5c10",
-            "value": "590a5c10"
-          },
-          {
-            "selected": false,
-            "text": "rowan",
-            "value": "rowan"
-          },
-          {
-            "selected": false,
-            "text": "sanguo",
-            "value": "sanguo"
-          },
-          {
-            "selected": false,
-            "text": "putuo",
-            "value": "putuo"
-          },
-          {
-            "selected": true,
-            "text": "saa-sz-dev106",
-            "value": "saa-sz-dev106"
-          },
-          {
-            "selected": false,
-            "text": "xiyou",
-            "value": "xiyou"
-          }
-        ],
+        "options": [],
         "query": "select aid from agent",
-        "refresh": 0,
+        "refresh": 1,
         "regex": "",
         "sort": 0,
         "tagValuesQuery": "",
@@ -1570,10 +1538,8 @@
       {
         "allValue": null,
         "current": {
-          "selected": false,
-          "tags": [],
-          "text": "35b19b67025b48ee916a4d9eee050301",
-          "value": "35b19b67025b48ee916a4d9eee050301"
+          "text": "4c663d83bd5b423e91c05371bd944989",
+          "value": "4c663d83bd5b423e91c05371bd944989"
         },
         "datasource": "postgres",
         "hide": 0,
@@ -1581,35 +1547,9 @@
         "label": "Service",
         "multi": false,
         "name": "service_id",
-        "options": [
-          {
-            "selected": true,
-            "text": "35b19b67025b48ee916a4d9eee050301",
-            "value": "35b19b67025b48ee916a4d9eee050301"
-          },
-          {
-            "selected": false,
-            "text": "194f148f697049b591dc2d9c9736a806",
-            "value": "194f148f697049b591dc2d9c9736a806"
-          },
-          {
-            "selected": false,
-            "text": "a158e3d6348946328356eb362d3c4e24",
-            "value": "a158e3d6348946328356eb362d3c4e24"
-          },
-          {
-            "selected": false,
-            "text": "663396a20f9a4ceab427e5b6520106dc",
-            "value": "663396a20f9a4ceab427e5b6520106dc"
-          },
-          {
-            "selected": false,
-            "text": "896fef2dc01c4f39b41e79b6cf7ae8d2",
-            "value": "896fef2dc01c4f39b41e79b6cf7ae8d2"
-          }
-        ],
+        "options": [],
         "query": "select id from service where aid='$aid' order by last_report_at DESC",
-        "refresh": 0,
+        "refresh": 1,
         "regex": "",
         "sort": 0,
         "tagValuesQuery": "",
@@ -1652,5 +1592,5 @@
   "timezone": "",
   "title": "Service Status",
   "uid": "kG1moUomk",
-  "version": 27
+  "version": 28
 }

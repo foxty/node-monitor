@@ -16,7 +16,7 @@
   "gnetId": null,
   "graphTooltip": 0,
   "id": 3,
-  "iteration": 1539328111528,
+  "iteration": 1539671611012,
   "links": [],
   "panels": [
     {
@@ -98,13 +98,14 @@
           "aggregator": "last",
           "currentTagKey": "",
           "currentTagValue": "",
-          "disableDownsampling": true,
+          "disableDownsampling": false,
           "downsampleAggregator": "last",
           "downsampleFillPolicy": "none",
           "downsampleInterval": "",
           "hide": false,
           "metric": "node.memory.used_mem",
           "refId": "A",
+          "shouldComputeRate": false,
           "tags": {
             "aid": "${aid}"
           }
@@ -187,7 +188,7 @@
           "aggregator": "last",
           "currentTagKey": "",
           "currentTagValue": "",
-          "disableDownsampling": false,
+          "disableDownsampling": true,
           "downsampleAggregator": "last",
           "downsampleFillPolicy": "none",
           "downsampleInterval": "",
@@ -401,8 +402,8 @@
       "scroll": true,
       "showHeader": true,
       "sort": {
-        "col": 5,
-        "desc": true
+        "col": 4,
+        "desc": false
       },
       "styles": [
         {
@@ -1300,7 +1301,7 @@
           "explicitTags": false,
           "filters": [],
           "hide": false,
-          "isCounter": false,
+          "isCounter": true,
           "metric": "node.network.tx_bytes",
           "refId": "A",
           "shouldComputeRate": true,
@@ -1407,7 +1408,7 @@
           "explicitTags": false,
           "filters": [],
           "hide": false,
-          "isCounter": false,
+          "isCounter": true,
           "metric": "node.network.rx_bytes",
           "refId": "A",
           "shouldComputeRate": true,
@@ -1468,9 +1469,9 @@
       {
         "allValue": null,
         "current": {
-          "selected": true,
-          "text": "590a5c10",
-          "value": "590a5c10"
+          "selected": false,
+          "text": "sanguo",
+          "value": "sanguo"
         },
         "datasource": "postgres",
         "hide": 0,
@@ -1478,40 +1479,9 @@
         "label": "Node ID",
         "multi": false,
         "name": "aid",
-        "options": [
-          {
-            "selected": false,
-            "text": "rowan",
-            "value": "rowan"
-          },
-          {
-            "selected": true,
-            "text": "590a5c10",
-            "value": "590a5c10"
-          },
-          {
-            "selected": false,
-            "text": "sanguo",
-            "value": "sanguo"
-          },
-          {
-            "selected": false,
-            "text": "saa-sz-dev106",
-            "value": "saa-sz-dev106"
-          },
-          {
-            "selected": false,
-            "text": "putuo",
-            "value": "putuo"
-          },
-          {
-            "selected": false,
-            "text": "xiyou",
-            "value": "xiyou"
-          }
-        ],
+        "options": [],
         "query": "select aid from agent",
-        "refresh": 0,
+        "refresh": 1,
         "regex": "",
         "sort": 0,
         "tagValuesQuery": "",
@@ -1555,5 +1525,5 @@
   "timezone": "",
   "title": "Node Status",
   "uid": "tT-zVETmk",
-  "version": 38
+  "version": 45
 }
