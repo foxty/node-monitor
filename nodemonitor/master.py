@@ -15,16 +15,15 @@ Node monitor master:
 import os
 import logging
 import sys
+import socket
+import select
 import SocketServer
 import content_parser
 import model
 from datetime import datetime, timedelta
 from threading import Timer
 from uuid import uuid4
-from common import YAMLConfig, Msg, InvalidMsgError, set_logging
-
-
-_MASTER = None
+from common import YAMLConfig, Msg, InvalidMsgError, set_logging, read_agent_msg
 
 
 class AlarmEngine(object):
@@ -62,53 +61,53 @@ class AlarmEngine(object):
         pass
 
 
-class AgentRequestHandler(SocketServer.StreamRequestHandler):
-    """All message are MonMsg and we should decode the msg here"""
-
-    def handle(self):
-        self.agentid = None
-        try:
-            self._loop()
-        except Exception as e:
-            logging.exception('error while processing data for %s', self.client_address)
-        finally:
-            if self.agentid:
-                status = _MASTER.inactive_agent(self.agentid)
-                logging.info('inactive agent %s ', status)
-            else:
-                logging.info('agent from %s not registered, exit handler.', self.client_address)
-
-    def _chk_msg(self, msg):
-        if not _MASTER.find_agent(msg.agentid) and msg.msg_type != Msg.A_REG:
-            raise InvalidMsgError('agentid %s not registered from %s' % (msg.agentid, self.client_address))
-        elif not self.agentid:
-            self.agentid = msg.agentid
-            logging.info('new agent %s joined', self.client_address)
-        elif self.agentid != msg.agentid:
-            raise InvalidMsgError('agentid change detected %d->%d from %s'
-                                  % (self.agentid, msg.agentid, self.client_address))
-
-    def _recv_msg(self):
-        header = self.rfile.readline().strip().split(':')
-        if len(header) == 2 and 'MSG' == header[0] and header[1].isdigit():
-            data = self.rfile.read(int(header[1])).split('\n')
-            headers, body = data[:-1], data[-1]
-            msg = Msg.decode(headers, body)
-            msg.client_addr = self.client_address
-            logging.debug("recv msg type=%s,datalen=%s,size=%d from %s",
-                          msg.msg_type, header[1], len(data), self.client_address)
-            return msg
-        else:
-            raise InvalidMsgError('unsupported msg header %s from %s'%(header, self.client_address))
-
-    def _loop(self):
-        process = True
-        while process:
-            msg = self._recv_msg()
-            self._chk_msg(msg)
-            process = _MASTER.handle_msg(msg, self.client_address)
-            if not process:
-                logging.info('msg handler stopped for %s from %s', msg, self.agentid)
+# class AgentRequestHandler(SocketServer.StreamRequestHandler):
+#     """All message are MonMsg and we should decode the msg here"""
+#
+#     def handle(self):
+#         self.agentid = None
+#         try:
+#             self._loop()
+#         except Exception as e:
+#             logging.exception('error while processing data for %s', self.client_address)
+#         finally:
+#             if self.agentid:
+#                 status = _MASTER.inactive_agent(self.agentid)
+#                 logging.info('inactive agent %s ', status)
+#             else:
+#                 logging.info('agent from %s not registered, exit handler.', self.client_address)
+#
+#     def _chk_msg(self, msg):
+#         if not _MASTER.find_agent(msg.agentid) and msg.msg_type != Msg.A_REG:
+#             raise InvalidMsgError('agentid %s not registered from %s' % (msg.agentid, self.client_address))
+#         elif not self.agentid:
+#             self.agentid = msg.agentid
+#             logging.info('new agent %s joined', self.client_address)
+#         elif self.agentid != msg.agentid:
+#             raise InvalidMsgError('agentid change detected %d->%d from %s'
+#                                   % (self.agentid, msg.agentid, self.client_address))
+#
+#     def _recv_msg(self):
+#         header = self.rfile.readline().strip().split(':')
+#         if len(header) == 2 and 'MSG' == header[0] and header[1].isdigit():
+#             data = self.rfile.read(int(header[1])).split('\n')
+#             headers, body = data[:-1], data[-1]
+#             msg = Msg.decode(headers, body)
+#             msg.client_addr = self.client_address
+#             logging.debug("recv msg type=%s,datalen=%s,size=%d from %s",
+#                           msg.msg_type, header[1], len(data), self.client_address)
+#             return msg
+#         else:
+#             raise InvalidMsgError('unsupported msg header %s from %s'%(header, self.client_address))
+#
+#     def _loop(self):
+#         process = True
+#         while process:
+#             msg = self._recv_msg()
+#             self._chk_msg(msg)
+#             process = _MASTER.handle_msg(msg, self.client_address)
+#             if not process:
+#                 logging.info('msg handler stopped for %s from %s', msg, self.agentid)
 
 
 class DataKeeper(object):
@@ -162,10 +161,12 @@ class Master(object):
 
     def __init__(self, config):
         servercfg = config['master']['server']
+        self._stopped = False
         self._addr = (servercfg['host'], servercfg['port'])
         self._agents = None
         self._handlers = {}
-        self._server = None
+        self._serversock = None
+        self._agentsocks = {}
         self._init_handlers()
         self._load_agents()
 
@@ -210,6 +211,15 @@ class Master(object):
         agent.set(last_msg_at=datetime.utcnow())
         logging.debug('heart beat get from %s', agent)
         return True
+
+    def _agent_stop(self, msg):
+        logging.info('stopping agent %s', msg.agentid)
+        sock = self._agentsocks.get(msg.agentid, None)
+        if sock:
+            sock.close()
+            logging.info('agent %s stopped',  msg.agnetid)
+        else:
+            logging.warn('agent not active, invalid STOP message %s', msg)
 
     def _agent_nmetrics(self, msg):
         logging.debug('parsing node metrics message %s', msg)
@@ -304,29 +314,63 @@ class Master(object):
                 gcrep = content_parser.parse_jstatgc(metric.aid, metric.collect_at, service.id, metric.content)
                 gcrep.save() if gcrep else None
 
-    def _agent_stop(self, msg):
-        return True
-
     def find_agent(self, aid):
-        return self._agents.get(aid, None)
-
-    def start(self):
-        logging.info('master started and listening on %s', self._addr)
-        SocketServer.ThreadingTCPServer.allow_reuse_address = True
-        self._server = SocketServer.ThreadingTCPServer(self._addr, AgentRequestHandler)
-        self._server.request_queue_size = 64
-        self._server.serve_forever()
-
-    def handle_msg(self, msg, client_addr):
-        logging.info('handle msg %s, client=%s.', msg, client_addr)
-        return self._handlers[msg.msg_type](msg)
-
-    def inactive_agent(self, agentid):
-        agent = self._agents[agentid]
+        agent = self._agents.get(aid, None)
+        if agent is None:
+            logging.warn('can not find agent %s form cache/db', aid)
         return agent
 
+    def start(self):
+        serversock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        serversock.bind(self._addr)
+        serversock.setblocking(False)
+        serversock.listen(64)
+        logging.info('master started and bind/listen to %s', self._addr)
+        self._serversock = serversock
+        
+        # staring loop
+        logging.info('master is running.....')
+        while not self._stopped:
+            agentsocks = self._agentsocks.values()
+            rlist, wlist, elist = select.select([self._serversock] + agentsocks, [], [], 5)
+            for rsock in rlist:
+                if rsock == self._serversock:
+                    agentsocket, addr = rsock.accept()
+                    self._agentsocks[addr] = agentsocket
+                    logging.info('client socket %s connected', addr)
+                else:
+                    # read from client socket
+                    self.recv_msg(rsock.getpeername())
+
+    def recv_msg(self, addr):
+        sock = self._agentsocks[addr]
+        msg = read_agent_msg(sock)
+        if msg:
+            if not self.find_agent(msg.agentid) and msg.msg_type != Msg.A_REG:
+                logging.info('agent(%s) not registered, message %s will skipped.', msg.agentid, msg)
+                return
+            else:
+                return self.handle_msg(msg)
+        else:
+            logging.warn('unsupported msg get from %s',  addr)
+
+    def handle_msg(self, msg):
+        logging.info('handle msg %s', msg)
+        handler = self._handlers.get(msg.msg_type, None)
+        if handler:
+            return handler(msg)
+        else:
+            logging.error('no handler defined for msg type %s', msg.msg_type)
+            return
+
     def stop(self):
-        self._server.server_close()
+        for sock in self._agentsocks.values():
+            try:
+                sock.close()
+            except socket.error:
+                logging.warn('error while close agent socket %s', sock.getpeername())
+        self._serversock.close()
+        logging.info('server socket closed.')
 
 
 def master_main(cfg):
@@ -336,8 +380,8 @@ def master_main(cfg):
     dbcfg = cfg['master']['database']
     model.init_db(dbcfg, schemapath)
     global _MASTER
-    _MASTER = Master(cfg)
-    _MASTER.start()
+    m = Master(cfg)
+    m.start()
 
 
 if __name__ == '__main__':

@@ -20,6 +20,7 @@ except:
     pass
 import logging.handlers
 import pickle
+import socket
 from subprocess import Popen, PIPE
 from base64 import standard_b64encode, standard_b64decode
 from datetime import datetime, date, time
@@ -492,3 +493,51 @@ def load_json(str):
         return dict((k, decode_date(v)) for k, v in dct.items())
 
     return json.loads(str, object_hook=obj_hook)
+
+
+def read_agent_msg(sock):
+    # read message stamper "MSG:<LENGTH>\n"
+    stamper = ''
+    while not stamper or stamper[-1] != '\n':
+        stamper += sock.recv(1)
+    stamper_items = stamper.strip().split(':')
+    if len(stamper_items) != 2 or not stamper_items[1].isdigit():
+        logging.warn('invalid message stamper %s from %s', stamper, sock.getpeername())
+        return
+    else:
+        length = int(stamper_items[1])
+        data = ''
+        while len(data) < length:
+            try:
+                data += sock.recv(length - len(data))
+            except socket.error:
+                pass
+        if length != len(data):
+            logging.warn('invalid message length (%s != %s) from %s', length, len(data), sock.getpeername())
+            return
+        msgdata = data.split('\n')
+        headers, body = msgdata[:-1], msgdata[-1]
+        msg = Msg.decode(headers, body)
+        logging.debug("recv msg type=%s, datalen=%s,size=%d from %s", msg.msg_type, length, len(data), sock.getpeername())
+        return msg
+
+
+def send_agent_msg(sock, msg):
+    headers, body = msg.encode()
+    data = '\n'.join(headers + [body])
+    datasize = len(data)
+    bucket = 'MSG:%d\n' % datasize + data
+    times = 0
+    while bucket:
+        try:
+            try:
+                sent = sock.send(bucket)
+                bucket = data[sent:]
+            except socket.error:
+                logging.exception('send data failed by times = %d', times)
+                if times > 10:
+                    logging.info('break the send msg loop while times=%s', times)
+                    break
+        finally:
+            times += 1
+    return datasize, times

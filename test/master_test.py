@@ -392,7 +392,7 @@ class MasterTest(model_test.BaseDBTest):
 
         # test a new agent join
         regmsg = Msg.create_msg('1', Msg.A_REG, {'os': 'LINUX', 'hostname': 'test-host'})
-        master.handle_msg(regmsg, None)
+        master.handle_msg(regmsg)
         agent = master.find_agent('1')
         self.assertEqual('1', agent.aid)
         self.assertEqual('test-host', agent.host)
@@ -406,10 +406,10 @@ class MasterTest(model_test.BaseDBTest):
         ctime = datetime.now()
         body = {'collect_time': ctime}
         regmsg = Msg.create_msg('2', Msg.A_REG, {'os': 'LINUX', 'hostname': 'test-host'})
-        m.handle_msg(regmsg, None)
+        m.handle_msg(regmsg)
 
         nmmsg = Msg.create_msg('2', Msg.A_NODE_METRIC, body)
-        re = m.handle_msg(nmmsg, None)
+        re = m.handle_msg(nmmsg)
         self.assertTrue(re)
 
     def test_handle_nmetrics_linux(self):
@@ -436,7 +436,7 @@ class MasterTest(model_test.BaseDBTest):
         }
         nmmsg = Msg.create_msg(agent.aid, Msg.A_NODE_METRIC, msgbody)
         nmmsg.set_header(nmmsg.H_COLLECT_AT, ctime)
-        re = m.handle_msg(nmmsg, None)
+        re = m.handle_msg(nmmsg)
         self.assertTrue(re)
         agents = model.Agent.query()
         self.assertEqual(1, len(agents))
@@ -451,7 +451,7 @@ class MasterTest(model_test.BaseDBTest):
         msgbody = {'name': 'service1', 'pid': '1', 'metrics': {'m1': 'm1 content', 'm2': 'm2 content'}}
         nmmsg = Msg.create_msg(agent.aid, Msg.A_SERVICE_METRIC, msgbody)
         nmmsg.set_header(Msg.H_COLLECT_AT, ctime)
-        re = m.handle_msg(nmmsg, None)
+        re = m.handle_msg(nmmsg)
         self.assertTrue(re)
 
         smetrics = model.SMetric.query(orderby='category ASC')
@@ -460,16 +460,16 @@ class MasterTest(model_test.BaseDBTest):
         self.assertEqual(aid, sm1.aid)
         self.assertEqual(ctime.replace(microsecond=0), sm1.collect_at)
         self.assertEqual('service1', sm1.name)
-        self.assertEqual('1', sm1.pid)
+        self.assertEqual(1, sm1.pid)
         self.assertEqual('m1', sm1.category)
         self.assertEqual('m1 content', sm1.content)
 
         sinfo = model.SInfo.query_by_aid(aid)[0]
         self.assertEqual(aid, sinfo.aid)
         self.assertEqual('service1', sinfo.name)
-        self.assertEqual('1', sinfo.pid)
+        self.assertEqual(1, sinfo.pid)
         self.assertEqual(ctime.replace(microsecond=0), sinfo.last_report_at)
-        self.assertEqual(model.SInfo.STATUS_ACT, sinfo.status)
+        self.assertEqual(model.SInfo.STATUS_ACT, sinfo.status.strip())
 
     def test_handle_smetrics_pidchg(self):
         aid = '2'
@@ -481,13 +481,13 @@ class MasterTest(model_test.BaseDBTest):
         msgbody = {'name': 'service1', 'pid': '1', 'metrics': {'m1': 'm1 content', 'm2': 'm2 content'}}
         nmmsg = Msg.create_msg(agent.aid, Msg.A_SERVICE_METRIC, msgbody)
         nmmsg.set_header(Msg.H_COLLECT_AT, ctime)
-        m.handle_msg(nmmsg, None)
+        m.handle_msg(nmmsg)
 
         ctime1 = datetime.now() + timedelta(hours=1)
         msgbody['pid'] = '2'
         nmmsg = Msg.create_msg(agent.aid, Msg.A_SERVICE_METRIC, msgbody)
         nmmsg.set_header(Msg.H_COLLECT_AT, ctime1)
-        m.handle_msg(nmmsg, None)
+        m.handle_msg(nmmsg)
 
         smetrics = model.SMetric.query()
         self.assertEqual(4, len(smetrics))
@@ -495,14 +495,14 @@ class MasterTest(model_test.BaseDBTest):
         sinfo = model.SInfo.query_by_aid(aid)[0]
         self.assertEqual(aid, sinfo.aid)
         self.assertEqual('service1', sinfo.name)
-        self.assertEqual('2', sinfo.pid)
+        self.assertEqual(2, sinfo.pid)
         self.assertEqual(ctime1.replace(microsecond=0), sinfo.last_report_at)
-        self.assertEqual(model.SInfo.STATUS_ACT, sinfo.status)
+        self.assertEqual(model.SInfo.STATUS_ACT, sinfo.status.strip())
 
-        sinfohis = model.SInfoHistory.query()
+        sinfohis = model.SInfoHistory.query(orderby='recv_at ASC')
         self.assertEqual(2, len(sinfohis))
-        self.assertEqual('1', sinfohis[0].pid)
-        self.assertEqual('2', sinfohis[1].pid)
+        self.assertEqual(1, sinfohis[0].pid)
+        self.assertEqual(2, sinfohis[1].pid)
 
 
 class DataKeeperTest(model_test.BaseDBTest):
@@ -536,23 +536,6 @@ class DataKeeperTest(model_test.BaseDBTest):
         dk.stop()
         self.assertFalse(dk._run)
         self.assertEqual(1, dk._count)
-
-    def test_run(self):
-        dk = self.data_keeper
-        today = datetime.now()
-        metrics = []
-        for i in range(0, 20):
-            theday = today - timedelta(days=i)
-            m = model.NMetric(aid=1, collect_at=theday, category='sys', content='content' + str(i), recv_at=theday)
-            metrics.append(m)
-        model.NMetric.save_all(metrics)
-        dk.start()
-        time.sleep(dk._interval + 1)
-        dk.stop()
-        metrics = model.NMetric.query()
-        self.assertEqual(5, len(metrics))
-        for m in metrics:
-            self.assertTrue((today - m.recv_at).days < 5)
 
 
 if __name__ == '__main__':
