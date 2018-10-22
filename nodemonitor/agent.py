@@ -22,10 +22,21 @@ import Queue as Q
 import threading
 from datetime import datetime
 from subprocess import call
-from common import Msg, InvalidMsgError, is_win, is_sunos, ostype, OSType, set_logging, check_output, process_info, interpret_exp
+from common import Msg, InvalidMsgError, is_win, is_sunos, ostype, OSType, set_logging, check_output, \
+    process_info, interpret_exp, send_msg, read_msg
 
 
 _MAX_BACKOFF_SECOND = 60  # in agent retry policy
+
+
+DEF_CONFIG = {
+    "version": 0,
+    "clock_interval": 10,
+    "heartbeat_clocks": 6,
+    "node_metrics": [],
+    "service_metrics": {},
+    "services": []
+}
 
 
 def is_metric_valid(metric):
@@ -50,206 +61,8 @@ def is_metric_valid(metric):
 
 class AgentConfig(object):
 
-    CONFIG = {
-        "clock_interval": 10,
-        "heartbeat_clocks": 6,
-        "node_metrics": [
-            # dstat-sys
-            {
-                "name": "dstat-sys",
-                "os": "LINUX",
-                "cmd": ["dstat", "-lyp", "1", "1"],
-                "clocks": 6
-            },
-            # dstat-cpu
-            {
-                "name": "dstat-cpu",
-                "os": "LINUX",
-                "cmd": ["dstat", "-c", "1", "1"],
-                "clocks": 6
-            },
-            # dstat-mem
-            {
-                "name": "dstat-mem",
-                "os": "LINUX",
-                "cmd": ["dstat", "-msg", "1", "1"],
-                "clocks": 6
-            },
-            # dstat-socket
-            {
-                "name": "dstat-socket",
-                "os": "LINUX",
-                "cmd": ["dstat", "--socket", "1", "1"],
-                "clocks": 6
-            },
-            # dstat-dio
-            {
-                "name": "dstat-dio",
-                "cmd": ["dstat", "-dr", "1", "1"],
-                "clocks": 6
-            },
-            # w
-            {
-                "name": "w",
-                "cmd": ["w"],
-                "clocks": 6
-            },
-            # free
-            {
-                "name": "free",
-                "os": "LINUX",
-                "cmd": ["free", "-m"],
-                "clocks":6
-            },
-            # vmstat
-            {
-                "name": "vmstat",
-                "cmd": ["vmstat","1", "2"],
-                "clocks": 6
-            },
-            # netstat
-            {
-                "name": "netstat",
-                "cmd": ["netstat", "-s"],
-                "clocks": 6
-            },
-            # ifconfig (network traffic )
-            {
-                "name": "ifconfig",
-                "cmd": ["ifconfig", "-a"],
-                "clocks": 6
-            },
-            # ip -s link
-            {
-                "name": "ip-link",
-                "os": "LINUX",
-                "cmd": ["ip", "-s", "link"],
-                "clocks": 6
-
-            },
-            # df solaris
-            {
-                "name": "df",
-                "os": "SUNOS",
-                "cmd": ["df", "-k"],
-                "clocks": 60
-            },
-            # df linux
-            {
-                "name": "df",
-                "os": "LINUX",
-                "cmd": ["df", "-kP"],
-                "clocks": 60
-            }
-        ],
-
-        "service_metrics": {
-            "pidstat": {
-                "name": "pidstat",
-                "type": "all",
-                "os": "LINUX",
-                "cmd": ["pidstat", "-tdruh", "-p", "${pid}"]
-            },
-            "prstat": {
-                "name": "prstat",
-                "type": "all",
-                "os": "SUNOS",
-                "cmd": ["prstat", "-p", "${pid}", "-c", "1", "1"]
-            },
-            "jstat-gc": {
-                "name": "jstat-gc",
-                "type": "java",
-                "cmd": ["su", "${puser}", "-c", "${java_home}/bin/jstat -gc -t ${pid}"]
-            }
-        },
-
-        "services": [
-            # agent
-            {
-                "name": "agent",
-                "type": "python",
-                "lookup_keyword": "agent.py",
-                "env": {
-                  "log_home": "${HOME}/node-monitor"
-                },
-                "log_pattern": ["agent.log.*"],
-                "metrics": ["pidstat", "prstat"],
-                "clocks": 6
-            },
-
-            # SAPM.Reactor
-            {
-                "name": "SAPM.Reactor",
-                "type": "java",
-                "lookup_keyword": "-Dprocess=Reactor",
-                "env": {
-                    "java_home": "${JAVA_HOME}",
-                    "log_home": "${STARGUS_HOME}/log"
-                },
-                "log_pattern": ["reactor.*"],
-                "metrics": ["pidstat", "prstat", "jstat-gc"],
-                "clocks": 6
-            },
-
-            # SAPM.Collector
-            {
-                "name": "SAPM.Collector",
-                "type": "java",
-                "lookup_keyword": "-Dprocess=Collector",
-                "env": {
-                    "java_home": "${JAVA_HOME}",
-                    "log_home": "${STARGUS_HOME}/log"
-                },
-                "log_pattern": ["collection_manager.log", "snmp_poller.log"],
-                "metrics": ["pidstat", "prstat", "jstat-gc"],
-                "clocks": 6
-            },
-
-            # SAPM.Controller
-            {
-                "name": "SAPM.Controller",
-                "type": "java",
-                "lookup_keyword": "jboss/bin/run.jar",
-                "env": {
-                    "java_home": "${JAVA_HOME}",
-                    "log_home": "${STARGUS_HOME}/log"
-                },
-                "log_pattern": ["jboss-*.log"],
-                "metrics": ["pidstat", "prstat", "jstat-gc"],
-                "clocks": 6
-            },
-
-            # SAPM.NodeReceiver
-            {
-                "name": "SAPM.NodeReceiver",
-                "type": "java",
-                "lookup_keyword": "/node-receiver/conf/receiver.properties",
-                "env": {
-                    "java_home": "${JAVA_HOME}",
-                    "log_home": "${STARGUS_HOME}/log"
-                },
-                "log_pattern": ["jboss-*.log"],
-                "metrics": ["pidstat", "jstat-gc"],
-                "clocks": 6
-            },
-
-
-            # Scaler
-            {
-                "name": "SAPM.Scaler",
-                "type": "java",
-                "lookup_keyword": "com.arrisi.sa.scaler.Agent",
-                "env": {
-                    "java_home": "/usr/java/latest"
-                },
-                "metrics": ["pidstat", "prstat", "jstat-gc"],
-                "clocks": 6
-            }
-        ]
-    }
-
-    def __init__(self):
-        config = self.CONFIG
+    def __init__(self, config):
+        self._version = config['version']
         self._node_metrics = config.get('node_metrics', [])
         self._valid_node_metrics = None
         self._service_metrics = config.get('service_metrics', {})
@@ -260,6 +73,7 @@ class AgentConfig(object):
         # clocks
         self._clock_interval = config.get('clock_interval', 10)
         self._hb_clocks = config.get('heartbeat_clocks', 60)
+        logging.info('agent config version %s', self._version)
 
     def _validate(self):
         # check node metrics
@@ -278,6 +92,10 @@ class AgentConfig(object):
         logging.info('valid service=%s, invalid services=%s',
                      map(lambda x: x['name'], self._valid_services),
                      map(lambda x: x['name'], invalid_serivces))
+
+    @property
+    def version(self):
+        return self._version
 
     @property
     def node_metrics(self):
@@ -314,10 +132,14 @@ class NodeCollector(threading.Thread):
         self._config = config
         self.setDaemon(True)
 
+    def reload_config(self, cfg):
+        logging.info('config reloaded by %s', cfg)
+        self._config = AgentConfig(cfg)
+
     def _collect(self):
-        interval = self._config.clock_interval
         loops = 1;
         while True:
+            interval = self._config.clock_interval
             self._delay.wait(interval)
             time1 = datetime.now()
             try:
@@ -336,7 +158,7 @@ class NodeCollector(threading.Thread):
 
     def _prod_heartbeat(self):
         logging.info('produce heartbeat...')
-        body = {'datetime': datetime.utcnow()}
+        body = {'datetime': datetime.utcnow(), 'config_version': self._config.version}
         hb_msg = Msg.create_msg(self._agentid, Msg.A_HEARTBEAT, body)
         self._agent.add_msg(hb_msg)
 
@@ -449,8 +271,8 @@ class NodeAgent:
         self._started = False
         self._queue = Q.Queue(maxsize=16)
         self._retry = threading.Event()
-        self._config = AgentConfig()
-        self._stat_collector = NodeCollector(self, self._config)
+        self._config = AgentConfig(DEF_CONFIG)
+        self._node_collector = NodeCollector(self, self._config)
         logging.info('agent init with id=%s, host=%s, master=%s, hostname=%s',
                      self._agentid, self._hostname, self._master_addr, self._hostname)
 
@@ -500,7 +322,7 @@ class NodeAgent:
     def start(self):
         logging.info('agent %s starting ...', self._agentid)
         self._connect_master()
-        self._stat_collector.start()
+        self._node_collector.start()
         self._started = True
         self._loop()
 
@@ -556,11 +378,15 @@ class NodeAgent:
                 self._connect_master()
 
     def _do_read(self, sock):
-        rdata = sock.recv(1024)
-        if not rdata:
-            raise InvalidMsgError('get invalid msg ' + rdata + ' from master')
+        msg = read_msg(sock)
+        if msg is None:
+            logging.warn('can not get msg from %s', sock.getpeername())
         else:
-            logging.info('get data %s from master', rdata.strip())
+            logging.info('receive msg %s', msg)
+            if msg.msg_type == Msg.M_CONFIG_UPDATE:
+                newconfig = msg.body['config']
+                self._node_collector.reload_config(newconfig)
+
 
     def _do_write(self, sock):
         while not self._queue.empty():
@@ -570,30 +396,9 @@ class NodeAgent:
                 logging.warn('Try to get msg from empty queue..')
                 return
             msg.set_header(msg.H_SEND_AT, datetime.utcnow())
-            headers, body = msg.encode()
-            data = '\n'.join(headers + [body])
-            datasize = len(data)
-            self._send_data(sock, 'MSG:%d\n' % datasize)
-            times = self._send_data(sock, data)
-            logging.info('send msg type=%s, datasize=%d, times=%d to=%s',
-                          msg.msg_type, datasize, times, self._master_addr)
-            logging.debug('msg data = %s', data)
-
-    def _send_data(self, sock, data):
-        times = 0
-        while data:
-            try:
-                try:
-                    sent = sock.send(data)
-                    data = data[sent:]
-                except socket.error:
-                    logging.exception('send data failed by times = %d', times)
-                    if times > 10:
-                        logging.info('break the send msg loop while times=%s', times)
-                        break
-            finally:
-                times += 1
-        return times
+            size, times = send_msg(sock, msg)
+            logging.info('msg %s sent to %s use %d times', msg, self._master_addr, times)
+            logging.debug('msg data = %s', msg.body)
 
     def _do_error(self, sock):
         logging.info('error happens for %s', sock)

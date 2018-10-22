@@ -85,14 +85,16 @@ class Msg(object):
     a set of builtin encoder & decoder method provided to trans msg over TCP stream.
     """
 
-    # Message Types
+    # Message from agnet
     NONE = 'NONE'
     A_REG = 'A_REG'
     A_HEARTBEAT = 'A_HEARTBEAT'
-    A_STOP = 'A_STOP'
-    M_ACT = 'A_ACT'
     A_NODE_METRIC = 'A_NODE_METRIC'
     A_SERVICE_METRIC = 'A_SERVICE_METRIC'
+
+    # Message from master
+    M_STOP_COLLECT = 'M_STOP_COLLECT'
+    M_CONFIG_UPDATE = 'M_CONFIG_UPDATE'
 
     # Headers definition
     H_AID = 'AgentID'
@@ -102,7 +104,7 @@ class Msg(object):
     H_SEND_AT = 'SendAt'
 
     SUPPORT_HEADERS = [H_AID, H_MSGTYPE, H_COLLECT_AT, H_SEND_AT]
-    SUPPORT_TYPES = [A_REG, A_HEARTBEAT, A_STOP, M_ACT, A_NODE_METRIC, A_SERVICE_METRIC]
+    SUPPORT_TYPES = [A_REG, A_HEARTBEAT, A_NODE_METRIC, A_SERVICE_METRIC, M_STOP_COLLECT, M_CONFIG_UPDATE]
 
     def __init__(self, headers=None, body=""):
         self._headers = {}
@@ -166,7 +168,7 @@ class Msg(object):
             return False
 
     def __str__(self):
-        return '%s from %s' % (self.msg_type, self.agentid)
+        return '%s[aid=%s]' % (self.msg_type, self.agentid)
 
     @classmethod
     def decode(cls, header_list=[], body=''):
@@ -495,7 +497,7 @@ def load_json(str):
     return json.loads(str, object_hook=obj_hook)
 
 
-def read_agent_msg(sock):
+def read_msg(sock):
     # read message stamper "MSG:<LENGTH>\n"
     stamper = ''
     while not stamper or stamper[-1] != '\n':
@@ -510,19 +512,24 @@ def read_agent_msg(sock):
         while len(data) < length:
             try:
                 data += sock.recv(length - len(data))
-            except socket.error:
-                pass
+            except socket.error as e:
+                if e.errno == 10035:
+                    # [Errno 10035] A non-blocking socket operation could not be completed immediately
+                    # should be ignored
+                    pass
+                else:
+                    raise e
         if length != len(data):
             logging.warn('invalid message length (%s != %s) from %s', length, len(data), sock.getpeername())
             return
         msgdata = data.split('\n')
         headers, body = msgdata[:-1], msgdata[-1]
         msg = Msg.decode(headers, body)
-        logging.debug("recv msg type=%s, datalen=%s,size=%d from %s", msg.msg_type, length, len(data), sock.getpeername())
+        logging.debug("recv msg %s from %s", msg, sock.getpeername())
         return msg
 
 
-def send_agent_msg(sock, msg):
+def send_msg(sock, msg):
     headers, body = msg.encode()
     data = '\n'.join(headers + [body])
     datasize = len(data)

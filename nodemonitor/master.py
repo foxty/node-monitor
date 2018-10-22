@@ -17,13 +17,13 @@ import logging
 import sys
 import socket
 import select
-import SocketServer
+import Queue as Q
 import content_parser
 import model
 from datetime import datetime, timedelta
-from threading import Timer
+from threading import Timer, Thread, RLock
 from uuid import uuid4
-from common import YAMLConfig, Msg, InvalidMsgError, set_logging, read_agent_msg
+from common import YAMLConfig, Msg, set_logging, read_msg, send_msg, load_json
 
 
 class AlarmEngine(object):
@@ -156,33 +156,138 @@ class DataKeeper(object):
             cursor.execute('DELETE FROM %s WHERE recv_at <= ?' % tbl, [theday])
 
 
+class AgentManger(object):
+    """
+    Manage agnet registration/de-regsitration and message exchanges.
+    """
+    def __init__(self, server_addr, message_handler):
+        self._server_addr = server_addr
+        self._message_handler = message_handler
+        self._serversock = None
+        self._stopped = False
+        self._agentslock = RLock()
+        self._agentsocks = {}
+        self._sendq = Q.Queue()
+        self._msg_receiver = Thread(name='Agent Message Receiver', target=self._recv_msg)
+        self._msg_sender = Thread(name='Agent Message Sender', target=self._send_message)
+        logging.info('agnet manager init with addr %s, messgae handler %s', server_addr, message_handler)
+
+    def _find_agent(self, agentid):
+        agent = model.Agent.get_by_id(agentid)
+        if agent is None:
+            logging.warn('cant not find agent from db by aid %s', agentid)
+        return agent
+
+    def start(self, blocking=True):
+        serversock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        serversock.bind(self._server_addr)
+        serversock.setblocking(False)
+        serversock.listen(64)
+        logging.info('agent manager started, listening on %s', self._server_addr)
+        self._serversock = serversock
+
+        self._msg_receiver.start()
+        self._msg_sender.start()
+
+    def _recv_msg(self):
+        # staring loop
+        logging.info('message receiver starting...')
+        while not self._stopped:
+            logging.debug('message receiver is running...')
+            agentsocks = self._agentsocks.values()
+
+            rlist, wlist, elist = select.select([self._serversock] + agentsocks, [], [], 5)
+            for rsock in rlist:
+                try:
+                    if rsock == self._serversock:
+                        agentsocket, addr = rsock.accept()
+                        self._agentsocks[addr] = agentsocket
+                        logging.info('agent from %s connected', addr)
+                    else:
+                        # read from client socket
+                        msg = read_msg(rsock)
+                        if msg:
+                            if not self._find_agent(msg.agentid) and msg.msg_type != Msg.A_REG:
+                                logging.info('agent(%s) not registered, message %s will skipped.', msg.agentid, msg)
+                            else:
+                                self._message_handler(msg, rsock.getpeername())
+                        else:
+                            logging.warn('unsupported msg get from %s',  rsock.getpeername())
+                except Exception as e:
+                    if rsock == self._serversock:
+                        logging.exception('error while accept new agent')
+                    else:
+                        logging.exception('error while recv message from %s, stop remote agent socket', rsock.getpeername())
+                        self.stop_agent(rsock.getpeername())
+        logging.info('message receiver stopped')
+
+    def pub_msg(self, remote_addr, msg):
+        logging.debug('put message %s to send queue with qsize = %s', msg, self._sendq.qsize())
+        self._sendq.put((remote_addr, msg))
+
+    def _send_message(self):
+        logging.info('message sender is starting...')
+        while not self._stopped:
+            try:
+                remote_addr, msg = self._sendq.get()
+                sock = self._agentsocks.get(remote_addr, None)
+                if sock is None:
+                    logging.warn('agent socket not found by %s', remote_addr)
+                else:
+                    logging.info('pub msg to agent %s', remote_addr)
+                    send_msg(sock, msg)
+            except Exception as e:
+                logging.exception('error while send message to %s', remote_addr)
+                self.stop_agent(remote_addr)
+        logging.info('message sender stopped')
+
+    def stop_agent(self, remote_addr):
+        with self._agentslock:
+            sock = self._agentsocks.get(remote_addr, None)
+            if sock is None:
+                logging.warn('agent socket not found by %s', remote_addr)
+            else:
+                logging.info('stopping agent socket %s', remote_addr)
+                try:
+                    sock.close()
+                except sock.error:
+                    pass
+                del self._agentsocks[remote_addr]
+
+    def stop(self):
+        self._stopped = True
+        self._serversock.close()
+
+
 class Master(object):
     """Agent work as the service and received status report from every Agent."""
 
     def __init__(self, config):
         servercfg = config['master']['server']
         self._stopped = False
-        self._addr = (servercfg['host'], servercfg['port'])
         self._agents = None
+        self._agent_addrs = {}
         self._handlers = {}
-        self._serversock = None
-        self._agentsocks = {}
         self._init_handlers()
         self._load_agents()
+        server_addr = (servercfg['host'], servercfg['port'])
+        self._agent_manager = AgentManger(server_addr, self.handle_msg)
 
         retentioncfg = config['master']['data_retention']
         self._data_keeper = DataKeeper(retentioncfg)
-        self._data_keeper.start()
         self._alarm_engine = AlarmEngine()
-        self._alarm_engine.start()
-        logging.info('master init on addr=%s', self._addr)
+
+    def _load_agent_config(self):
+        basepath = os.path.dirname(sys.path[0])
+        agent_config = os.path.join(basepath, 'nodemonitor', 'agent_config.json')
+        with open(agent_config) as f:
+            return load_json(f.read())
 
     def _init_handlers(self):
         self._handlers[Msg.A_REG] = getattr(self, '_agent_reg')
         self._handlers[Msg.A_HEARTBEAT] = getattr(self, '_agent_heartbeat')
         self._handlers[Msg.A_NODE_METRIC] = getattr(self, '_agent_nmetrics')
         self._handlers[Msg.A_SERVICE_METRIC] = getattr(self, '_agent_smetrics')
-        self._handlers[Msg.A_STOP] = getattr(self, '_agent_stop')
         logging.info('%s msg handlers prepared.', len(self._handlers))
 
     def _load_agents(self):
@@ -209,17 +314,22 @@ class Master(object):
     def _agent_heartbeat(self, msg):
         agent = self.find_agent(msg.agentid)
         agent.set(last_msg_at=datetime.utcnow())
+        config_version = msg.body.get('config_version', None)
+        curr_config = self._load_agent_config()
+        curr_config_version = curr_config['version']
+        if config_version is None or curr_config_version > config_version:
+            logging.info(
+                'current config version is %s, agent %s config version is %s, will update config to agent.',
+                curr_config_version, agent.name, config_version)
+            agent_addr = self._agent_addrs.get(msg.agentid)
+            if agent_addr is None:
+                logging.warn('can not find agnet addr for %s, config update msg will be disgarded', msg.agentid)
+            else:
+                cfgmsg = Msg.create_msg(msg.agentid, Msg.M_CONFIG_UPDATE, {'config': curr_config})
+                self._agent_manager.pub_msg(agent_addr, cfgmsg)
+                logging.info('config message %s send to %s', cfgmsg, agent_addr)
         logging.debug('heart beat get from %s', agent)
         return True
-
-    def _agent_stop(self, msg):
-        logging.info('stopping agent %s', msg.agentid)
-        sock = self._agentsocks.get(msg.agentid, None)
-        if sock:
-            sock.close()
-            logging.info('agent %s stopped',  msg.agnetid)
-        else:
-            logging.warn('agent not active, invalid STOP message %s', msg)
 
     def _agent_nmetrics(self, msg):
         logging.debug('parsing node metrics message %s', msg)
@@ -320,42 +430,9 @@ class Master(object):
             logging.warn('can not find agent %s form cache/db', aid)
         return agent
 
-    def start(self):
-        serversock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        serversock.bind(self._addr)
-        serversock.setblocking(False)
-        serversock.listen(64)
-        logging.info('master started and bind/listen to %s', self._addr)
-        self._serversock = serversock
-        
-        # staring loop
-        logging.info('master is running.....')
-        while not self._stopped:
-            agentsocks = self._agentsocks.values()
-            rlist, wlist, elist = select.select([self._serversock] + agentsocks, [], [], 5)
-            for rsock in rlist:
-                if rsock == self._serversock:
-                    agentsocket, addr = rsock.accept()
-                    self._agentsocks[addr] = agentsocket
-                    logging.info('client socket %s connected', addr)
-                else:
-                    # read from client socket
-                    self.recv_msg(rsock.getpeername())
-
-    def recv_msg(self, addr):
-        sock = self._agentsocks[addr]
-        msg = read_agent_msg(sock)
-        if msg:
-            if not self.find_agent(msg.agentid) and msg.msg_type != Msg.A_REG:
-                logging.info('agent(%s) not registered, message %s will skipped.', msg.agentid, msg)
-                return
-            else:
-                return self.handle_msg(msg)
-        else:
-            logging.warn('unsupported msg get from %s',  addr)
-
-    def handle_msg(self, msg):
-        logging.info('handle msg %s', msg)
+    def handle_msg(self, msg, agent_addr):
+        logging.info('handle msg %s from %s', msg, agent_addr)
+        self._agent_addrs[msg.agentid] = agent_addr
         handler = self._handlers.get(msg.msg_type, None)
         if handler:
             return handler(msg)
@@ -363,14 +440,15 @@ class Master(object):
             logging.error('no handler defined for msg type %s', msg.msg_type)
             return
 
+    def start(self):
+        self._data_keeper.start()
+        self._alarm_engine.start()
+        self._agent_manager.start()
+
     def stop(self):
-        for sock in self._agentsocks.values():
-            try:
-                sock.close()
-            except socket.error:
-                logging.warn('error while close agent socket %s', sock.getpeername())
-        self._serversock.close()
-        logging.info('server socket closed.')
+        self._agent_manager.stop()
+        self._alarm_engine.stop()
+        logging.info('master stopped.')
 
 
 def master_main(cfg):
