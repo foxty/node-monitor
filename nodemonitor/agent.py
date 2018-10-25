@@ -130,15 +130,19 @@ class NodeCollector(threading.Thread):
         self._agentid = agent.agentid
         self._delay = threading.Event()
         self._config = config
+        self._stopped = False
         self.setDaemon(True)
 
     def reload_config(self, cfg):
         logging.info('config reloaded by %s', cfg)
         self._config = AgentConfig(cfg)
 
+    def stop(self):
+        self._stopped = True
+
     def _collect(self):
         loops = 1;
-        while True:
+        while not self._stopped:
             interval = self._config.clock_interval
             self._delay.wait(interval)
             time1 = datetime.now()
@@ -155,6 +159,7 @@ class NodeCollector(threading.Thread):
                 time2 = datetime.now()
                 time_used = (time2 - time1).seconds
                 interval = self._config.clock_interval - time_used
+        logging.info('agent collector stopped after %s loops', loops)
 
     def _prod_heartbeat(self):
         logging.info('produce heartbeat...')
@@ -269,7 +274,7 @@ class NodeAgent:
         self._agentid = self._gen_agentid()
         self._master_addr = (master_host, master_port)
         self._started = False
-        self._queue = Q.Queue(maxsize=16)
+        self._queue = Q.Queue(maxsize=8)
         self._retry = threading.Event()
         self._config = AgentConfig(DEF_CONFIG)
         self._node_collector = NodeCollector(self, self._config)
@@ -291,7 +296,7 @@ class NodeAgent:
 
     def _connect_master(self):
         if getattr(self, 'sock', None):
-            logging.warn('Found exiting socket, now close it.')
+            logging.warn('found exiting socket, now close it.')
             try:
                 self.sock.close()
             except socket.error:

@@ -4,3 +4,4 @@ venv
 test
 web/node_modules
 **/*.log.*
+**/*.log
