@@ -17,8 +17,8 @@ from subprocess import check_call, check_output, CalledProcessError
 
 BASE_PATH = sys.path[0]
 VERSION = '1.0.0-%s'
-MASTER_DOCKER_IMG_TAG = 'registry.cn-shenzhen.aliyuncs.com/foxty/node-monitor-master'
-UI_DOCKER_IMG_TAG = 'registry.cn-shenzhen.aliyuncs.com/foxty/node-monitor-ui'
+MASTER_DOCKER_IMG_TAG = 'foxty/node-monitor-master'
+UI_DOCKER_IMG_TAG = 'foxty/node-monitor-ui'
 
 
 def run_cmd(title, cmd):
