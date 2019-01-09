@@ -1,26 +1,46 @@
 apiVersion: v1
 kind: Service
 metadata:
-  labels: {app: node-monitor}
-  name: svc-node-monitor
+  name: svc-node-monitor-master
 spec:
   ports:
-  - {name: http-ui, nodePort: 30080, port: 30080, protocol: TCP}
-  - {name: http-master-mgr, nodePort: 30078, port: 30078, protocol: TCP}
   - {name: tcp-master, nodePort: 30079, port: 30079, protocol: TCP}
-  selector: {app: node-monitor}
+  selector: {app: node-monitor-master}
   type: LoadBalancer
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: svc-node-monitor-masterui
+spec:
+  ports:
+  - {name: http-masterui, nodePort: 30078, port: 30078, protocol: TCP}
+  selector: {app: node-monitor-masterui}
+  type: LoadBalancer
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: svc-node-monitor-reportui
+spec:
+  ports:
+  - {name: http-reportui, nodePort: 30080, port: 30080, protocol: TCP}
+  selector: {app: node-monitor-reportui}
+  type: LoadBalancer
+
+
 ---
 apiVersion: apps/v1
 kind: Deployment
-metadata: {name: dep-node-monitor}
+metadata: {name: dep-node-monitor-master}
 spec:
+  replicas: 3
   selector:
-    matchLabels: {app: node-monitor}
+    matchLabels: {app: node-monitor-master}
   strategy: {type: Recreate}
   template:
     metadata:
-      labels: {app: node-monitor}
+      labels: {app: node-monitor-master}
     spec:
       containers:
       - image: foxty/node-monitor-master:1.0.0-SNAPSHOT
@@ -33,10 +53,48 @@ spec:
             value: svc-postgres
         ports:
         - {containerPort: 30079}
-        - {containerPort: 30078}
-      - image: foxty/node-monitor-ui:1.0.0-SNAPSHOT
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata: {name: dep-node-monitor-masterui}
+spec:
+  replicas: 1
+  selector:
+    matchLabels: {app: node-monitor-masterui}
+  strategy: {type: Recreate}
+  template:
+    metadata:
+      labels: {app: node-monitor-masterui}
+    spec:
+      containers:
+      - image: foxty/node-monitor-masterui:1.0.0-SNAPSHOT
         imagePullPolicy: Always
-        name: node-monitor-ui
+        name: node-monitor-masterui
+        env:
+          - name: OPENTSDB_HOST
+            value: svc-opentsdb
+          - name: POSTGRES_HOST
+            value: svc-postgres
+        ports:
+        - {containerPort: 30078}
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata: {name: dep-node-monitor-reportui}
+spec:
+  replicas: 1
+  selector:
+    matchLabels: {app: node-monitor-reportui}
+  strategy: {type: Recreate}
+  template:
+    metadata:
+      labels: {app: node-monitor-reportui}
+    spec:
+      containers:
+      - image: foxty/node-monitor-reportui:1.0.0-SNAPSHOT
+        imagePullPolicy: Always
+        name: node-monitor-reportui
         env:
           - name: OPENTSDB_HOST
             value: svc-opentsdb

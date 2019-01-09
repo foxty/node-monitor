@@ -170,7 +170,7 @@ class AgentManger(object):
         self._sendq = Q.Queue()
         self._msg_receiver = Thread(name='Agent Message Receiver', target=self._recv_msg)
         self._msg_sender = Thread(name='Agent Message Sender', target=self._send_message)
-        logging.info('agnet manager init with addr %s, messgae handler %s', server_addr, message_handler)
+        logging.info('agent manager init with addr %s, messgae handler %s', server_addr, message_handler)
 
     def _find_agent(self, agentid):
         agent = model.Agent.get_by_id(agentid)
@@ -186,14 +186,16 @@ class AgentManger(object):
         logging.info('agent manager started, listening on %s', self._server_addr)
         self._serversock = serversock
 
+        self._msg_receiver.daemon = False
+        self._msg_sender.daemon = False
         self._msg_receiver.start()
         self._msg_sender.start()
 
     def _recv_msg(self):
         # staring loop
-        logging.info('message receiver starting...')
+        logging.info('message receiver starting with stop flag is %s', self._stopped)
         while not self._stopped:
-            logging.debug('message receiver is running...')
+            logging.info('message receiver is running...')
             agentsocks = self._agentsocks.values()
 
             rlist, wlist, elist = select.select([self._serversock] + agentsocks, [], [], 5)

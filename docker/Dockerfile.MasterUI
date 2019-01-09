@@ -12,6 +12,5 @@ COPY web/dist ./web/dist
 RUN pip install -r requirements.txt
 RUN chmod +x ./nodemonitor/master_ui.py
 
-EXPOSE 30080
-VOLUME /opt/node-monitor/db
+EXPOSE 30078
 CMD [ "python", "./nodemonitor/master_ui.py"]

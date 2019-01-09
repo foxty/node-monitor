@@ -18,7 +18,8 @@ from subprocess import check_call, check_output, CalledProcessError
 BASE_PATH = sys.path[0]
 VERSION = '1.0.0-%s'
 MASTER_DOCKER_IMG_TAG = 'foxty/node-monitor-master'
-UI_DOCKER_IMG_TAG = 'foxty/node-monitor-ui'
+MASTER_UI_DOCKER_IMG_TAG = 'foxty/node-monitor-masterui'
+REPORT_UI_DOCKER_IMG_TAG = 'foxty/node-monitor-reportui'
 
 
 def run_cmd(title, cmd):
@@ -48,9 +49,9 @@ def build_ui():
     :return:
     """
     logging.info('[ui] build report ui ')
-    tag = UI_DOCKER_IMG_TAG + ':' + VERSION
+    tag = REPORT_UI_DOCKER_IMG_TAG + ':' + VERSION
     ret = run_cmd('[ui] build docker image %s' % tag,
-                  ['docker', 'build', '-f', os.path.join('docker', 'Dockerfile.UI'), '-t', tag, '.'])
+                  ['docker', 'build', '-f', os.path.join('docker', 'Dockerfile.ReportUI'), '-t', tag, '.'])
     logging.info('')
     return ret
 
@@ -61,14 +62,21 @@ def build_master():
     :return:
     """
     tag = MASTER_DOCKER_IMG_TAG + ':' + VERSION
+    # build master images
     logging.info('[master] build master')
+    ret = run_cmd('[master] build docker image %s' % tag,
+                  ['docker', 'build', '-f', os.path.join('docker', 'Dockerfile.Master'), '-t', tag,
+                   '.'])
+
+    # build masterui images
+    tag = MASTER_UI_DOCKER_IMG_TAG + ':' + VERSION
     # step 1 install js libs
     ret = run_cmd('[master] install javascript libs',
                   ["cd", "web", "&&", "npm", "install", "--production"])
     # step 2 webpack build
     ret = run_cmd('[master] webpack build', ['cd', 'web', '&&', 'npm', 'run', 'build']) if ret else False
     ret = run_cmd('[master] build docker image %s' % tag,
-                  ['docker', 'build', '-f', os.path.join('docker', 'Dockerfile.Master'), '-t', tag,
+                  ['docker', 'build', '-f', os.path.join('docker', 'Dockerfile.MasterUI'), '-t', tag,
                    '.']) if ret else False
     logging.info('')
     return ret
@@ -96,15 +104,24 @@ def update_k8s_deployer():
 
 
 def push_img():
+    # push master image
     tag = MASTER_DOCKER_IMG_TAG + ':' + VERSION
     logging.info('push image:%s', tag)
     ret = run_cmd('push docker image %s' % tag, ['docker', 'push', tag])
     logging.info('push image:%s - [%s]', tag, 'SUCC' if ret else 'FAIL')
-    tag = UI_DOCKER_IMG_TAG + ':' + VERSION
+
+    # push masterui iamge
+    tag = MASTER_UI_DOCKER_IMG_TAG + ':' + VERSION
+    logging.info('push image:%s', tag)
+    ret = run_cmd('push docker image %s' % tag, ['docker', 'push', tag])
+    logging.info('push image:%s - [%s]', tag, 'SUCC' if ret else 'FAIL')
+
+    tag = REPORT_UI_DOCKER_IMG_TAG + ':' + VERSION
     logging.info('push image:%s', tag)
     ret = run_cmd('push docker image %s'% tag, ['docker', 'push', tag])
     logging.info('push image:%s - [%s]', tag, 'SUCC' if ret else 'FAIL')
     logging.info('')
+
     return ret
 
 
