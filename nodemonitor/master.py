@@ -195,7 +195,7 @@ class AgentManger(object):
         # staring loop
         logging.info('message receiver starting with stop flag is %s', self._stopped)
         while not self._stopped:
-            logging.info('message receiver is running...')
+            logging.debug('message receiver is running...')
             agentsocks = self._agentsocks.values()
 
             rlist, wlist, elist = select.select([self._serversock] + agentsocks, [], [], 5)

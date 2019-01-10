@@ -77,7 +77,7 @@ def get_agents_byload1():
 
 @_APP.route('/api/agents', methods=['GET'])
 def get_agents():
-    mhost = os.environ['MASTER_HOST'] or socket.gethostname()
+    mhost = os.getenv('MASTER_HOST', None) or socket.gethostname()
     mport = _CONFIG['master']['server']['port']
     master_addr = '%s:%s' % (mhost, mport)
     agents = Agent.query(orderby='last_msg_at DESC')
