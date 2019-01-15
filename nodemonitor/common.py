@@ -512,7 +512,8 @@ def read_msg(sock):
         while len(data) < length:
             try:
                 data += sock.recv(length - len(data))
-            except socket.error as e:
+            except socket.error:
+                _, e, _ = sys.exc_info()
                 if e.errno == 10035:
                     # [Errno 10035] A non-blocking socket operation could not be completed immediately
                     # should be ignored
