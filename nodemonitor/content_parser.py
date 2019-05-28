@@ -125,7 +125,7 @@ def parse_df(aid, collect_time, content):
             fs, size, used  = cols[0], int(cols[1]), int(cols[2])
             available, used_util, mount_point= int(cols[3]), float(cols[4][:-1]), cols[5]
 
-            diskreps.append(NDiskReport(aid=aid, timestamp=collect_time, fs=fs, size=size, used=used,
+            diskreps.append(NDiskReport(aid=aid, collect_at=collect_time, fs=fs, size=size, used=used,
                                         available=available, used_util=used_util, mount_point=mount_point))
         return diskreps
     else:
@@ -339,7 +339,7 @@ def parse_iplinkstat(aid, collect_time, content):
             ifcontent = lines[i*6: (i+1)*6]
             ifname = re.split(':', ifcontent[0])[1].strip()
             rx, tx = re.split('\s+', ifcontent[3]), re.split('\s+', ifcontent[5])
-            report = NNetworkReport(timestamp=collect_time, aid=aid, interface=ifname,
+            report = NNetworkReport(collect_at=collect_time, aid=aid, interface=ifname,
                                     rx_bytes=int(rx[0]), rx_packets=int(rx[1]), rx_errors=int(rx[2]),
                                     rx_dropped=int(rx[3]), rx_overrun=int(rx[4]), rx_mcast=int(rx[5]),
                                     tx_bytes=int(tx[0]), tx_packets=int(tx[1]), tx_errors=int(tx[2]),

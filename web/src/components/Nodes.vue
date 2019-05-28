@@ -27,7 +27,7 @@
             </thead>
             <tbody>
             <tr v-for="a in agents">
-                <td>{{a.name}}</td>
+                <td><router-link :to="{name: 'nodeStatus', params: {aid:a.aid}}">{{a.name}}</router-link></td>
                 <td>
                         <span class="label"
                               :class="{'label-success': a.status=='active', 'label-default': a.status=='inactive'}">

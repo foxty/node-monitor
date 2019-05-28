@@ -20,7 +20,7 @@ DB_CONFIG = None
 _EPOC = datetime(1970, 1, 1)
 
 
-def init_db(dbconfig, schema = None):
+def init_db(dbconfig, schema=None):
     """
     setup database by sqlite3
     :return:
@@ -37,10 +37,12 @@ def dao(db):
     def db_info(f):
         def dao_decorator(*kargs, **kdargs):
             infodb = DB_CONFIG['info']
+            dbtype = infodb['type']
             dbhost = infodb['host']
             dbname = infodb['name']
             user = infodb['user']
             password = infodb['password']
+            dbinfo = user + '@' + dbhost +"/" + dbname
             # redo the operation until it success
             retry = 0
             while True:
@@ -54,7 +56,7 @@ def dao(db):
                         return result
                 except psycopg2.OperationalError as oe:
                     retry += 1
-                    logging.error('error while connecting to postgres db, retry %d...', retry)
+                    logging.error('connect db %s failed, retry=%d, msg=%s', dbinfo, retry, oe)
         return dao_decorator
 
     def db_tsd(f):
@@ -100,7 +102,7 @@ class InvalidAggError(Exception):
     pass
 
 
-class Model(dict):
+class RDBModel(dict):
     _MAPPINGS = {}
     _TABLE = 'model'
     _FIELDS = []
@@ -110,7 +112,7 @@ class Model(dict):
     def __new__(cls, *args, **kwargs):
         if not cls._MAPPINGS.has_key(cls._TABLE):
             cls._MAPPINGS[cls._TABLE] = cls
-        return super(Model, cls).__new__(cls, args, kwargs)
+        return super(RDBModel, cls).__new__(cls, args, kwargs)
 
     def __init__(self, *args, **kwargs):
         upd = None
@@ -435,14 +437,18 @@ class ServiceChronoModel(object):
 
     @classmethod
     def query_by_ctime(cls, sid, start, end):
-        return cls.query(where='service_id=? AND collect_at >= ? AND collect_at <= ?', orderby='collect_at ASC', params=[sid, start, end])
+        return cls.query(where='service_id=? AND collect_at >= ? AND collect_at <= ?',
+                         orderby='collect_at ASC',
+                         params=[sid, start, end])
 
     @classmethod
     def query_by_rtime(cls, sid, start, end):
-        return cls.query(where='service_id=? AND recv_at >= ? AND recv_at <= ?', orderby='collect_at ASC',params=[sid, start, end])
+        return cls.query(where='service_id=? AND recv_at >= ? AND recv_at <= ?',
+                         orderby='collect_at ASC',
+                         params=[sid, start, end])
 
 
-class Agent(Model):
+class Agent(RDBModel):
     _TABLE = 'agent'
     _FIELDS = ['aid', 'name', 'host', 'create_at', 'last_msg_at',
                'last_cpu_util', 'last_mem_util', 'last_sys_load1', 'last_sys_cs', 'status']
@@ -461,15 +467,22 @@ class Agent(Model):
         return cls.query(orderby='last_sys_load1 DESC', limit=count)
 
 
-class NMetric(Model, AgentChronoModel):
+class NMetric(RDBModel, AgentChronoModel):
     _TABLE = 'node_metric_raw'
     _FIELDS = ['aid', 'collect_at', 'category', 'content', 'recv_at']
 
 
-class NMemoryReport(TSDModel):
+class NMemoryReport(RDBModel, AgentChronoModel):
+
+    # For tsd model
     _METRIC_PREFIX = 'node.memory'
     _METRICS = ['total_mem', 'used_mem', 'free_mem', 'cache_mem', 'total_swap', 'used_swap', 'free_swap']
     _TAGS = ['aid']
+
+    # For rdb model
+    _TABLE = 'node_memory_report'
+    _FIELDS = ['aid', 'collect_at', 'total_mem', 'used_mem', 'free_mem', 'cache_mem',
+               'total_swap', 'used_swap', 'free_swap', 'recv_at']
 
     @property
     def used_util(self):
@@ -480,42 +493,63 @@ class NMemoryReport(TSDModel):
         return self.free_mem*100/self.total_mem if self.free_mem and self.total_mem else None
 
 
-class NCPUReport(TSDModel):
+class NCPUReport(RDBModel, AgentChronoModel):
+    # For TSD
     _METRIC_PREFIX = 'node.cpu'
     _METRICS = ['us', 'sy', 'id', 'wa', 'st']
     _TAGS = ['aid']
+
+    # For RDB
+    _TABLE = 'node_cpu_report'
+    _FIELDS = ['aid', 'collect_at', 'us', 'sy', 'id', 'wa', 'st', 'recv_at']
 
     @property
     def used_util(self):
         return self.us + self.sy if self.us is not None and self.sy is not None else None
 
 
-class NSystemReport(TSDModel):
+class NSystemReport(RDBModel, AgentChronoModel):
+    # For TSDModel
     _METRIC_PREFIX = 'node.system'
-    _METRICS = ['uptime', 'users', 'load1', 'load5',
-                'load15', 'procs_r', 'procs_b', 'sys_in', 'sys_cs']
+    _METRICS = ['uptime', 'users', 'load1', 'load5', 'load15', 'procs_r', 'procs_b', 'sys_in', 'sys_cs']
     _TAGS = ['aid']
 
+    # For RDBModel
+    _TABLE = 'node_system_report'
+    _FIELDS = ['aid', 'collect_at', 'uptime', 'users', 'load1', 'load5', 'load15',
+               'procs_r', 'procs_b', 'sys_in', 'sys_cs', 'recv_at']
 
-class NDiskReport(TSDModel):
+
+class NDiskReport(RDBModel, AgentChronoModel):
+    # For TSDModel
     _METRIC_PREFIX = 'node.disk'
     _METRICS = ['size', 'used', 'available', 'used_util']
     _TAGS = ['aid', 'fs', 'mount_point']
 
+    # For RDBModel
+    _TABLE = 'node_disk_report'
+    _FIELDS = ['aid', 'collect_at', 'fs', 'mount_point', 'size', 'used', 'available', 'used_util', 'recv_at']
 
-class NNetworkReport(TSDModel):
+
+class NNetworkReport(RDBModel, AgentChronoModel):
+    # For TSDModel
     _METRIC_PREFIX = "node.network"
     _METRICS = ['rx_bytes','rx_packets', 'rx_errors', 'rx_dropped', 'rx_overrun', 'rx_mcast',
                 'tx_bytes', 'tx_packets', 'tx_errors', 'tx_dropped', 'tx_carrier', 'tx_collsns']
     _TAGS = ['aid', 'interface']
 
+    # For RDBModel
+    _TABLE = "node_network_report"
+    _FIELDS = ['aid', 'collect_at', 'interface', 'rx_bytes','rx_packets', 'rx_errors', 'rx_dropped', 'rx_overrun', 'rx_mcast',
+               'tx_bytes', 'tx_packets', 'tx_errors', 'tx_dropped', 'tx_carrier', 'tx_collsns', 'recv_at']
 
-class SMetric(Model, AgentChronoModel):
+
+class SMetric(RDBModel, AgentChronoModel):
     _TABLE = 'service_metric_raw'
     _FIELDS = ['aid', 'collect_at', 'name', 'pid', 'category', 'content', 'recv_at']
 
 
-class SInfo(Model):
+class SInfo(RDBModel):
     _TABLE = 'service'
     _FIELDS = ['id', 'aid', 'name', 'pid', 'type', 'last_report_at', 'status']
     _PK = ['id']
@@ -551,32 +585,50 @@ class SInfo(Model):
         return cls.query(where='aid=?', orderby='name', params=[aid])
 
 
-class SInfoHistory(Model, ServiceChronoModel):
+class SInfoHistory(RDBModel, ServiceChronoModel):
     _TABLE = 'service_history'
     _FIELDS = ['aid','service_id', 'pid', 'collect_at', 'recv_at']
 
 
-class SPidstatReport(TSDModel):
+class SPidstatReport(RDBModel, ServiceChronoModel):
+    # For TSDModel
     _METRIC_PREFIX = 'service.pidstat'
     _METRICS = ['cpu_us', 'cpu_sy', 'cpu_gu', 'cpu_util', 'mem_minflt', 'mem_majflt',
                 'mem_vsz', 'mem_rss', 'mem_util', 'disk_rd', 'disk_wr', 'disk_ccwr']
     _TAGS = ['aid', 'service_id', 'tid']
 
+    # For RDBModel
+    _TABLE = 'service_pidstat_report'
+    _FIELDS = ['aid', 'service_id', 'collect_at', 'tid', 'cpu_us', 'cpu_sy', 'cpu_gu', 'cpu_util',
+               'mem_minflt', 'mem_majflt', 'mem_vsz', 'mem_rss', 'mem_util', 'disk_rd', 'disk_wr', 'disk_ccwr',
+               'recv_at']
 
-class SJstatGCReport(TSDModel):
+    @classmethod
+    def lst_report_by_aid(cls, aid, count):
+        return cls.query(where='aid=?', orderby='collect_at DESC', params=[aid], limit=count)
+
+
+
+class SJstatGCReport(RDBModel, ServiceChronoModel):
+    # For TSDModel
     _METRIC_PREFIX = 'service.jstatgc'
     _METRICS = ['ts', 's0c', 's1c', 's0u', 's1u', 'ec', 'eu', 'oc', 'ou', 'mc', 'mu',
                 'ccsc', 'ccsu', 'ygc', 'ygct', 'fgc', 'fgct', 'gct']
     _TAGS = ['aid', 'service_id']
 
+    # For RDBModel
+    _TABLE = 'service_jstatgc_report'
+    _FIELDS = ['aid', 'service_id', 'collect_at', 'ts', 's0c', 's1c', 's0u', 's1u', 'ec', 'eu', 'oc', 'ou', 'mc', 'mu',
+               'ccsc', 'ccsu', 'ygc', 'ygct', 'fgc', 'fgct', 'gct', 'recv_at']
+
     def __sub__(self, other):
-        return SJstatGCReport(aid=self.aid, service_id=self.service_id, timestamp=self.timestamp,
+        return SJstatGCReport(aid=self.aid, service_id=self.service_id, collect_at=self.collect_at,
                               ts=self.ts - other.ts, ygc=self.ygc - other.ygc, ygct=self.ygct - other.ygct,
                               fgc=self.fgc - other.fgc, fgct=self.fgct - other.fgct, gct=self.gct - other.gct)
 
     def __add__(self, other):
-        timestamp = other.timestamp if other.timestamp > self.timestamp else self.timestamp
-        return SJstatGCReport(aid=self.aid, service_id=self.service_id, timestamp=timestamp,
+        collect_at = other.collect_at if other.collect_at > self.collect_at else self.collect_at
+        return SJstatGCReport(aid=self.aid, service_id=self.service_id, collect_at=collect_at,
                               ts=self.ts + other.ts, ygc=self.ygc + other.ygc, ygct=self.ygct + other.ygct,
                               fgc=self.fgc + other.fgc, fgct=self.fgct + other.fgct, gct=self.gct + other.gct)
 
@@ -590,8 +642,8 @@ class SJstatGCReport(TSDModel):
         return 1 - self.gct/self.ts
 
     def to_gcstat(self, category):
-        start_at = self.timestamp - timedelta(seconds=self.ts)
-        return JavaGCStat(category=category, start_at=start_at, end_at=self.timestamp, samples=0,
+        start_at = self.collect_at - timedelta(seconds=self.ts)
+        return JavaGCStat(category=category, start_at=start_at, end_at=self.collect_at, samples=0,
                           ygc=self.ygc, ygct=self.ygct, avg_ygct=self.avg_ygct(),
                           fgc=self.fgc, fgct=self.fgct, avg_fgct=self.avg_fgct(),
                           throughput=self.throughput())
@@ -601,11 +653,11 @@ class SJstatGCReport(TSDModel):
         return cls.query(where='aid=?', orderby='collect_at DESC', params=[aid], limit=count)
 
 
-class JavaGCStat(Model):
+class JavaGCStat(RDBModel, ServiceChronoModel):
     _FIELDS = ['category', 'start_at', 'end_at', 'samples',
                'ygc', 'ygct', 'avg_ygct', 'fgc', 'fgct', 'avg_fgct', 'throughput']
 
 
-class Alarm(Model):
+class Alarm(RDBModel):
     _TABLE = ""
     _FIELDS = [""]

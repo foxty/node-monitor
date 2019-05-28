@@ -153,7 +153,7 @@ class DataKeeper(object):
         for tbl, days  in self._policy.items():
             logging.info('start to keep data of %s within %s days', tbl, days)
             theday = datetime.now() - timedelta(days=days)
-            cursor.execute('DELETE FROM %s WHERE recv_at <= ?' % tbl, [theday])
+            cursor.execute('DELETE FROM %s WHERE recv_at <= %s' % tbl, [theday])
 
 
 class AgentManger(object):

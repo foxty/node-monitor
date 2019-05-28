@@ -1,0 +1,270 @@
+{
+  "version": 1,
+  "clock_interval": 10,
+  "heartbeat_clocks": 6,
+  "node_metrics": [
+    {
+      "name": "dstat-sys",
+      "os": "LINUX",
+      "cmd": [
+        "dstat",
+        "-lyp",
+        "1",
+        "1"
+      ],
+      "clocks": 6
+    },
+    {
+      "name": "dstat-cpu",
+      "os": "LINUX",
+      "cmd": [
+        "dstat",
+        "-c",
+        "1",
+        "1"
+      ],
+      "clocks": 6
+    },
+    {
+      "name": "dstat-mem",
+      "os": "LINUX",
+      "cmd": [
+        "dstat",
+        "-msg",
+        "1",
+        "1"
+      ],
+      "clocks": 6
+    },
+    {
+      "name": "dstat-socket",
+      "os": "LINUX",
+      "cmd": [
+        "dstat",
+        "--socket",
+        "1",
+        "1"
+      ],
+      "clocks": 6
+    },
+    {
+      "name": "dstat-dio",
+      "cmd": [
+        "dstat",
+        "-dr",
+        "1",
+        "1"
+      ],
+      "clocks": 6
+    },
+    {
+      "name": "w",
+      "cmd": [
+        "w"
+      ],
+      "clocks": 6
+    },
+    {
+      "name": "free",
+      "os": "LINUX",
+      "cmd": [
+        "free",
+        "-m"
+      ],
+      "clocks": 6
+    },
+    {
+      "name": "vmstat",
+      "cmd": [
+        "vmstat",
+        "1",
+        "2"
+      ],
+      "clocks": 6
+    },
+    {
+      "name": "netstat",
+      "cmd": [
+        "netstat",
+        "-s"
+      ],
+      "clocks": 6
+    },
+    {
+      "name": "ifconfig",
+      "cmd": [
+        "ifconfig",
+        "-a"
+      ],
+      "clocks": 6
+    },
+    {
+      "name": "ip-link",
+      "os": "LINUX",
+      "cmd": [
+        "ip",
+        "-s",
+        "link"
+      ],
+      "clocks": 6
+    },
+    {
+      "name": "df",
+      "os": "SUNOS",
+      "cmd": [
+        "df",
+        "-k"
+      ],
+      "clocks": 60
+    },
+    {
+      "name": "df",
+      "os": "LINUX",
+      "cmd": [
+        "df",
+        "-kP"
+      ],
+      "clocks": 60
+    }
+  ],
+  "service_metrics": {
+    "pidstat": {
+      "name": "pidstat",
+      "type": "all",
+      "os": "LINUX",
+      "cmd": [
+        "pidstat",
+        "-tdruh",
+        "-p",
+        "${pid}"
+      ]
+    },
+    "prstat": {
+      "name": "prstat",
+      "type": "all",
+      "os": "SUNOS",
+      "cmd": [
+        "prstat",
+        "-p",
+        "${pid}",
+        "-c",
+        "1",
+        "1"
+      ]
+    },
+    "jstat-gc": {
+      "name": "jstat-gc",
+      "type": "java",
+      "cmd": [
+        "su",
+        "${puser}",
+        "-c",
+        "${java_home}/bin/jstat -gc -t ${pid}"
+      ]
+    }
+  },
+  "services": [
+    {
+      "name": "agent",
+      "type": "python",
+      "lookup_keyword": "agent.py",
+      "env": {
+        "log_home": "${HOME}/node-monitor"
+      },
+      "log_pattern": [
+        "agent.log.*"
+      ],
+      "metrics": [
+        "pidstat",
+        "prstat"
+      ],
+      "clocks": 6
+    },
+    {
+      "name": "SAPM.Reactor",
+      "type": "java",
+      "lookup_keyword": "-Dprocess=Reactor",
+      "env": {
+        "java_home": "${JAVA_HOME}",
+        "log_home": "${STARGUS_HOME}/log"
+      },
+      "log_pattern": [
+        "reactor.*"
+      ],
+      "metrics": [
+        "pidstat",
+        "prstat",
+        "jstat-gc"
+      ],
+      "clocks": 6
+    },
+    {
+      "name": "SAPM.Collector",
+      "type": "java",
+      "lookup_keyword": "-Dprocess=Collector",
+      "env": {
+        "java_home": "${JAVA_HOME}",
+        "log_home": "${STARGUS_HOME}/log"
+      },
+      "log_pattern": [
+        "collection_manager.log",
+        "snmp_poller.log"
+      ],
+      "metrics": [
+        "pidstat",
+        "prstat",
+        "jstat-gc"
+      ],
+      "clocks": 6
+    },
+    {
+      "name": "SAPM.Controller",
+      "type": "java",
+      "lookup_keyword": "jboss/bin/run.jar",
+      "env": {
+        "java_home": "${JAVA_HOME}",
+        "log_home": "${STARGUS_HOME}/log"
+      },
+      "log_pattern": [
+        "jboss-*.log"
+      ],
+      "metrics": [
+        "pidstat",
+        "prstat",
+        "jstat-gc"
+      ],
+      "clocks": 6
+    },
+    {
+      "name": "SAPM.NodeReceiver",
+      "type": "java",
+      "lookup_keyword": "/node-receiver/conf/receiver.properties",
+      "env": {
+        "java_home": "${JAVA_HOME}",
+        "log_home": "${STARGUS_HOME}/log"
+      },
+      "log_pattern": [
+        "jboss-*.log"
+      ],
+      "metrics": [
+        "pidstat",
+        "jstat-gc"
+      ],
+      "clocks": 6
+    },
+    {
+      "name": "SAPM.Scaler",
+      "type": "java",
+      "lookup_keyword": "com.arrisi.sa.scaler.Agent",
+      "env": {
+        "java_home": "/usr/java/latest"
+      },
+      "metrics": [
+        "pidstat",
+        "prstat",
+        "jstat-gc"
+      ],
+      "clocks": 6
+    }
+  ]
+}

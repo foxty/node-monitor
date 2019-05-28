@@ -6,10 +6,16 @@ Created on 2017-12-22
 @author: foxty
 """
 
+import os, sys
 import unittest
+import json
 from mock import MagicMock
-from common import Msg, ostype, is_linux, is_sunos, is_win, OSType
+from common import Msg, is_linux, is_sunos, is_win, OSType
 from agent import AgentConfig, NodeCollector, is_metric_valid
+
+basepath = os.path.dirname(sys.path[0])
+with open(os.path.join(basepath, 'test', 'agent_config_test.json'), 'r') as f:
+    test_cfg = json.load(f)
 
 
 class GlobalTest(unittest.TestCase):
@@ -22,16 +28,17 @@ class GlobalTest(unittest.TestCase):
             os = OSType.WIN
         elif is_sunos():
             os = OSType.SUNOS
-        metric = {'name': 'cd', 'cmd': ['ls', '/'], 'os': os}
+        metric = {'name': 'cd', 'cmd': ['asfdasd', '/'], 'os': os}
         re = is_metric_valid(metric)
-        self.assertTrue(re)
+        self.assertFalse(re)
 
 
 class AgentConfigTest(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
-        cls.CONFIG = AgentConfig()
+
+        cls.CONFIG = AgentConfig(test_cfg)
 
     def test_clock_interval(self):
         self.assertEqual(10, self.CONFIG.clock_interval)
@@ -41,7 +48,7 @@ class AgentConfigTest(unittest.TestCase):
 
     def test_node_metrics(self):
         metrics = self.CONFIG.node_metrics
-        self.assertEqual(11, len(metrics))
+        self.assertEqual(13, len(metrics))
         w = metrics[5]
         self.assertEqual(['w'], w['cmd'])
         self.assertEqual(6, w['clocks'])
@@ -49,11 +56,11 @@ class AgentConfigTest(unittest.TestCase):
         self.assertEqual(['free', '-m'], free['cmd'])
         self.assertEqual(6, free['clocks'])
         df = metrics[9]
-        self.assertEqual(['df', '-k'], df['cmd'])
-        self.assertEqual(60, df['clocks'])
+        self.assertEqual(['ifconfig', '-a'], df['cmd'])
+        self.assertEqual(6, df['clocks'])
         df = metrics[10]
-        self.assertEqual(['df', '-kP'], df['cmd'])
-        self.assertEqual(60, df['clocks'])
+        self.assertEqual(['ip', '-s', 'link'], df['cmd'])
+        self.assertEqual(6, df['clocks'])
 
     def test_service_metrics(self):
         metrics = self.CONFIG.service_metrics
@@ -79,18 +86,18 @@ class NodeCollectorTest(unittest.TestCase):
 
             @property
             def valid_node_metrics(self):
-                return self.CONFIG['node_metrics']
+                return self._config['node_metrics']
 
             @property
             def valid_services(self):
-                return self.CONFIG['services']
+                return self._config['services']
 
             @property
             def clock_interval(self):
-                return self.CONFIG['clock_interval']
+                return self._config['clock_interval']
 
         cls.AGENT = MockAgent()
-        cls.COLLECTOR = NodeCollector(cls.AGENT, MockAgentConfig())
+        cls.COLLECTOR = NodeCollector(cls.AGENT, MockAgentConfig(test_cfg))
         cls.COLLECTOR._get_cmd_result = MagicMock(return_value='cmd content')
 
     def test_trans_cmd(self):
@@ -117,7 +124,7 @@ class NodeCollectorTest(unittest.TestCase):
         self.assertIsNotNone(msg)
         self.assertEqual('1', msg.agentid)
         self.assertEqual(Msg.A_NODE_METRIC, msg.msg_type)
-        self.assertEqual(9, len(msgbody))
+        self.assertEqual(11, len(msgbody))
         self.assertEqual('cmd content', msgbody['w'])
         self.assertEqual('cmd content', msgbody['free'])
         self.assertEqual('cmd content', msgbody['vmstat'])
@@ -128,7 +135,7 @@ class NodeCollectorTest(unittest.TestCase):
         self.assertIsNotNone(msg)
         self.assertEqual('1', msg.agentid)
         self.assertEqual(msg.A_NODE_METRIC, msg.msg_type)
-        self.assertEqual(10, len(msgbody))
+        self.assertEqual(12, len(msgbody))
         self.assertEqual('cmd content', msgbody['df'])
 
     def test_collect_smetrics(self):

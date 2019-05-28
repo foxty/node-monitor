@@ -20,7 +20,7 @@ class BaseDBTest(unittest.TestCase):
         dbconfig = {
             'info': {
                 'type': 'sqlite',
-                'host': '192.168.99.100',
+                'host': 'saa018',
                 'name': 'node-monitor',
                 'user': 'node-monitor',
                 'password': 'node-monitor'
@@ -44,20 +44,20 @@ class BaseDBTest(unittest.TestCase):
 class ReportModelTest(unittest.TestCase):
     def test_mem_report(self):
         ct = datetime.now()
-        memrep = model.NMemoryReport(timestamp=ct, total_mem=1000, used_mem=100, free_mem=900)
+        memrep = model.NMemoryReport(collect_at=ct, total_mem=1000, used_mem=100, free_mem=900)
         self.assertEqual(100*100/1000, memrep.used_util)
         self.assertEqual(900*100/1000, memrep.free_util)
 
-        memrep = model.NMemoryReport(timestamp=ct, total_mem=1100, used_mem=100, free_mem=900)
+        memrep = model.NMemoryReport(collect_at=ct, total_mem=1100, used_mem=100, free_mem=900)
         self.assertEqual(100*100/1100, memrep.used_util)
         self.assertEqual(900*100/1100, memrep.free_util)
 
-        memrep = model.NMemoryReport(timestamp=ct, total_mem=None, used_mem=100, free_mem=900)
+        memrep = model.NMemoryReport(collect_at=ct, total_mem=None, used_mem=100, free_mem=900)
         self.assertEqual(None, memrep.used_util)
         self.assertEqual(None, memrep.free_util)
 
     def test_cpu_report(self):
-        cpurep = model.NCPUReport(timestamp=datetime.now(), us=None, sy=100)
+        cpurep = model.NCPUReport(collect_at=datetime.now(), us=None, sy=100)
         self.assertEqual(None, cpurep.used_util)
 
         cpurep.us=1
@@ -75,7 +75,7 @@ class ReportModelTest(unittest.TestCase):
 
 class ModelTest(unittest.TestCase):
 
-    class ModelA(model.Model):
+    class ModelA(model.RDBModel):
         _TABLE = 'tablea'
         _FIELDS = ['id', 'a1', 'a2', 'a3']
 
@@ -343,24 +343,24 @@ class SPidstatReportTest(BaseDBTest):
     def test_base(self):
         ctime = datetime.now()
         id = uuid4().hex
-        r = model.SPidstatReport(timestamp=ctime, aid='1', service_id=id)
+        r = model.SPidstatReport(collect_at=ctime, aid='1', service_id=id)
         r.save()
         self.assertEqual('1', r.aid)
         self.assertEqual(id, r.service_id)
-        self.assertEqual(ctime, r.timestamp)
+        self.assertEqual(ctime, r.collect_at)
 
 
 class SJstatReportTest(unittest.TestCase):
 
     def test_calc(self):
-        rep = model.SJstatGCReport(timestamp=datetime.now(), ts=100, ygc=3, ygct=15.0, fgc=2, fgct=5.0, gct=20.0)
+        rep = model.SJstatGCReport(collect_at=datetime.now(), ts=100, ygc=3, ygct=15.0, fgc=2, fgct=5.0, gct=20.0)
         self.assertEqual(5, rep.avg_ygct())
         self.assertEqual(2.5, rep.avg_fgct())
         self.assertEqual(0.8, rep.throughput())
 
     def test_to_gcstat(self):
         ctime = datetime.now()
-        rep = model.SJstatGCReport(timestamp=datetime.now(), ts=100, service_id='sid',
+        rep = model.SJstatGCReport(collect_at=datetime.now(), ts=100, service_id='sid',
                                    ygc=3, ygct=15.0, fgc=2, fgct=5.0, gct=20.0)
         gcstat = rep.to_gcstat('test')
         self.assertEqual(model.JavaGCStat(category='test', start_at=ctime - timedelta(seconds=100), end_at=ctime,
@@ -368,18 +368,18 @@ class SJstatReportTest(unittest.TestCase):
                                           throughput=0.8), gcstat)
 
     def test_sub(self):
-        now = timestamp=datetime.now()
-        rep1 = model.SJstatGCReport(timestamp=now, ts=100, ygc=3, ygct=15.0, fgc=2, fgct=5.0, gct=20.0)
-        rep2 = model.SJstatGCReport(timestamp=now, ts=20, ygc=1, ygct=10.0, fgc=1, fgct=3.0, gct=15.0)
+        now = datetime.now()
+        rep1 = model.SJstatGCReport(collect_at=now, ts=100, ygc=3, ygct=15.0, fgc=2, fgct=5.0, gct=20.0)
+        rep2 = model.SJstatGCReport(collect_at=now, ts=20, ygc=1, ygct=10.0, fgc=1, fgct=3.0, gct=15.0)
         sub = rep1 - rep2
-        self.assertEqual(model.SJstatGCReport(timestamp=now, ts=80, ygc=2, ygct=5.0, fgc=1, fgct=2.0, gct=5.0), sub)
+        self.assertEqual(model.SJstatGCReport(collect_at=now, ts=80, ygc=2, ygct=5.0, fgc=1, fgct=2.0, gct=5.0), sub)
 
     def test_add(self):
-        now = timestamp=datetime.now(),
-        rep1 = model.SJstatGCReport(timestamp=now, ts=100, ygc=3, ygct=15.0, fgc=2, fgct=5.0, gct=20.0)
-        rep2 = model.SJstatGCReport(timestamp=now, ts=20, ygc=1, ygct=10.0, fgc=1, fgct=3.0, gct=15.0)
+        now = datetime.now(),
+        rep1 = model.SJstatGCReport(collect_at=now, ts=100, ygc=3, ygct=15.0, fgc=2, fgct=5.0, gct=20.0)
+        rep2 = model.SJstatGCReport(collect_at=now, ts=20, ygc=1, ygct=10.0, fgc=1, fgct=3.0, gct=15.0)
         add = rep1 + rep2
-        self.assertEqual(model.SJstatGCReport(timestamp=now, ts=120, ygc=4, ygct=25.0, fgc=3, fgct=8.0, gct=35.0), add)
+        self.assertEqual(model.SJstatGCReport(collect_at=now, ts=120, ygc=4, ygct=25.0, fgc=3, fgct=8.0, gct=35.0), add)
 
 
 if __name__ == '__main__':

@@ -29,7 +29,7 @@ module.exports = {
                 ]
             },
             {
-                test: /\.(png|svg|jpg|gif|woff|woff2|eot|ttf|otf)$/,
+                test: /\.(png|svg|jpg|gif|woff|woff2|eot|ttf|otf|ico)$/,
                 use: [
                     'file-loader'
                 ]
@@ -39,7 +39,8 @@ module.exports = {
     plugins: [
         new HtmlWebpackPlugin({
             title: 'Node Monitor',
-            template: 'src/index.html'
+            template: 'src/index.html',
+            favicon: 'src/favicon.ico',
         }),
         new VueLoaderPlugin()
     ],

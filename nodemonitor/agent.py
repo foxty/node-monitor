@@ -14,10 +14,8 @@ import os
 import sys
 import logging
 import logging.handlers
-import getopt
 import socket
 import select
-import re
 import Queue as Q
 import threading
 from datetime import datetime
@@ -62,6 +60,7 @@ def is_metric_valid(metric):
 class AgentConfig(object):
 
     def __init__(self, config):
+        self._config = config;
         self._version = config['version']
         self._node_metrics = config.get('node_metrics', [])
         self._valid_node_metrics = None
