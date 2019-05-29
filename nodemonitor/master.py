@@ -190,10 +190,11 @@ class AgentManger(object):
         self._msg_sender.daemon = False
         self._msg_receiver.start()
         self._msg_sender.start()
+        logging.info("master started.")
 
     def _recv_msg(self):
         # staring loop
-        logging.info('message receiver starting with stop flag is %s', self._stopped)
+        logging.info('message receiver started.')
         while not self._stopped:
             logging.debug('message receiver is running...')
             agentsocks = self._agentsocks.values()
@@ -228,7 +229,7 @@ class AgentManger(object):
         self._sendq.put((remote_addr, msg))
 
     def _send_message(self):
-        logging.info('message sender is starting...')
+        logging.info('message sender started.')
         while not self._stopped:
             try:
                 remote_addr, msg = self._sendq.get()

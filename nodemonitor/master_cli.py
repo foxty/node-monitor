@@ -206,7 +206,7 @@ if __name__ == '__main__':
     logging.info('config loaded from %s', cfgpath)
 
     try:
-        opts, args = getopt.getopt(sys.argv[1:], "hi:p:m", ['help', 'install=', 'push=', 'master', 'stop-agents='])
+        opts, args = getopt.getopt(sys.argv[1:], "hi:p:r:", ['help', 'install=', 'push=', 'run=', 'stop-agents='])
     except getopt.GetoptError as e:
         print('Wrong usage', e)
         sys.exit(2)
@@ -221,19 +221,17 @@ if __name__ == '__main__':
                 mhost = socket.gethostbyaddr(socket.gethostname())[0]
             mport = config['master']['server']['port']
             push_to_nodes(basepath, nodelist, mhost, mport)
-        elif opt in ['-m', '--master']:
+        elif opt in ['-r', '--run']:
+            target = v
             from master import master_main
             from master_ui import ui_main
-            master_proc = Process(target=master_main, args=(config,))
-            masterui_proc = Process(target=ui_main, args=(config,))
-            master_proc.start()
-            logging.info('master started: %s', master_proc)
-            masterui_proc.start()
-            logging.info('ui started: %s', masterui_proc)
-
-            master_proc.join()
-            masterui_proc.join()
-            logging.info('master exited.')
+            if target == 'master':
+                master_main(config)
+            elif target == 'ui':
+                ui_main(config)
+            elif target == 'all':
+                master_main(config)
+                ui_main(config)
         elif opt == '--stop-agents':
             with open(v, 'r') as f:
                 nodelist = [[ele.strip() for ele in l.strip().split(',')]

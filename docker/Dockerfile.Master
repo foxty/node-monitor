@@ -11,7 +11,9 @@ COPY nodemonitor ./nodemonitor
 COPY web/dist  ./web/dist
 
 RUN pip install -r requirements.txt
-RUN chmod +x ./nodemonitor/master.py
+RUN chmod +x ./nodemonitor/master_cli.py
 
+EXPOSE 30078
 EXPOSE 30079
-CMD [ "python", "./nodemonitor/master.py", "-m"]
+ENTRYPOINT ["python", "./nodemonitor/master_cli.py", "-r"]
+CMD ["all"]
