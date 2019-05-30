@@ -11,18 +11,8 @@ const parseJson = function(text) {
     })
 }
 
-const convertBytes = function(value, from, to) {
-    
-}
-
-const tsFormatter = function(ts) {
-    let d = new Date(ts)
-    return (d.getMonth() + 1) + "/" + d.getDate() + " "
-        + d.getHours() + ":" + d.getMinutes()
-}
-
 /**Echarts**/
-const genChartOption = function (title, data, seriesMapping, options) {
+const genChartOption = function (title, data, cateProp, seriesPropsMapping, options) {
     options = options || {}
     options.stack = options.stack || false
     options.yAxisFmt = options.yAxisFmt || '{value}'
@@ -30,52 +20,47 @@ const genChartOption = function (title, data, seriesMapping, options) {
     //options.yAxisMax
     console.log('options for graph ' + title + ': ' + JSON.stringify(options))
 
-    let legends = []
-    let series = []
-    for (let serieName in seriesMapping) {
-        legends.push(serieName)
-        let serieKey = seriesMapping[serieName]
-        let metric = data[serieKey]
-        if (!metric || metric.length ==0) {
-            console.warn('no metric data for ' + serieKey)
-            continue
+    var category = []
+    var seriesMap = {}
+    var legends = []
+    data.forEach(function (d) {
+        var serieCategory = d[cateProp]
+        serieCategory = typeof serieCategory == 'string' && DATETIME_RE.test(serieCategory)
+            ? new Date(serieCategory)
+            : serieCategory
+
+        category.push(serieCategory)
+        for (var serieName in seriesPropsMapping) {
+            var serie = seriesMap[serieName];
+            if (!serie) {
+                serie = {
+                    name: serieName,
+                    type: 'line',
+                    showSymbol: false,
+                    data: []
+                };
+                if (options.stack) {
+                    serie.stack = true;
+                    serie.areaStyle = {normal: {}};
+                }
+                serie.markLine = options.markLine
+                seriesMap[serieName] = serie;
+            }
+            var serieDataProp = seriesPropsMapping[serieName];
+            var serieDataValue = d[serieDataProp]
+            serie.data.push([serieCategory, serieDataValue])
         }
-        let dps = metric[0].dps
-        let serieData = []
-        for (let ts in dps) {
-            serieData.push([ts*1000, Math.round(dps[ts]*100)/100])
-        }
-        let serie = {
-            name: serieName,
-            type: 'line',
-            showSymbol: false,
-            data: serieData
-        };
-        if (options.stack) {
-            serie.stack = true;
-            serie.areaStyle = {normal: {}};
-        }
-        serie.markLine = options.markLine
-        series.push(serie)
+    })
+    var series = [];
+    for (var serieName in seriesMap) {
+        legends.push(serieName);
+        series.push(seriesMap[serieName]);
     }
 
     let go = {
         title: {text: title},
         tooltip: {
-            trigger: 'axis',
-            formatter: function (params) {
-                let label =  tsFormatter(params[0].axisValue)
-                label += '<ul style="list-style-type:square; margin:0;padding-left:20px">'
-                params.forEach( param => {
-                    label += '<li style="color:'+param.color+'">'
-                        + '<span style="color:white">'
-                        + param.seriesName
-                        + ' : '
-                        + param.value[1]
-                        + '</span></li>'
-                })
-                return label + '</ul>'
-            }
+            trigger: 'axis'
         },
         legend: {
             data: legends
@@ -84,7 +69,10 @@ const genChartOption = function (title, data, seriesMapping, options) {
             type: 'category',
             boundaryGap: false,
             axisLabel: {
-                formatter: tsFormatter
+                formatter: function(value, index) {
+                    return (value.getMonth() + 1) + "/" + value.getDate() + " "
+                    + value.getHours() + ":" + value.getMinutes()
+                }
             }
         },
         yAxis: {
@@ -104,7 +92,6 @@ const genChartOption = function (title, data, seriesMapping, options) {
         ],
         series: series
     }
-    console.debug(go)
     return go;
 }
 

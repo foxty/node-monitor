@@ -6,25 +6,25 @@
             </div>
             <div class="panel-body">
 
-                <div v-if="sysReports && Object.keys(sysReports).length > 0">
+                <div v-if="sysReports && sysReports.length > 0">
                     <chart :options="sysLoad" style="width:100%;height:300px"></chart>
                     <div class='col-md-6'><chart :options="sysUsers" style="width:100%;height:300px"></chart></div>
                     <div class='col-md-6'><chart :options="sysCs" style="width:100%;height:300px"></chart></div>
                 </div>
                 <div v-else class="no_data">No system load data.</div>
 
-                <div v-if="cpuReports && Object.keys(cpuReports).length > 0" style="clear: both;">
+                <div v-if="cpuReports && cpuReports.length > 0" style="clear: both;">
                     <chart :options="cpuChart" style="width:100%;height:300px"></chart>
                 </div>
                 <div v-else class="no_data">No CPU data.</div>
 
-                <div v-if="memReports && Object.keys(memReports).length > 0">
+                <div v-if="memReports && memReports.length > 0">
                     <div class="col-md-6"><chart :options="memoryChart" style="width:100%;height:300px"></chart></div>
                     <div class="col-md-6"><chart :options="swapChart" style="width:100%;height:300px"></chart></div>
                 </div>
                 <div v-else class="no_data">No memory data.</div>
 
-                <div v-if="diskReports && Object.keys(diskReports).length > 0" style="clear: both;">
+                <div v-if="diskReports && diskReports.length > 0" style="clear: both;">
                     <chart :options="diskChart" style="width:100%;height:300px"></chart>
                 </div>
                 <div v-else class="no_data">No disk data.</div>
@@ -68,43 +68,45 @@
                 }
             },
             sysReports: function(n, o) {
-                this.sysLoad = genChartOption("Sys Load", n,
-                    {"Load1":"node.system.load1", "Load5":"node.system.load5", "Load15":"node.system.load15"},
+                this.sysLoad = genChartOption("Sys Load", n, "collect_at",
+                    {"Load1":"load1", "Load5":"load5", "Load15":"load15"},
                     {yAxisMax:function(value) { return value.max < 10 ? 10 : value.max + 5 }});
-                this.sysUsers = genChartOption("Sys Users",n,
-                    {"Users":"node.system.users"},
+                this.sysUsers = genChartOption("Sys Users",n, "collect_at", {"Users":"users"},
                     {yAxisMax:function(value) { return value.max < 10 ? 10 : value.max + 5 }});
-                this.sysCs =  genChartOption("Sys IN&CS", n,
-                    {"IN":"node.system.sys_in", "CS":"node.system.sys_cs"});
+                this.sysCs =  genChartOption("Sys IN&CS", n, "collect_at", {"IN":"sys_in", "CS":"sys_cs"});
             },
             cpuReports: function(n, o) {
-                let stack = false == n.downsample
-                this.cpuChart = genChartOption("CPU", n,
-                    {"User":"node.cpu.us","System":"node.cpu.sy", "Wait":"node.cpu.wa","Stolen":"node.cpu.st"},
-                    {stack:stack, yAxisFmt: "{value}%", yAxisMax:100,});
+                this.cpuChart = genChartOption("CPU", n, "collect_at",
+                    {"User":"us","System":"sy", "Wait":"wa","Stolen":"st", "Idle": "id"},
+                    {stack:true, yAxisFmt: "{value}%", yAxisMax:100,});
             },
             memReports: function(n, o) {
-                let stack = false == n.downsample
-                this.memoryChart = genChartOption("Memory", n,
-                    {"Used":"node.memory.used_mem", "Free":"node.memory.free_mem"},
-                    {stack:stack, yAxisFmt:"{value}M"});
-                this.swapChart = genChartOption("Swap", n,
-                    {"Used":"node.memory.used_swap", "Free":"node.memory.free_swap"},
-                    {stack:stack, yAxisFmt:"{value}M"});
+                this.memoryChart = genChartOption("Memory", n, "collect_at",
+                    {"Used":"used_mem", "Free":"free_mem"},
+                    {stack:true, yAxisFmt:"{value}M"});
+                this.swapChart = genChartOption("Swap", n, "collect_at",
+                    {"Used":"used_swap", "Free":"free_swap"},
+                    {stack:true, yAxisFmt:"{value}M"});
             },
             diskReports: function(n, o) {
-                if (!n || Object.keys(n).length == 0) {
-                    console.warn('no data from disk report.')
-                    return
-                }
                 var reportsMap = {}
                 var spMapping = {}
-                n['node.disk.used_util'].forEach(x => {
-                    let mp = x['tags'].mount_point
-                    spMapping[mp] = mp
-                    reportsMap[mp] =[x]
+                n.forEach(x => {
+                    if(!reportsMap[x.collect_at]) {
+                        reportsMap[x.collect_at] = {'aid': x.aid, collect_at: x.collect_at}
+                    }
+                    reportsMap[x.collect_at][x.mount_point] = Math.round(x.used*100.0/x.size)
+                    if(!spMapping[x.mount_point]) {
+                        spMapping[x.mount_point] = x.mount_point
+                    }
                 })
-                this.diskChart = genChartOption("Disk Util", reportsMap, spMapping,
+                var reports = []
+                var i=0
+                for(var t in reportsMap) {
+                    reports[i++] = reportsMap[t]
+                }
+                this.diskChart = genChartOption("Disk Util", reports, "collect_at",
+                    spMapping,
                     {yAxisFmt:"{value}%", yAxisMax:100,});
             }
         },

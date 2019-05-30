@@ -5,16 +5,14 @@
                 <report-toolbar title="Service Status" v-on:changeRange="changeRange" v-on:reload="loadReports()"></report-toolbar>
             </div>
             <div class="panel-body row">
-                <div v-if="pidstatReports && Object.keys(pidstatReports).length > 0">
+                <div v-if="pidstatReports && pidstatReports.length > 0">
                     <div><chart :options="cpuChart" style="width:100%;height:300px"></chart></div>
                     <div><chart :options="memoryChart" style="width:100%;height:300px"></chart></div>
-                    <div><chart :options="rssChart" style="width:100%;height:300px"></chart></div>
-                    <div><chart :options="vszChart" style="width:100%;height:300px"></chart></div>
                 </div>
                 <div v-else class="no_data">No pidstat data.</div>
 
-                <div v-if="jstatgcReports && Object.keys(jstatgcReports).length > 0">
-                    <!--div style="padding: 15px;">
+                <div v-if="jstatgcReports && jstatgcReports.length > 0">
+                    <div style="padding: 15px;">
                         <label>GC Stats</label>
                         <table class="table table-bordered">
                             <thead>
@@ -46,7 +44,7 @@
                             </tr>
                             </tbody>
                         </table>
-                    </div-->
+                    </div>
                     <div><chart :options="jmemoryChart" style="width:100%;height:300px"></chart></div>
                 </div>
                 <div v-else class="no_data">No jstat-gc data.</div>
@@ -72,8 +70,6 @@
                 pidstatReports: null,
                 cpuChart: null,
                 memoryChart: null,
-                rssChart: null,
-                vszChart: null,
 
                 jstatgcReports: null,
                 jstatgcStats: null,
@@ -140,29 +136,25 @@
             },
 
             genPidstatReports: function(n, markerLine) {
-                this.cpuChart = genChartOption("CPU Utilization", n,
-                    {"CPU":"service.pidstat.cpu_util"},
+                this.cpuChart = genChartOption("CPU Utilization", n, "collect_at",
+                    {"CPU":"cpu_util"},
                     {yAxisFmt:"{value}%", yAxisMax:100, markLine: markerLine})
-                this.memoryChart = genChartOption("Memory Utilization", n,
-                    {"Util":"service.pidstat.mem_util"},
+                this.memoryChart = genChartOption("Memory Utilization", n, "collect_at",
+                    {"Util":"mem_util"},
                     {stack:true, yAxisFmt:"{value}%", yAxisMax:100, markLine: markerLine})
-                this.rssChart = genChartOption("RSS", n,
-                    {"RSS":"service.pidstat.mem_rss"},
-                    {yAxisFmt:"{value}K", markLine: markerLine})
-                this.vszChart = genChartOption("VSZ", n,
-                    {"VSZ":"service.pidstat.mem_vsz"},
-                    {yAxisFmt:"{value}K", markLine: markerLine})
 
             },
 
             genJstatgcReports: function(n, markerLine) {
-                if(!n || Object.keys(n).length == 0) {
+                if(!n || n.length == 0) {
                     console.warn('No data for jstat-gc')
                     return;
                 }
-                this.jmemoryChart = genChartOption("Java Heap Util", n,
-                    {"S0U":"service.jstatgc.s0u", "S1U":"service.jstatgc.s1u",
-                        "EU":"service.jstatgc.eu", "OU":"service.jstatgc.ou"},
+                this.jgcChart = genChartOption("CPU Utilization", n, "collect_at",
+                    {"Total":"cpu_util", "SYS":"cpu_sy", "USER":"cpu_us"},
+                    {stack:false, yAxisFmt:"{value}%", yAxisMax:100, markLine: markerLine});
+                this.jmemoryChart = genChartOption("Java Heap Util", n, "collect_at",
+                    {"S0U":"s0u", "S1U":"s1u", "EU":"eu", "OU":"ou"},
                     {stack:true, yAxisFmt: function (v, index) {
                             return Math.round(v/1024) + 'MB'
                         }
