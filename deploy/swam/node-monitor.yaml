@@ -1,0 +1,25 @@
+version: "3"
+services:
+  master:
+    image: foxty/node-monitor-master:1.0.0-SNAPSHOT
+    deploy:
+      replicas: 1
+      restart_policy:
+        condition: on-failure
+      resources:
+        limits:
+          cpus: 2
+          memory: 100M
+    ports:
+      - "30078:30078"
+      - "30079:30079"
+  postgres:
+    image: postgres:10
+    deploy:
+      replicas: 1
+      restart_policy:
+        condition: on-failure
+    ports:
+      - "5432:5432"
+    volumes:
+      - "/var/lib/postgresql/data:/volume/postgres/data"
