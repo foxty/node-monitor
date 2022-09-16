@@ -10,7 +10,7 @@
     "build": "webpack"
   },
   "dependencies": {
-    "bootstrap": "3.3.7",
+    "bootstrap": "3.4.1",
     "echarts": "4.1.0",
     "moment": "2.22.1",
     "vue": "2.5.13",
